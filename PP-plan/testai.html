@@ -1441,6 +1441,116 @@ async function testaiImones1108(){
   });
 }
 
+/* Sutarčių žemėlapis (2026-11-19): viešos CVP IS sutartys per G-Procure serverį - tik paspaudus; grupės, plano aprėptis,
+   „Įtraukti į planą“ (įrašo žmogus), klaidos - ne „sutarčių nėra“. Serverio atsakymas imituojamas (tinklas nenaudojamas). */
+function szZemelapis(o){
+  return Object.assign({ laikotarpis: { siandien: "2026-11-19", iki: "2028-11-19", nuo: "2023-11-19" }, sutarciu: 3, beTiekejo: 1, datuKlaidu: 2, grupes: [
+    { grupe: "312", sutarciu: 2, sutartys: [
+      { id: "1", cpv: ["31211300"], pav: "Transformatorių <b>priežiūra</b>", verte: 150000, sudaryta: "2024-01-10", galioja: "2027-06-30", pirkimoNr: "VPP-1", menesiu: 7, tiekejas: { pav: "UAB \"TETAS\"", kodas: "300513148" }, tiekeju: 1 },
+      { id: "2", cpv: ["31211300"], pav: "Skirstomųjų įrenginių remontas", verte: 90000, sudaryta: "2024-05-10", galioja: "2028-05-01", pirkimoNr: null, menesiu: 17, tiekejas: { paslepta: true }, tiekeju: 1 }],
+      koncentracija: { sutarciu: 5, suma: 1000000, tiekeju: 2, didziausioDalis: 70, didziausias: { pav: "UAB \"TETAS\"", kodas: "300513148" } } },
+    { grupe: "452", sutarciu: 1, sutartys: [
+      { id: "3", cpv: ["45231000"], pav: "Tvoros remontas", verte: null, sudaryta: "2025-01-10", galioja: "2027-01-05", pirkimoNr: null, menesiu: 1, tiekejas: null, tiekeju: 0 }], koncentracija: null }
+  ] }, o || {});
+}
+function szStub(atsakymas){
+  const kv = [];
+  W.GP_VIESOS_SUTARTYS.pirkejas = async (kodas, o) => { kv.push(kodas); return typeof atsakymas === "function" ? atsakymas(o) : atsakymas; };
+  return kv;
+}
+async function testaiSutarciuZemelapis1119(){
+  grupe("Sutarčių žemėlapis (2026-11-19)");
+  await testas("Skiltis „Ribos ir grupės“ skirtuke: įmonės (LITGRID - pagal numatymą), laikotarpis 12 / 24 mėn., kas siunčiama; duomenų nesiunčiama, kol nepaspausta", async () => {
+    const kv = szStub({ ok: true, zemelapis: szZemelapis(), meta: {} });
+    svarus(); W.goTab("ribos"); await lauk(50);
+    const s = D.getElementById("sutZemelapis");
+    tiesa(s && s.closest("#sec-ribos"), "skiltis ne skirtuke „Ribos ir grupės“");
+    lygu([...D.querySelectorAll("#szImone option")].map(o => o.value), W.eval("Object.keys(COMPANIES)"), "įmonės");
+    lygu([D.getElementById("szImone").value, D.getElementById("szLaikotarpis").value, D.getElementById("szGauti").textContent.trim()], ["LITGRID", "24", "Gauti viešų sutarčių duomenis"]);
+    tiesa(/tik pirkimo vykdytojo kodas/.test(D.getElementById("szSiunciama").textContent) && /Nieko neišsaugoma/.test(D.getElementById("szSiunciama").textContent), "kas siunčiama");
+    W.goTab("register"); W.goTab("ribos"); await lauk(50);
+    lygu(kv.length, 0, "be paspaudimo užklausų nėra");
+    tiesa(D.getElementById("szImone").hasAttribute("data-darbas-ne") && D.getElementById("szLaikotarpis").hasAttribute("data-darbas-ne"), "pasirinkimai - ne neišsaugotas darbas");
+  });
+  await testas("Paspaudus: grupės pagal BVPŽ, plano aprėptis (ta pati įmonė, grupė, metai), paslėptas ir nepaskelbtas tiekėjas, tekstas ekranuotas, didžiausio tiekėjo dalis su rinkos konsultacijos nuoroda iš registro, šaltinis ir licencija, ankstesni duomenys pažymėti", async () => {
+    svarus();
+    W.eval("DATA.procurements.push({ id: 'x1', imone: 'LITGRID', rusis: 'Darbai', bvpz: '45231400-9', objektas: 'Linijų remonto darbai', pirkimoData: '2026-03-01' },"
+      + " { id: 'x2', imone: 'AMBER', rusis: 'Prekės', bvpz: '31211000-2', objektas: 'Kitos įmonės transformatoriai', pirkimoData: '2026-03-01' }); save();");   // kitos įmonės pirkimas grupės neapima
+    const kv = szStub({ ok: true, zemelapis: szZemelapis(), meta: { atnaujinta: "2026-11-19T08:00:00Z", pasenusi: true } });
+    W.goTab("ribos"); D.getElementById("szGauti").click(); await laukTol(() => D.querySelector("#szRez .sz-grupe"));
+    lygu(kv, ["302564383"], "siunčiamas tik LITGRID AB kodas");
+    const r = D.getElementById("szRez"), t = r.textContent;
+    tiesa(/sutarčių, kurios baigiasi per 24 mėn\., - 3 \(BVPŽ grupių: 2\)/.test(t), "suvestinė: " + t.slice(0, 200));
+    lygu([...r.querySelectorAll(".sz-grupe h4")].map(h => h.textContent.slice(0, 3)), ["312", "452"]);
+    const g312 = D.getElementById("sz-312"), g452 = D.getElementById("sz-452");
+    tiesa(g312.querySelector("[data-sz-itraukti='312']") && /Plane nėra/.test(g312.textContent), "312 - plane nėra");
+    tiesa(/Plane yra/.test(g452.textContent) && /Linijų remonto darbai \(2026 m\.\)/.test(g452.textContent) && !g452.querySelector("[data-sz-itraukti]"), "452 - plane yra");
+    tiesa(/juridinis asmuo \(pavadinimas nerodomas\)/.test(g312.textContent) && /tiekėjas dar nepaskelbtas/.test(g452.textContent), "paslėptas ir nepaskelbtas tiekėjas");
+    tiesa(!r.querySelector("b") && /Transformatorių <b>priežiūra<\/b>/.test(t), "pavadinimas - tik tekstas");
+    tiesa(/Didžiausio tiekėjo dalis - 70 %/.test(g312.textContent) && /rinkos konsultaciją \(PĮ 39 str/.test(g312.textContent), "koncentracija ir registro nuoroda");
+    tiesa(/CC BY 4\.0/.test(t) && /ne sutarčių apskaita/.test(t), "šaltinis, licencija ir paskirtis");
+    tiesa(/Šaltinis šiuo metu neatsako - rodomi ankstesni duomenys \(2026-11-19 10:00\)/.test(t), "ankstesni duomenys");
+    tiesa(/sutarčių be paskelbto tiekėjo - 1/.test(t) && /neįmanoma galiojimo data .* - 2/.test(t), "duomenų kokybė");
+    tiesa(/Įtraukti į planą/.test(g312.querySelector("[data-sz-itraukti]").getAttribute("aria-label")), "mygtuko pavadinimas prasideda matomu tekstu");
+  });
+  await testas("12 mėn.: tolimesnės sutartys nerodomos (be naujos užklausos); kitos įmonės pasirinkimas išvalo rezultatą", async () => {
+    const kv = szStub({ ok: true, zemelapis: szZemelapis(), meta: {} });
+    D.getElementById("szImone").value = "LITGRID"; D.getElementById("szGauti").click(); await laukTol(() => D.querySelector("#szRez .sz-grupe"));
+    const sel = D.getElementById("szLaikotarpis"); sel.value = "12"; sel.dispatchEvent(new W.Event("change"));
+    const t = D.getElementById("szRez").textContent;
+    tiesa(/per 12 mėn\., - 2/.test(t) && !/Skirstomųjų įrenginių/.test(t) && /Transformatorių/.test(t), "12 mėn. filtras: " + t.slice(0, 120));
+    lygu(kv.length, 1, "nauja užklausa nesiunčiama");
+    sel.value = "24"; sel.dispatchEvent(new W.Event("change"));
+    const im = D.getElementById("szImone"); im.value = "AMBER"; im.dispatchEvent(new W.Event("change"));
+    lygu(D.getElementById("szRez").innerHTML, "", "kita įmonė - rezultatas išvalytas");
+    im.value = "LITGRID"; im.dispatchEvent(new W.Event("change"));
+  });
+  await testas("„Įtraukti į planą“: naujo pirkimo langas su sutarties duomenimis (įmonė, rūšis, objektas, BVPŽ, sutarties data, pastaba); plane nieko neatsiranda, kol žmogus nepaspaudžia „Išsaugoti“; „Atšaukti“ - nieko", async () => {
+    svarus(); szStub({ ok: true, zemelapis: szZemelapis(), meta: {} });
+    D.getElementById("szGauti").click(); await laukTol(() => D.querySelector("#szRez [data-sz-itraukti]"));
+    D.querySelector("#szRez [data-sz-itraukti='312']").click(); await lauk(50);
+    tiesa(D.getElementById("modal").classList.contains("show"), "langas neatsivėrė");
+    const v = id => D.getElementById("f_" + id).value;
+    lygu([v("imone"), v("rusis"), v("objektas"), v("bvpz"), v("sutarciesData")], ["LITGRID", "Prekės", "Transformatorių <b>priežiūra</b>", "31211300", "2027-06-30"]);
+    tiesa(/baigiasi 2027-06-30/.test(v("pastabos")) && /pirkimo Nr\. VPP-1/.test(v("pastabos")) && /nustatykite patys/.test(v("pastabos")), "pastaba: " + v("pastabos"));
+    lygu(W.eval("DATA.procurements.length"), 0, "neįrašyta be „Išsaugoti“");
+    [...D.querySelectorAll("#modalContent button")].find(b => b.textContent.trim() === "Atšaukti").click();
+    lygu(W.eval("DATA.procurements.length"), 0, "„Atšaukti“ - neįrašyta");
+    D.querySelector("#szRez [data-sz-itraukti='312']").click(); await lauk(50);
+    D.getElementById("f_verte").value = "120000";
+    [...D.querySelectorAll("#modalContent button")].find(b => /Išsaugoti/.test(b.textContent)).click(); await lauk(50);
+    lygu(W.eval("DATA.procurements.map(p => [p.imone, p.bvpz, p.sutarciesData, p.verte])"), [["LITGRID", "31211300", "2027-06-30", 120000]], "įrašė žmogus");
+    W.eval("piesSutarciuZemelapi()");
+    tiesa(/Plane yra/.test(D.getElementById("sz-312").textContent), "po įrašymo grupė - plane");
+  });
+  await testas("Nepavykęs gavimas - klaida su priežastimi ir „Bandyti dar kartą“, ne „sutarčių nėra“ (paslauga neįdiegta, šaltinis neatsako, ryšys); tuščias atsakymas - „nerasta“", async () => {
+    for (const [rusis, re] of [["neidiegta", /dar neįdiegta/], ["saltinis", /šaltinis neatsakė/], ["rysys", /Nėra ryšio/]]) {
+      szStub({ ok: false, rusis: rusis });
+      D.getElementById("szGauti").click(); await laukTol(() => /Nepavyko/.test(D.getElementById("szBusena").textContent));
+      const b = D.getElementById("szBusena");
+      tiesa(re.test(b.textContent) && /Bandyti dar kartą/.test(b.textContent), rusis + ": " + b.textContent);
+      tiesa(!/nerasta/i.test(D.getElementById("szRez").textContent + b.textContent), rusis + ": „nerasta“ neturi būti");
+    }
+    szStub({ ok: true, zemelapis: szZemelapis({ grupes: [], sutarciu: 0, beTiekejo: 0, datuKlaidu: 0 }), meta: {} });
+    D.getElementById("szGauti").click(); await laukTol(() => /nerasta/.test(D.getElementById("szRez").textContent));
+    tiesa(/LITGRID AB sutarčių, kurios baigiasi per 24 mėn\., nerasta/.test(D.getElementById("szRez").textContent), "tuščias - nerasta");
+  });
+  await testas("Tikras klientas (shared/viesos-sutartys.js) modulyje: GET į api.g-procure.com be slapukų; 404 - „paslauga dar neįdiegta“; 202 - eiga ir kartojama", async () => {
+    await modulis(); svarus(); W.goTab("ribos");
+    const kv = []; let n = 0;
+    W.fetch = (u, o) => { kv.push([u, o.credentials, o.referrerPolicy]); n++;
+      if (n === 1) return Promise.resolve({ status: 404, json: () => Promise.resolve({ klaida: "x" }) });
+      if (n === 2) return Promise.resolve({ status: 202, json: () => Promise.resolve({ ruosiama: true }) });
+      return Promise.resolve({ status: 200, json: () => Promise.resolve({ zemelapis: szZemelapis(), meta: { atnaujinta: "2026-11-19T08:00:00Z" } }) }); };
+    D.getElementById("szGauti").click(); await laukTol(() => /dar neįdiegta/.test(D.getElementById("szBusena").textContent));
+    lygu(kv[0], ["https://api.g-procure.com/api/sutartys/pirkejas/302564383", "omit", "no-referrer"]);
+    const orig = W.setTimeout; W.setTimeout = (f, ms) => orig(f, ms > 1000 && ms < 5000 ? 0 : ms);
+    D.getElementById("szGauti").click(); await laukTol(() => D.querySelector("#szRez .sz-grupe"), 8000);
+    W.setTimeout = orig;
+    lygu(kv.length, 3, "202 - pakartota");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1464,6 +1574,8 @@ async function testaiImones1108(){
     await testaiPatikra1107b();
     await modulis();
     await testaiImones1108();
+    await modulis();
+    await testaiSutarciuZemelapis1119();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

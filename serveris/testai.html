@@ -41,6 +41,7 @@ užklausos ir sąrašų būsenos (nepasiektas sąrašas - „nepatikrinta“, ne
 <script src="cvpis-logika.js"></script>
 <script src="sankcijos-logika.js"></script>
 <script src="di-uzduotys.js"></script>
+<script src="viesos-sutartys-logika.js"></script>
 <script>
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
@@ -852,6 +853,229 @@ async function testaiDiUzduotys(){
   });
 }
 
+/* ============ Viešų pirkimų sutarčių duomenų paslauga (2026-11-19) ============ */
+const VS = window.GP_VIESOS_SUTARTYS_API;
+const VS_DABAR = Date.UTC(2026, 10, 19, 10, 0, 0);   // Lietuvoje 2026-11-19 12:00
+const vsU = c => [8, 4, 4, 4, 12].map(n => c.repeat(n)).join("-");   // UUID testams (sargas neleidžia UUID tekstu)
+function vsSut(o){ return Object.assign({ dok_id: "1", cpv_codes: "31211300-1", dok_sut_verte: 50000, dok_sudarymo_data: "2025-01-10", dok_sut_galiojimo_data: "2027-03-01", dok_sut_obj_pav: "Transformatoriai", dok_pirk_numeris: "VPP-1", imported: false }, o); }
+function vsSal(o){ return Object.assign({ dok_id: "1", salies_kodas: "300513148", salies_asmens_rusis: "Juridinis", salies_pavadinimas: "UAB \"TETAS\"" }, o); }
+
+async function testaiViesosSutartys1119(){
+  grupe("Viešų pirkimų sutarčių duomenys (2026-11-19) - įvestis, užklausos šaltiniams, normalizavimas");
+  await testas("Įvestis: pirkėjo kodas 7-9 skaitmenys, BVPŽ pradžia 3-8 skaitmenys (galiniai nuliai nuimami, ne trumpiau nei 3), ribos - teigiamos sumos", () => {
+    lygu(["302564383", "1234567", "12345678901", "30256438a", "", null].map(VS.jarKodas), ["302564383", "1234567", null, null, null, null]);
+    lygu(["31210000", "3121", "45000000", "312", "31", "3121\")|(x", "3121 ", "123456789", null].map(VS.cpvPradzia), ["3121", "3121", "450", "312", null, null, null, null, null]);
+    lygu(["1500000", "1500000.5", "0", "-5", "1e6", "1 000", "99999999999"].map(VS.riba), [1500000, 1500000.5, null, null, null, null, 99999999999]);
+  });
+  await testas("Užklausos šaltiniams - tik iš patikrintų reikšmių, be tarpų ir ne ASCII ženklų (šaltinio užklausų kalba neatkoduoja %22), su datų langu nuo „šiandien“ Lietuvos laiku", () => {
+    const ids = ["101", "102"];
+    const u = [VS.uzklausaPirkejoId("302564383"), VS.uzklausaPirkejoSutartys(ids, VS_DABAR), VS.uzklausaTiekejai(ids), VS.uzklausaRinka("3121", VS_DABAR), VS.uzklausaJa(["300513148"]), VS.uzklausaPajamos([vsU("2")], VS_DABAR)];
+    u.forEach(x => tiesa(!/[^\x21-\x7E]/.test(x.kelias), "ne ASCII ar tarpas: " + x.kelias));
+    lygu(u.map(x => x.saltinis), ["vda", "vda", "vda", "vda", "jar", "jar"]);
+    tiesa(u[0].kelias === 'Salis?salies_kodas="302564383"&ar_salis_tiekejas=false&select(dok_id)&limit(20000)', u[0].kelias);
+    tiesa(u[1].kelias.indexOf('(dok_id="101"|dok_id="102")') > 0 && u[1].kelias.indexOf('dok_sut_galiojimo_data>="2026-11-19"&dok_sut_galiojimo_data<="2028-11-19"') > 0 && u[1].kelias.indexOf('dok_sudarymo_data>="2023-11-19"&dok_sut_verte>=10000') > 0, u[1].kelias);
+    tiesa(u[2].kelias.indexOf("ar_salis_tiekejas=true") > 0, "tik tiekėjai");
+    tiesa(u[3].kelias === 'Sutartis?cpv_codes.startswith("3121")&dok_sudarymo_data>="2023-11-19"&dok_sut_verte>=10000&select(dok_id,cpv_codes,dok_sut_verte,dok_sudarymo_data,imported)&sort(-dok_sudarymo_data)&limit(1000)', u[3].kelias);
+    tiesa(u[4].kelias === "iregistruoti/JuridinisAsmuo?(ja_kodas=300513148)&select(_id,ja_kodas)&limit(2)", u[4].kelias);
+    tiesa(/line_name\.startswith\("PARDAVIMO"\)&laikotarpis_iki>="2022-01-01"/.test(u[5].kelias), u[5].kelias);
+    const t = VS.uzklausaTed("3121", "lt", VS_DABAR), e = VS.uzklausaTed("3121", "es", VS_DABAR);
+    lygu(t.saltinis, "ted");
+    lygu(t.kunas.query, "notice-type IN (can-standard, can-social, can-desg) AND classification-cpv = 3121* AND publication-date >= 20231119 AND buyer-country = LTU SORT BY publication-date DESC");
+    tiesa(e.kunas.query.indexOf("buyer-country") < 0 && t.kunas.limit === 250 && t.kunas.fields.indexOf("winner-name") >= 0, "ES - be šalies, 250");
+    lygu([VS.siandien(Date.UTC(2026, 10, 18, 22, 30)), VS.pridekMen("2026-01-31", 1), VS.pridekMen("2026-11-19", -36), VS.menesiuIki("2026-11-19", "2027-03-01")], ["2026-11-19", "2026-02-28", "2023-11-19", 3]);
+  });
+  await testas("Sutarties ir šalies įrašai - nepatikimi duomenys: tik žinomi laukai, ženklų nuorodos (&#044;) atkoduojamos, valdymo ženklai šalinami, neįmanoma data (2525 m.) - be datos ir suskaičiuojama, neigiama vertė - be vertės", () => {
+    const c = VS.sutartis(vsSut({ dok_id: "77", cpv_codes: "34330000-9 Krovininių automobilių&#044; furgonų; 34300000-0", dok_sut_obj_pav: "A‮š\u0007 \n B", dok_sut_verte: -5, dok_sut_galiojimo_data: "2525-11-07", x: "<img>" }), VS_DABAR);
+    lygu([c.id, c.cpv, c.pav, c.verte, c.galioja, c.datosKlaida, c.sudaryta, Object.keys(c).sort().join(",")], ["77", ["34330000", "34300000"], "A š B", null, null, true, "2025-01-10", "cpv,datosKlaida,galioja,id,importuota,pav,pirkimoNr,sudaryta,verte"]);
+    lygu([VS.sutartis({ dok_id: "x1" }, VS_DABAR), VS.sutartis(null, VS_DABAR), VS.sutartis(vsSut({ dok_sudarymo_data: "2031-01-01" }), VS_DABAR).sudaryta, VS.sutartis(vsSut({ dok_sut_galiojimo_data: "2026-02-30" }), VS_DABAR).galioja], [null, null, null, null]);
+    const s = VS.salis(vsSal({})), ii = VS.salis(vsSal({ salies_pavadinimas: "Jono Jonaičio individuali įmonė", salies_kodas: "123456789" })), nz = VS.salis(vsSal({ salies_asmens_rusis: "Nežinomas", salies_kodas: "39001010000" }));
+    lygu([s.viesas, s.pav, s.kodas], [true, "UAB \"TETAS\"", "300513148"]);
+    lygu([ii.viesas, ii.pav, ii.juridinis, ii.kodas], [false, null, true, "123456789"], "asmens vardu pavadinta įmonė - be pavadinimo");
+    lygu([nz.juridinis, nz.viesas, nz.pav, nz.kodas], [false, false, null, null], "nežinoma rūšis");
+    const nz2 = VS.salis(vsSal({ salies_asmens_rusis: "Nežinomas" }));
+    lygu([nz2.juridinis, nz2.viesas, nz2.pav, nz2.kodas], [false, false, null, null], "ne juridinis asmuo su įmonės kodu - irgi tik suskaičiuojamas");
+  });
+  await testas("Asmens vardu pavadintos įmonės (IĮ, MB, ūkinės bendrijos, ūkininkas) atpažįstamos; bendrovės (UAB, AB, ŽŪB) - ne", () => {
+    const taip = ["Jono Jonaičio individuali įmonė", "IĮ „Petraitis“", "MB Projektų sprendimai", "Petro Petraičio TŪB", "KŪB „Jonas ir partneriai“", "ūkininkas Jonas Jonaitis", "Mažoji bendrija „Darbai“"];
+    const ne = ["UAB \"TETAS\"", "LITGRID AB", "ŽŪB Agrovaldyba", "Siemens Energy AB", "UAB Mbita", "Iėjimas UAB"];
+    taip.forEach(x => tiesa(VS.asmensVardoForma(x), "turėjo atpažinti: " + x));
+    ne.forEach(x => tiesa(!VS.asmensVardoForma(x), "neturėjo: " + x));
+  });
+
+  grupe("Viešų pirkimų sutarčių duomenys (2026-11-19) - suvestinės");
+  await testas("Pirkėjo žemėlapis: sutartys, kurios baigiasi per 24 mėn. (ribos imtinai), pagal BVPŽ grupę; koncentracija - per 3 metus nuo 10 000 Eur, kelių tiekėjų vertė dalijama; paslėpti pavadinimai; kokybės skaičiai", () => {
+    const sut = [
+      vsSut({ dok_id: "1", cpv_codes: "31211300-1", dok_sut_galiojimo_data: "2026-11-19", dok_sut_verte: 100000 }),
+      vsSut({ dok_id: "2", cpv_codes: "31211300-1", dok_sut_galiojimo_data: "2028-11-19", dok_sut_verte: 300000 }),
+      vsSut({ dok_id: "3", cpv_codes: "31211300-1", dok_sut_galiojimo_data: "2028-11-20", dok_sut_verte: 600000 }),
+      vsSut({ dok_id: "4", cpv_codes: "45231000-5", dok_sut_galiojimo_data: "2027-01-05", dok_sut_verte: 200000 }),
+      vsSut({ dok_id: "5", cpv_codes: "45231000-5", dok_sut_galiojimo_data: "2525-01-01", dok_sut_verte: 900000 }),
+      vsSut({ dok_id: "6", cpv_codes: "45231000-5", dok_sut_galiojimo_data: "2026-11-18", dok_sut_verte: 5000 })
+    ].map(x => VS.sutartis(x, VS_DABAR));
+    const sal = [vsSal({ dok_id: "1" }), vsSal({ dok_id: "2", salies_kodas: "111111111", salies_pavadinimas: "UAB Kitas" }), vsSal({ dok_id: "3" }),
+      vsSal({ dok_id: "4", salies_kodas: "222222222", salies_pavadinimas: "Jono Jonaičio IĮ" }), vsSal({ dok_id: "4", salies_kodas: "333333333", salies_pavadinimas: "UAB Partneris" }), vsSal({ dok_id: "6", salies_kodas: "444444444", salies_pavadinimas: "UAB Smulkus" })].map(VS.salis);
+    const z = VS.pirkejoZemelapis(sut, sal, VS_DABAR);
+    lygu(z.grupes.map(g => [g.grupe, g.sutartys.map(c => c.id)]), [["312", ["1", "2"]], ["452", ["4"]]], "grupės ir ribos");
+    lygu([z.sutarciu, z.datuKlaidu, z.beTiekejo], [3, 1, 1], "kiekiai");
+    const g312 = z.grupes[0], g452 = z.grupes[1];
+    lygu([g312.koncentracija.sutarciu, g312.koncentracija.suma, g312.koncentracija.tiekeju, g312.koncentracija.didziausioDalis, g312.koncentracija.didziausias], [3, 1000000, 2, 70, { pav: "UAB \"TETAS\"", kodas: "300513148" }], "312 koncentracija");
+    lygu([g452.koncentracija.sutarciu, g452.koncentracija.suma], [1, 200000], "koncentracija - tik nuo 10 000 Eur");
+    lygu([g452.koncentracija.didziausioDalis, g452.sutartys[0].tiekejas, g452.sutartys[0].tiekeju, g452.sutartys[0].menesiu, g452.sutartys[0].cpv], [50, { paslepta: true }, 2, 1, ["45231000"]], "dalinimas po lygiai, paslėptas pavadinimas");
+    lygu(g312.sutartys[0].tiekejas, { pav: "UAB \"TETAS\"", kodas: "300513148" });
+    lygu(z.laikotarpis, { siandien: "2026-11-19", iki: "2028-11-19", nuo: "2023-11-19" });
+  });
+  await testas("Rinka: tiekėjai pagal sutarčių vertę, viešai - tik juridiniai asmenys ne asmens vardu; kiti - tik suskaičiuojami; vidus (pajėgumui) į atsakymą nepatenka", () => {
+    const sut = ["1", "2", "3", "4", "5"].map((id, i) => VS.sutartis(vsSut({ dok_id: id, dok_sut_verte: [100000, 50000, 80000, 30000, 20000][i], dok_sudarymo_data: "2025-0" + (i + 1) + "-01" }), VS_DABAR));
+    const sal = [vsSal({ dok_id: "1" }), vsSal({ dok_id: "2" }), vsSal({ dok_id: "3", salies_kodas: "111111111", salies_pavadinimas: "UAB Kitas" }),
+      vsSal({ dok_id: "4", salies_kodas: "222222222", salies_pavadinimas: "MB Darbai" }), vsSal({ dok_id: "4", salies_asmens_rusis: "Fizinis", salies_kodas: "39001010000" })].map(VS.salis);
+    const r = VS.rinkosSuvestine(sut, sal, false);
+    lygu(r.tiekejai, [{ pav: "UAB \"TETAS\"", kodas: "300513148", kiekis: 2, suma: 150000, didziausia: 100000, paskutine: "2025-02-01" }, { pav: "UAB Kitas", kodas: "111111111", kiekis: 1, suma: 80000, didziausia: 80000, paskutine: "2025-03-01" }]);
+    lygu([r.sutarciu, r.tiekeju, r.paslepta, r.nezinomuSaliu, r.beTiekejo, r.apribota], [5, 3, 1, 1, 1, false]);
+    lygu(r.vidus.map(x => [x.kodas, x.viesas, x.didziausia]).sort(), [["111111111", true, 80000], ["222222222", false, 30000], ["300513148", true, 100000]]);
+  });
+  await testas("TED: laimėtojo pavadinimas iš kelių kalbų, vertė - tik EUR, Lietuvos kodas - tik LTU laimėtojui, pasiūlymų mediana, asmens vardu pavadintos įmonės - tik suskaičiuojamos, apribota - kai skelbimų daugiau", () => {
+    const n = [
+      { "publication-number": "137503-2024", "publication-date": "2024-03-06Z", "winner-name": { lit: ["UAB „Elektra“"] }, "winner-country": ["LTU"], "winner-identifier": ["247744890"], "tender-value": ["1700000"], "tender-value-cur": ["EUR"], "received-submissions-type-val": ["3"] },
+      { "publication-number": "200001-2025", "publication-date": "2025-05-01Z", "winner-name": { eng: ["Elektra UAB"] }, "winner-country": ["LTU"], "winner-identifier": ["247744890"], "tender-value": ["300000"], "tender-value-cur": ["EUR"], "received-submissions-type-val": ["1"] },
+      { "publication-number": "300001-2025", "publication-date": "2025-06-01Z", "winner-name": { pol: ["Polska Sp. z o.o."] }, "winner-country": ["POL"], "winner-identifier": ["5260001234"], "tender-value": ["900000"], "tender-value-cur": ["PLN"] },
+      { "publication-number": "400001-2025", "publication-date": "2025-07-01Z", "winner-name": { lit: ["Jono Jonaičio individuali įmonė"] }, "winner-country": ["LTU"], "winner-identifier": ["123456789"] },
+      { "publication-number": "500001-2025", "publication-date": "2025-08-01Z" },
+      { "publication-number": "bad" }
+    ];
+    const t = VS.tedSuvestine(n.map(VS.tedSkelbimas), 9);
+    lygu(t.laimetojai, [{ pav: "UAB „Elektra“", salis: "LTU", kodas: "247744890", kiekis: 2, suma: 2000000, paskutine: "2025-05-01", skelbimas: "200001-2025" },
+      { pav: "Polska Sp. z o.o.", salis: "POL", kodas: null, kiekis: 1, suma: 0, paskutine: "2025-06-01", skelbimas: "300001-2025" }]);
+    lygu([t.skelbimu, t.viso, t.apribota, t.beLaimetojo, t.pasiulymuMediana, t.paslepta], [5, 9, true, 1, 2, 1]);
+    lygu(t.vidus, [{ kodas: "247744890", didziausia: 1700000 }]);
+  });
+  await testas("Pajėgumas - tik skaičiai: naujausių finansinių metų pajamos, asmens vardu pavadintos ir be ataskaitų - „nežinoma“, TED Lietuvos laimėtojai įskaitomi; patirtis - didžiausia panaši sutartis", () => {
+    const paj = VS.pajamuSuvestine([
+      { juridinis_asmuo: { _id: vsU("1") }, line_name: "PARDAVIMO PAJAMOS", reiksme: 900000, laikotarpis_iki: "2024-12-31" },
+      { juridinis_asmuo: { _id: vsU("1") }, line_name: "PARDAVIMO PAJAMOS", reiksme: 2000000, laikotarpis_iki: "2025-12-31" },
+      { juridinis_asmuo: { _id: vsU("1") }, line_name: "PARDAVIMO SAVIKAINA", reiksme: 9e9, laikotarpis_iki: "2025-12-31" },
+      { juridinis_asmuo: { _id: vsU("2") }, line_name: "PARDAVIMO PAJAMOS", reiksme: 400000, laikotarpis_iki: "2025-12-31" },
+      { juridinis_asmuo: { _id: vsU("4") }, line_name: "PARDAVIMO PAJAMOS", reiksme: 9000000, laikotarpis_iki: "2025-12-31" },
+      { juridinis_asmuo: { _id: vsU("6") }, line_name: "PARDAVIMO PAJAMOS", reiksme: 1000000, laikotarpis_iki: "2025-12-31" },
+      { juridinis_asmuo: { _id: vsU("3") }, line_name: "PARDAVIMO PAJAMOS", reiksme: 5000000, laikotarpis_iki: "2023-12-31" },
+      { juridinis_asmuo: { _id: "bad" }, line_name: "PARDAVIMO PAJAMOS", reiksme: 1, laikotarpis_iki: "2025-12-31" }
+    ]);
+    lygu(paj[vsU("1")], { pajamos: 2000000, iki: "2025-12-31", metai: 2025 });
+    const rinka = { vidus: [{ kodas: "300513148", viesas: true, didziausia: 500000 }, { kodas: "111111111", viesas: true, didziausia: 100000 }, { kodas: "222222222", viesas: false, didziausia: 800000 }, { kodas: "444444444", viesas: true, didziausia: 50000 }, { kodas: "666666666", viesas: true, didziausia: 600000 }] };
+    const ted = { vidus: [{ kodas: "300513148", didziausia: 1200000 }, { kodas: "555555555", didziausia: 700000 }] };
+    const kid = { "300513148": vsU("1"), "111111111": vsU("2"), "555555555": vsU("3"), "222222222": vsU("4"), "666666666": vsU("6") };
+    const r = VS.pajegumas(rinka, ted, paj, kid, 1000000, 600000);
+    lygu(r, { visi: 6, apyvarta: { atitiktu: 3, neatitiktu: 1, nezinoma: 2 }, patirtis: { atitiktu: 4, neatitiktu: 2 }, finansiniaiMetai: { nuo: 2023, iki: 2025 } }, "riba imtinai, asmens vardu pavadintai - nežinoma net turint duomenų");
+    lygu(VS.pajegumas(rinka, null, {}, {}, null, 100000), { visi: 5, apyvarta: null, patirtis: { atitiktu: 4, neatitiktu: 1 }, finansiniaiMetai: null });
+  });
+
+  grupe("Viešų pirkimų sutarčių duomenys (2026-11-19) - darbai su netikru šaltiniu ir HTTP atsakymai");
+  await testas("Pirkėjo darbas: identifikatoriai paketais po 150, sutartys, tiekėjai - tik gautoms sutartims; nesutikusi šaltinio sandara - klaida, ne tuščias žemėlapis", async () => {
+    const kv = [];
+    const ids = Array.from({ length: 160 }, (_, i) => ({ dok_id: String(1000 + i) }));
+    const gauk = async u => {
+      kv.push(u.saltinis + ":" + u.kelias.slice(0, 20));
+      if (/^Salis\?salies_kodas=/.test(u.kelias)) return { _data: ids.concat([{ dok_id: "1000" }]) };
+      if (/^Sutartis\?/.test(u.kelias)) return { _data: /dok_id="1000"/.test(u.kelias) ? [vsSut({ dok_id: "1000" })] : [vsSut({ dok_id: "1155", cpv_codes: "45231000-5", dok_sut_galiojimo_data: "2027-06-01" })] };
+      if (/^Salis\?\(/.test(u.kelias)) return { _data: [vsSal({ dok_id: "1000" }), vsSal({ dok_id: "1155", salies_kodas: "111111111", salies_pavadinimas: "UAB Kitas" })] };
+      throw new Error("netikėta užklausa");
+    };
+    const z = await VS.vykdykPirkejas({ jar: "302564383" }, gauk, { dabar: VS_DABAR });
+    lygu([z.pirkejoSutarciu, z.sutarciu, z.grupes.map(g => g.grupe), z.apribota], [160, 2, ["312", "452"], false]);
+    lygu(kv.filter(x => /^vda:Sutartis/.test(x)).length, 2, "160 identifikatorių - 2 paketai");
+    lygu(kv.filter(x => /^vda:Salis\?\(/.test(x)).length, 1, "tiekėjai - vienas paketas");
+    let klaida = null;
+    try { await VS.vykdykPirkejas({ jar: "302564383" }, async () => ({ klaida: 1 }), { dabar: VS_DABAR }); } catch (e) { klaida = e.rusis; }
+    lygu(klaida, "netiketa-sandara");
+  });
+  await testas("Rinkos darbas: vienam šaltiniui nepavykus - kitas rodomas, o klaida įvardijama (ne „nėra“); abiem - klaida; finansų darbas - tik galiojantys kodai, identifikatorius pagal kodą", async () => {
+    const vda = async u => {
+      if (u.saltinis === "ted") throw Object.assign(new Error("x"), { rusis: "saltinis-500" });
+      if (/^Sutartis/.test(u.kelias)) return { _data: [vsSut({ dok_id: "9" })] };
+      return { _data: [vsSal({ dok_id: "9" })] };
+    };
+    const r = await VS.vykdykRinka({ cpv: "3121", ted: "lt" }, vda, { dabar: VS_DABAR });
+    lygu([!!r.lt, r.ted, r.klaidos, r.lt.tiekejai.length], [true, null, { ted: "saltinis-500" }, 1]);
+    const tik = async u => { if (u.saltinis === "ted") return { notices: [{ "publication-number": "1-2025", "winner-name": ["A UAB"], "winner-country": ["LTU"] }], totalNoticeCount: 1 }; throw Object.assign(new Error("x"), { rusis: "rysys" }); };
+    const r2 = await VS.vykdykRinka({ cpv: "3121", ted: "es" }, tik, { dabar: VS_DABAR });
+    lygu([r2.lt, r2.klaidos, r2.ted.apimtis, r2.ted.laimetojai.length], [null, { vda: "rysys" }, "es", 1]);
+    let k = null;
+    try { await VS.vykdykRinka({ cpv: "3121" }, async () => { throw Object.assign(new Error("x"), { rusis: "laikas" }); }, { dabar: VS_DABAR }); } catch (e) { k = e.rusis; }
+    lygu(k, "laikas");
+    const kel = [];
+    const f = await VS.vykdykFinansai(["300513148", "300513148", "12", "111111111"], async u => {
+      kel.push(u.kelias);
+      if (/JuridinisAsmuo/.test(u.kelias)) return { _data: [{ _id: vsU("1"), ja_kodas: 300513148 }, { _id: vsU("9"), ja_kodas: 999999999 }] };
+      return { _data: [{ juridinis_asmuo: { _id: vsU("1") }, line_name: "PARDAVIMO PAJAMOS", reiksme: 5, laikotarpis_iki: "2025-12-31" }] };
+    }, { dabar: VS_DABAR });
+    lygu([f.ieskota, f.kodasId, Object.keys(f.pajamos)], [2, { "300513148": vsU("1") }, [vsU("1")]]);
+    tiesa(kel[0].indexOf("(ja_kodas=300513148|ja_kodas=111111111)") > 0, kel[0]);
+  });
+  await testas("Maršrutai: tik GET, griežti keliai ir parametrai (400 su parametro pavadinimu, įvestis neatkartojama), darbo raktas; CORS - tik G-Procure ir vietinis tikrinimas", () => {
+    const m = (met, a, k) => VS.marsrutas(met, a, k || "https://g-procure.com", { talpykloje: 0 });
+    lygu([m("OPTIONS", "/api/sutartys/rinka").atsakymas.status, m("POST", "/api/sutartys/rinka?cpv=3121").atsakymas.status, m("GET", "/api/sutartys/kita").atsakymas.status, m("GET", "/api/sutartys/busena").atsakymas.status], [204, 405, 404, 200]);
+    lygu(JSON.parse(m("GET", "/api/sutartys/busena").atsakymas.kunas).versija, VS.VERSIJA);
+    const blogi = [["/api/sutartys/pirkejas/30256438a", "jar"], ["/api/sutartys/pirkejas/302564383?x=1", "kelias"], ["/api/sutartys/rinka", "cpv"], ["/api/sutartys/rinka?cpv=31", "cpv"],
+      ["/api/sutartys/rinka?cpv=3121&cpv=3122", "parametras"], ["/api/sutartys/rinka?cpv=3121&ted=xx", "ted"], ["/api/sutartys/rinka?cpv=3121&q=<script>", "parametras"],
+      ["/api/sutartys/pajegumas?cpv=3121", "apyvarta"], ["/api/sutartys/pajegumas?cpv=3121&apyvarta=-1", "apyvarta"], ["/api/sutartys/pajegumas?cpv=3121&patirtis=1e5", "patirtis"]];
+    blogi.forEach(([a, p]) => {
+      const r = m("GET", a).atsakymas;
+      lygu([r.status, JSON.parse(r.kunas).parametras], [400, p], a);
+      tiesa(!/script|30256438a|xx|1e5/.test(r.kunas), "įvestis atkartota: " + r.kunas);
+    });
+    lygu(m("GET", "/api/sutartys/pirkejas/302564383").darbas, { tipas: "pirkejas", raktas: "p:302564383", p: { jar: "302564383" } });
+    lygu(m("GET", "/api/sutartys/rinka?cpv=31210000&ted=es").darbas, { tipas: "rinka", raktas: "r:3121:es", p: { cpv: "3121", ted: "es" } });
+    lygu(m("GET", "/api/sutartys/pajegumas?cpv=3121&apyvarta=1500000").darbas, { tipas: "pajegumas", raktas: "g:3121", p: { cpv: "3121", apyvarta: 1500000, patirtis: null } });
+    lygu([m("GET", "/api/sutartys/busena", "https://g-procure.com").atsakymas.antrastes["Access-Control-Allow-Origin"], m("GET", "/api/sutartys/busena", "http://localhost:8000").atsakymas.antrastes["Access-Control-Allow-Origin"],
+      m("GET", "/api/sutartys/busena", "https://evil.example").atsakymas.antrastes["Access-Control-Allow-Origin"]], ["https://g-procure.com", "http://localhost:8000", undefined]);
+  });
+  await testas("Darbo atsakymas: vidiniai duomenys (kodai pajėgumui) neperduodami, pajėgumas - tik skaičiai, nepavykę finansai - saltiniai.finansai: false; senesnis nei 24 val. - pasenusi", () => {
+    const rinka = { lt: { sutarciu: 2, apribota: false, tiekeju: 1, tiekejai: [{ pav: "A", kodas: "300513148" }], vidus: [{ kodas: "300513148", viesas: true, didziausia: 5 }] },
+      ted: { skelbimu: 0, laimetojai: [], vidus: [] }, klaidos: { ted: "saltinis-500" } };
+    const ir = { laikas: VS_DABAR - 25 * 3600000, duomenys: rinka };
+    const a = JSON.parse(VS.atsakymasDarbo({ tipas: "rinka", p: {} }, ir, "https://g-procure.com", VS_DABAR).kunas);
+    tiesa(!("vidus" in a.lt) && !("vidus" in a.ted) && a.meta.pasenusi === true && /5xx/.test(a.klaidos.ted), JSON.stringify(a));
+    const p = JSON.parse(VS.atsakymasDarbo({ tipas: "pajegumas", p: { apyvarta: 10, patirtis: 1 } }, { laikas: VS_DABAR, duomenys: rinka }, null, VS_DABAR, null).kunas);
+    lygu([p.pajegumas.visi, p.pajegumas.apyvarta, p.pajegumas.saltiniai, p.meta.pasenusi], [1, { atitiktu: 0, neatitiktu: 0, nezinoma: 1 }, { lt: true, ted: true, finansai: false }, false]);
+    tiesa(!/300513148/.test(JSON.stringify(p)), "kodai neperduodami");
+  });
+
+  grupe("Viešų pirkimų sutarčių duomenys (2026-11-19) - serverio failas, systemd ir nginx (sargai)");
+  const srv = await tekstas("viesos-sutartys-serveris.js"), vien = await tekstas("g-procure-sutartys.service"), ng = await tekstas("nginx-sutartys.conf"), lg = await tekstas("viesos-sutartys-logika.js");
+  await testas("Serverio failas išnagrinėjamas, naudoja tik Node modulius ir logiką, jokio kodo vykdymo; kreipiasi tik į L.SALTINIAI kompiuterius per https.request, nukreipimai nesekami, laiko ir dydžio ribos", () => {
+    new Function("require", "module", "process", "__dirname", srv.replace(/^#!.*\n/, ""));
+    lygu([...srv.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)].map(m => m[1]), ["node:http", "node:https", "./viesos-sutartys-logika.js"]);
+    tiesa(!/child_process|\beval\s*\(|new Function|vm\.run|\bfetch\([^)]|writeFile|createWriteStream|fs\./.test(srv), "jokio kodo vykdymo, fetch ir rašymo į diską");
+    lygu([...srv.matchAll(/https:\/\/[^"'\s)]+/g)].map(m => m[0]).filter(u => !/^https:\/\/g-procure\.com\//.test(u)), [], "kitų adresų nėra");
+    tiesa(/const cfg = L\.SALTINIAI\[uz && uz\.saltinis\];/.test(srv) && /hostname: cfg\.kompiuteris, port: 443, path: kelias/.test(srv), "tik L.SALTINIAI");
+    tiesa(/\/\[\^\\x21-\\x7E\]\/\.test\(kelias\)/.test(srv), "kelias - tik ASCII be tarpų");
+    tiesa(/st >= 300 && st < 400 \? new SaltinioKlaida\("saltinis-kita", false\)/.test(srv) && /MAX_ATSAKYMO/.test(srv) && /timeout: UZKLAUSOS_MS/.test(srv), "nukreipimai, dydis, laikas");
+    const s = VS.SALTINIAI;
+    lygu([s.vda.kompiuteris, s.vda.kelias, s.jar.kompiuteris, s.jar.kelias, s.ted.kompiuteris, s.ted.kelias], ["get.data.gov.lt", "/datasets/gov/lsd/vpt/cvpp/", "get.data.gov.lt", "/datasets/gov/rc/jar/", "api.ted.europa.eu", "/v3/notices/search"]);
+  });
+  await testas("Užklausų turinys nežurnalizuojamas; klausomasi tik 127.0.0.1; IP iš X-Real-IP tik vietinei jungčiai; antroji riba; darbas ilgiau nei 40 s - 202, nepavykęs be ankstesnio - 503 (ne „nėra“), ankstesnis - iki 7 d. su žyma", () => {
+    const zurn = [...srv.matchAll(/zurnalas\([^;]*\)/g)].map(m => m[0]).join("\n").replace(/function zurnalas\(ivykis, duomenys\)/, "");
+    tiesa(!/req\.|url|jar|cpv|kodas|apyvarta|origin|ip\b/.test(zurn), "žurnale nėra užklausos: " + zurn);
+    tiesa(!/console\.(log|error|warn)\((?!JSON\.stringify\(Object\.assign\(\{ laikas)/.test(srv), "console - tik per zurnalas()");
+    tiesa(/listen\(PORTAS, "127\.0\.0\.1"/.test(srv) && /vietinis && typeof req\.headers\["x-real-ip"\]/.test(srv) && /RIBA_IP_MIN/.test(srv), "127.0.0.1, X-Real-IP, riba");
+    tiesa(/const LAUKTI_MS = 40000;/.test(srv) && /jsonAtsakymas\(202, \{ ruosiama: true/.test(srv) && /jsonAtsakymas\(503, \{ klaida: L\.KLAIDOS\.saltinis/.test(srv), "202 ir 503");
+    tiesa(/Date\.now\(\) - senas\.laikas < L\.PASENES_MAX_D \* 86400000/.test(srv) && /senas\.klaida = rusis/.test(srv), "ankstesnis su žyma");
+    tiesa(/const MAX_DARBU = 2;/.test(srv) && /PARINKTYS = \{ lygiagreciai: 2 \}/.test(srv), "lygiagretumo ribos");
+    tiesa(/kodai neperduodami|be pavadinimų|tik suskaičiuoti/.test(lg), "logikos paaiškinimas");
+  });
+  await testas("systemd: DynamicUser, izoliacija, be raktų ir be rašomo katalogo, V8 riba žemiau systemd ribos, prievadas 3003; nginx: tik GET / HEAD / OPTIONS, riba, be prieigos žurnalo, laukimas ilgesnis už 40 s", () => {
+    ["DynamicUser=yes", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "PrivateDevices=yes", "CapabilityBoundingSet=\n",
+     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX", "SystemCallFilter=@system-service", "MemoryMax=", "MemoryHigh=", "Environment=PORT=3003"].forEach(e => tiesa(vien.indexOf(e) >= 0, "trūksta: " + e));
+    tiesa(!/LoadCredential|EnvironmentFile|KEY|TOKEN|StateDirectory/i.test(vien), "raktų ir rašomo katalogo nėra");
+    [srv, vien, ng, lg].forEach((t, i) => tiesa(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(t) && !/apiKey["']?\s*[:=]\s*["'][A-Za-z0-9-]{8,}/.test(t), "rakto pavidalo reikšmė faile Nr. " + i));
+    const v8 = +(/--max-old-space-size=(\d+)/.exec(vien) || [])[1], cg = +(/\nMemoryMax=(\d+)M/.exec(vien) || [])[1];
+    tiesa(/\nExecStart=\/usr\/bin\/node --max-old-space-size=\d+ \/opt\/g-procure-sutartys\/viesos-sutartys-serveris\.js\n/.test(vien) && v8 > 0 && v8 + 300 <= cg, "ExecStart ir V8 riba");
+    ["location /api/sutartys/", "limit_except GET HEAD OPTIONS { deny all; }", "limit_req zone=gp_sutartys", "access_log off;", "proxy_pass http://127.0.0.1:3003;",
+     "proxy_set_header X-Real-IP $remote_addr;", "client_max_body_size 1k;", "zone=gp_sutartys:10m rate=20r/m"].forEach(e => tiesa(ng.indexOf(e) >= 0, "nginx trūksta: " + e));
+    const rt = +(/proxy_read_timeout (\d+)s;/.exec(ng) || [])[1];
+    tiesa(rt > 45, "nginx laukimas turi būti ilgesnis už 40 s: " + rt);
+  });
+}
+
 (async function(){
   try {
     if (!L) throw new Error("cvpis-logika.js neįsikėlė");
@@ -867,6 +1091,8 @@ async function testaiDiUzduotys(){
     await testaiSankcijuSargai();
     if (!window.GP_DI_UZDUOTYS) throw new Error("di-uzduotys.js neįsikėlė");
     await testaiDiUzduotys();
+    if (!window.GP_VIESOS_SUTARTYS_API) throw new Error("viesos-sutartys-logika.js neįsikėlė");
+    await testaiViesosSutartys1119();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

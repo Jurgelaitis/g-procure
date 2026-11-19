@@ -302,6 +302,16 @@ details.card > summary,details.ribos-kaip > summary{cursor:pointer;font-weight:7
 .imoniu-lent th[scope="row"]{text-align:left;font-weight:700;white-space:nowrap;padding:9px 12px;border-bottom:1px solid var(--grafitas-15);vertical-align:top}
 .imoniu-lent td{white-space:nowrap}
 .imones-blokas > h3:focus-visible{outline:2px solid var(--color-emerald-strong);outline-offset:3px}
+/* Sutarčių žemėlapis (2026-11-19) */
+.sz{margin-top:14px;overflow-wrap:anywhere}
+.sz-irankiai{align-items:flex-end;flex-wrap:wrap}
+.sz-siunciama,.sz-saltinis,.sz-pastaba{font-size:13px}
+.sz-suvestine{margin:10px 0 6px;font-size:14px}
+.sz-grupe{margin-top:14px;border-top:1px solid var(--grafitas-15);padding-top:10px}
+.sz-grupe h4{font-size:14px;margin:0 0 6px}
+.sz-lent{width:100%;min-width:0}
+.sz-lent th,.sz-lent td{font-size:13px;vertical-align:top;overflow-wrap:anywhere}
+.sz-planas,.sz-konc{font-size:13px;margin:8px 0}
 
 </style>
 </head>
@@ -488,6 +498,18 @@ details.card > summary,details.ribos-kaip > summary{cursor:pointer;font-weight:7
     <p class="muted" id="ribosApimtis" style="margin:0;flex:1;min-width:240px"></p>
   </div>
   <div id="ribosRez"></div>
+  <section class="card sz" id="sutZemelapis" aria-labelledby="szPav">
+    <h3 id="szPav" style="margin-top:0">Sutarčių žemėlapis: kurios sutartys baigiasi</h3>
+    <p class="muted" style="margin-top:0">Iš viešų CVP IS sutarčių duomenų: įmonės sutartys, kurios baigiasi per pasirinktą laikotarpį, pagal tas pačias BVPŽ grupes kaip planas. Kai plane tos grupės pirkimo dar nėra - „Įtraukti į planą“ atveria naujo pirkimo langą su sutarties duomenimis (išsaugote jūs). Didžiausio tiekėjo dalis - informacija apie priklausomybę nuo vieno tiekėjo.</p>
+    <div class="toolbar sz-irankiai">
+      <div class="pc"><label for="szImone">Įmonė</label><select id="szImone" data-darbas-ne></select></div>
+      <div class="pc"><label for="szLaikotarpis">Baigiasi per</label><select id="szLaikotarpis" data-darbas-ne><option value="12">12 mėn.</option><option value="24" selected>24 mėn.</option></select></div>
+      <button type="button" class="btn secondary" id="szGauti">Gauti viešų sutarčių duomenis</button>
+    </div>
+    <p class="muted sz-siunciama" id="szSiunciama"></p>
+    <div id="szBusena"></div>
+    <div id="szRez"></div>
+  </section>
   <details class="card ribos-kaip" id="ribosKaip">
     <summary>Kaip skaičiuojama</summary>
     <div id="ribosKaipTekstas"></div>
@@ -698,6 +720,7 @@ details.card > summary,details.ribos-kaip > summary{cursor:pointer;font-weight:7
 <script src="../shared/eksportas.js"></script>
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadintas planas nevirsta tuščiu -->
 <script src="../shared/busena.js"></script>
+<script src="../shared/viesos-sutartys.js"></script>
 <script src="../shared/saugykla.js"></script>
 <!-- Biblioteka neįsikėlė (nėra ryšio, o ji dar neišsaugota darbui be interneto) - paaiškinimas vietoje, ne lūžis (GP_BIBLIOTEKOS) -->
 <script src="../shared/bibliotekos.js"></script>
@@ -1842,9 +1865,10 @@ function pasirinkimas(id, reiksme, variantai, tuscias){
     + `</select>`;
 }
 function failePastaba(tekstas){ return tekstas ? `<div class="muted" style="font-size:12px;margin-top:3px">Faile įrašyta „${escapeHtml(tekstas)}“ - neatpažinta</div>` : ""; }
-function openProcModal(p){
+function openProcModal(p, pradiniai){
   const isNew = !p;
-  if(isNew) p = {id:naujasId("new"), imone: numatytojiImone()};
+  // pradiniai - naujo pirkimo laukai iš kito skirtuko (sutarčių žemėlapis); įrašoma tik paspaudus „Išsaugoti“
+  if(isNew) p = Object.assign({id:naujasId("new"), imone: numatytojiImone()}, pradiniai && typeof pradiniai === "object" ? pradiniai : {});
   const m = document.getElementById("modalContent");
   const budoKodas = mapMethodNameToCode(p.budas);
   const neData = v => v && !parseDate(v) ? String(v).slice(0, 40) : "";
@@ -2237,6 +2261,7 @@ function renderRibos(){
   const rp = document.getElementById("ribosRodyti");
   if(rp) rp.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.tik === "1") === RIBOS_TIK_PASTABOS)));
   npImones();
+  szInit();   // sutarčių žemėlapis veikia ir tuščiam planui (planą galima pradėti nuo baigiančių galioti sutarčių)
   if(!DATA.procurements.length){
     host.innerHTML = planoNezinomas() ? `<div class="empty"><div class="icon">⚠️</div>Išsaugoto plano perskaityti nepavyko - grupių suvestinė nežinoma.</div>`
       : `<div class="empty"><div class="icon">📊</div>Plane pirkimų nėra. <button class="btn ghost sm" onclick="atverkImporta()">Importuoti planą</button> arba <button class="btn ghost sm" onclick="loadDemo()">įkelti pavyzdžius</button>.</div>`;
@@ -2279,6 +2304,108 @@ function renderRibos(){
   host.innerHTML = html || `<div class="empty"><div class="icon">📊</div>${metai} m. ${cf === "ALL" ? "" : escapeHtml(COMPANIES[cf].name) + " "}pirkimų nėra.</div>`;
   if(RIBOS_RODYTI){ const el = document.getElementById(RIBOS_RODYTI); RIBOS_RODYTI = null; if(el){ el.scrollIntoView({ block: "center" }); const b = el.querySelector(".grp-btn"); if(b) b.focus({ preventScroll: true }); } }
   ribosKaip();
+}
+/* ==================== SUTARČIŲ ŽEMĖLAPIS (2026-11-19, G-Procure ateities perspektyvų 3 žingsnis) ====================
+   Viešos CVP IS sutartys (Valstybės duomenų agentūra) per G-Procure serverį (shared/viesos-sutartys.js): įmonės sutartys, kurios
+   baigiasi per 12 ar 24 mėn., pagal BVPŽ grupę (3 skaitmenys, kaip „Ribos ir grupės“). Kiekvienai grupei - ar plane jau yra tos
+   grupės pirkimas tais ar ankstesniais metais, ir veiksmas „Įtraukti į planą“ (naujo pirkimo langas su sutarties duomenimis -
+   įrašo žmogus). Didžiausio tiekėjo dalis grupėje per 3 metus - informacija. Duomenys gaunami tik paspaudus mygtuką; niekas
+   neišsaugoma. Nepavykęs gavimas - klaida su priežastimi, ne „sutarčių nėra“. */
+let SZ = { imone: null, z: null, meta: null };
+function szImonesKodas(k){ const o = window.GP_ORG && COMPANIES[k] ? GP_ORG.pagalId(COMPANIES[k].org) : null; return o && o.jarKodas ? o.jarKodas : null; }
+function szInit(){
+  const sel = document.getElementById("szImone"), btn = document.getElementById("szGauti");
+  if(!sel || !btn) return;
+  if(!sel.dataset.uzpildyta){
+    sel.innerHTML = Object.keys(COMPANIES).map(k => `<option value="${k}">${escapeHtml(COMPANIES[k].name)}</option>`).join("");
+    sel.dataset.uzpildyta = "1";
+    btn.addEventListener("click", () => gaukSutarciuZemelapi());
+    document.getElementById("szLaikotarpis").addEventListener("change", () => piesSutarciuZemelapi());
+    sel.addEventListener("change", () => {
+      sel.dataset.zmogus = "1";
+      if(SZ.imone !== sel.value){ SZ = { imone: null, z: null, meta: null }; document.getElementById("szRez").innerHTML = ""; if(window.GP_BUSENA) GP_BUSENA.slepk("#szBusena"); }
+    });
+    document.getElementById("szSiunciama").textContent = window.GP_VIESOS_SUTARTYS ? GP_VIESOS_SUTARTYS.siunciama("pirkejas", "lt") : "";
+  }
+  // Įmonė: žmogaus pasirinkta lieka; kol nepasirinko - pagal juostą „Įmonės planas“ (visa grupė - LITGRID, prioritetas)
+  if(!sel.dataset.zmogus){ const cf = pasirinktaImone(); sel.value = COMPANIES[cf] ? cf : "LITGRID"; }
+}
+async function gaukSutarciuZemelapi(){
+  const V = window.GP_VIESOS_SUTARTYS, B = window.GP_BUSENA, k = document.getElementById("szImone").value, kodas = szImonesKodas(k);
+  if(!V || !B) return;
+  if(!kodas){ B.rodyk("#szBusena", { tipas: "klaida", tekstas: "Šios įmonės kodo organizacijų sąraše nėra - duomenų gauti negalima." }); return; }
+  document.getElementById("szRez").innerHTML = "";
+  SZ = { imone: null, z: null, meta: null };
+  const r = await B.vykdyk("#szBusena", { tipas: "eiga", tekstas: "Gaunami viešų sutarčių duomenys...", klaidosPriesdelis: "Nepavyko gauti viešų sutarčių duomenų",
+    kartoti: () => gaukSutarciuZemelapi(),
+    veiksmas: async () => {
+      const x = await V.pirkejas(kodas, { eiga: () => B.rodyk("#szBusena", { tipas: "eiga", tekstas: V.klaida("ruosiamaEiga", "lt") }) });
+      if(!x.ok) throw new Error(V.klaida(x.rusis, "lt"));
+      return x;
+    } });
+  if(!r.ok) return;
+  SZ = { imone: k, z: r.reiksme.zemelapis, meta: r.reiksme.meta };
+  B.slepk("#szBusena");
+  piesSutarciuZemelapi();
+}
+const SZ_RUSIS = kodas => { const d = +String(kodas).slice(0, 2); return d === 45 ? "Darbai" : (d >= 3 && d <= 44) || d === 48 ? "Prekės" : d >= 50 && d <= 98 ? "Paslaugos" : ""; };
+// Plano eilutės, kurios jau apima grupę: ta pati įmonė, tie patys 3 BVPŽ skaitmenys, pirkimas sutarties pabaigos ar ankstesniais metais
+function szPlaneYra(k, grupe, galioja){
+  const m = +String(galioja).slice(0, 4), plano = planoMetai();
+  return DATA.procurements.filter(p => {
+    const metai = pirkimoMetai(p) || plano;
+    return p.imone === k && String(p.bvpz || "").replace(/\D/g, "").slice(0, 3) === grupe && metai >= m - 1 && metai <= m;
+  });
+}
+function szTiekejas(c){
+  if(!c.tiekejas) return '<span class="muted">tiekėjas dar nepaskelbtas</span>';
+  if(c.tiekejas.paslepta) return "juridinis asmuo (pavadinimas nerodomas)";
+  return escapeHtml(c.tiekejas.pav) + (c.tiekejas.kodas ? ` <span class="muted">${escapeHtml(c.tiekejas.kodas)}</span>` : "");
+}
+function szIki(siandien, men){ const d = parseDate(siandien); if(!d) return null; d.setMonth(d.getMonth() + men); return fmtDate(d); }
+function piesSutarciuZemelapi(){
+  const host = document.getElementById("szRez"); if(!host || !SZ.z) return;
+  const z = SZ.z, men = +document.getElementById("szLaikotarpis").value || 24, k = SZ.imone, V = window.GP_VIESOS_SUTARTYS;
+  const iki = z.laikotarpis && z.laikotarpis.siandien ? szIki(z.laikotarpis.siandien, men) : null;
+  const grupes = z.grupes.map(g => Object.assign({}, g, { sutartys: (g.sutartys || []).filter(c => !iki || c.galioja <= iki) })).filter(g => g.sutartys.length);
+  const atn = SZ.meta && SZ.meta.atnaujinta ? V.atnaujinta(SZ.meta.atnaujinta, "lt") : "";
+  const viso = grupes.reduce((s, g) => s + g.sutartys.length, 0);
+  let html = `<p class="sz-suvestine">${escapeHtml(COMPANIES[k].name)}: sutarčių, kurios baigiasi per ${men} mėn., - <strong>${viso}</strong> (BVPŽ grupių: ${grupes.length}). Duomenys gauti ${escapeHtml(atn)}.</p>`;
+  if(SZ.meta && SZ.meta.pasenusi) html += `<p class="alert warn" style="margin:6px 0"><span class="alert-body">Šaltinis šiuo metu neatsako - rodomi ankstesni duomenys (${escapeHtml(atn)}).</span></p>`;
+  const pst = [];
+  if(z.beTiekejo) pst.push(`sutarčių be paskelbto tiekėjo - ${z.beTiekejo} (tiekėjų duomenys šaltinyje vėluoja 1-2 mėn.)`);
+  if(z.datuKlaidu) pst.push(`sutarčių su neįmanoma galiojimo data (pvz., 2525 m.) - ${z.datuKlaidu}, jos nerodomos`);
+  if(pst.length) html += `<p class="muted sz-pastaba">Duomenų kokybė: ${pst.join("; ")}.</p>`;
+  if(!grupes.length){
+    html += `<div class="empty"><div class="icon">📄</div>Viešuose duomenyse ${escapeHtml(COMPANIES[k].name)} sutarčių, kurios baigiasi per ${men} mėn., nerasta.</div>`;
+  } else {
+    html += grupes.map(g => {
+      const yra = szPlaneYra(k, g.grupe, g.sutartys[0].galioja), kc = g.koncentracija, gid = escapeHtml(g.grupe);
+      const konc = kc ? `<p class="sz-konc">Per 3 metus grupėje sudaryta sutarčių nuo 10 000 Eur: ${kc.sutarciu} (${fmtMoney(kc.suma)}), tiekėjų - ${kc.tiekeju}. Didžiausio tiekėjo dalis - <strong>${String(kc.didziausioDalis).replace(".", ",")} %</strong>${kc.didziausias && !kc.didziausias.paslepta ? " (" + escapeHtml(kc.didziausias.pav) + ")" : ""}.`
+        + (kc.didziausioDalis > 50 ? ` Daugiau nei pusė grupės vertės - vieno tiekėjo: rengiant pirkimą verta apsvarstyti rinkos konsultaciją (${escapeHtml(GP_TEISE.cit("rinkos_konsultacijos", COMPANIES[k].law))}).` : "") + `</p>` : "";
+      const planas = yra.length
+        ? `<p class="sz-planas"><span class="badge green">Plane yra</span> ${yra.slice(0, 3).map(p => escapeHtml(p.objektas || p.nr || "pirkimas") + (pirkimoMetai(p) ? " (" + pirkimoMetai(p) + " m.)" : "")).join("; ")}${yra.length > 3 ? "; dar " + (yra.length - 3) : ""}</p>`
+        : `<p class="sz-planas"><span class="badge yellow">Plane nėra</span> <button type="button" class="btn sm" data-sz-itraukti="${gid}" aria-label="Įtraukti į planą - BVPŽ grupė ${gid}">Įtraukti į planą</button></p>`;
+      return `<div class="sz-grupe" id="sz-${gid}"><h4>${gid} - ${escapeHtml(BVPZ3(g.grupe) || "BVPŽ grupė")}</h4>
+        <div class="table-wrap" style="max-height:none"><table class="sz-lent"><caption class="sr-only">Sutartys, kurios baigiasi: BVPŽ grupė ${gid}</caption>
+        <thead><tr><th scope="col">Sutarties objektas</th><th scope="col">Tiekėjas</th><th scope="col">Vertė be PVM</th><th scope="col">Galioja iki</th></tr></thead><tbody>`
+        + g.sutartys.slice(0, 10).map(c => `<tr><td>${escapeHtml(c.pav || "objektas nenurodytas")}${c.pirkimoNr ? ` <span class="muted">Nr. ${escapeHtml(c.pirkimoNr)}</span>` : ""}</td><td>${szTiekejas(c)}</td><td>${c.verte != null ? fmtMoney(c.verte) : "-"}</td><td>${escapeHtml(c.galioja)} <span class="muted">(po ${+c.menesiu || 0} mėn.)</span></td></tr>`).join("")
+        + `</tbody></table></div>${g.sutartys.length > 10 ? `<p class="muted">Rodoma 10 iš ${g.sutartys.length}.</p>` : ""}${planas}${konc}</div>`;
+    }).join("");
+  }
+  html += `<p class="muted sz-saltinis">${escapeHtml(V.saltiniuTekstas(["vda"], "lt"))} Tai viešų duomenų pagalba planuojant, ne sutarčių apskaita: ar ir kada pirkti, sprendžiate jūs.</p>`;
+  host.innerHTML = html;
+  host.querySelectorAll("[data-sz-itraukti]").forEach(b => b.addEventListener("click", () => szItraukti(b.dataset.szItraukti)));
+}
+function szItraukti(grupe){
+  const g = SZ.z && SZ.z.grupes.find(x => x.grupe === grupe); if(!g || !g.sutartys.length) return;
+  const c = g.sutartys[0], k = SZ.imone, cpv = (c.cpv && c.cpv[0]) || "";
+  openProcModal(undefined, {
+    imone: k, rusis: SZ_RUSIS(grupe), objektas: c.pav || BVPZ3(grupe) || "", bvpz: cpv,
+    sutarciesData: c.galioja,
+    pastabos: `Pagal viešą CVP IS sutartį, kuri baigiasi ${c.galioja}${c.verte != null ? ` (vertė ${fmtMoney(c.verte)} be PVM)` : ""}${c.pirkimoNr ? `, pirkimo Nr. ${c.pirkimoNr}` : ""}. Vertę, būdą ir datas nustatykite patys.`
+  });
+
 }
 function ribosTikPastabos(v){ RIBOS_TIK_PASTABOS = !!v; renderRibos(); const b = document.querySelector(`#ribosRodyti [data-tik="${v ? 1 : 0}"]`); if(b) b.focus(); }
 function ribosKaip(){

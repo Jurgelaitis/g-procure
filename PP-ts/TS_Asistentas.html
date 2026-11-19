@@ -1701,6 +1701,21 @@ details[open] summary {
   .rk-kl { padding: 10px 12px; }
 }
 
+/* Galimi rinkos konsultacijos adresatai (2026-11-19) */
+.rk-adr-laukai { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; margin-top: 12px; }
+.rk-adr-laukai .form-group { margin-bottom: 0; }
+.rk-adr-pastaba, .rk-adr-meta, .rk-adr-sub { color: var(--color-graphite-50-strong); font-size: 13px; }
+.rk-adr-meta { margin: 12px 0 4px; }
+.rk-adr-h { font-size: 14px; margin: 14px 0 4px; }
+.rk-adr-klaida { color: var(--color-error-strong); font-size: 13px; }
+.rk-adr-sarasas { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
+.rk-adr-sarasas li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: start; padding: 6px 8px; border: 1px solid var(--color-graphite-15); border-radius: 8px; }
+.rk-adr-sarasas input { margin-top: 3px; }
+.rk-adr-sarasas label { font-size: 14px; overflow-wrap: anywhere; }
+.rk-adr-sub { grid-column: 2; overflow-wrap: anywhere; }
+.rk-adr-veiksmai { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+@media (max-width: 640px) { .rk-adr-laukai { grid-template-columns: minmax(0, 1fr); } }
+
 </style>
 </head>
 <body>
@@ -2552,6 +2567,18 @@ details[open] summary {
             <div id="rkDiPastaba" class="mt-2" hidden></div>
             <div id="rkEksportoBusena" hidden></div>
           </div>
+          <div class="card mb-3" id="rkAdresatai">
+            <h3 class="card-title">Galimi adresatai: kas laimėjo panašius pirkimus</h3>
+            <p class="rk-adr-pastaba mt-1" id="rkAdrPaaiskinimas">Kvietimas konsultuotis skelbiamas CVP IS - jį mato visi. Šis sąrašas tik padeda informuoti galimus dalyvius, kad kvietimas paskelbtas: kam pranešti, renkatės jūs.</p>
+            <div class="rk-adr-laukai">
+              <div class="form-group"><label class="form-label" for="rkAdrBvpz">BVPŽ kodas</label><input autocomplete="off" type="text" id="rkAdrBvpz" class="form-input" placeholder="pvz., 31210000-8" data-darbas-ne /></div>
+              <div class="form-group"><label class="form-label" for="rkAdrApimtis">Kur ieškoti</label><select id="rkAdrApimtis" class="form-select" data-darbas-ne><option value="lt">Lietuvoje (CVP IS sutartys ir TED)</option><option value="es">Lietuvoje ir visoje ES (TED)</option></select></div>
+              <div class="form-group rk-adr-btn"><button type="button" class="btn btn-secondary" id="rkAdrGauti" onclick="App.rkAdresatai()">Rodyti galimus adresatus</button></div>
+            </div>
+            <p class="form-help" id="rkAdrSiunciama"></p>
+            <div id="rkAdrBusena"></div>
+            <div id="rkAdrRez"></div>
+          </div>
           <div class="rk-dok" id="rkPerziura"></div>
           <div class="wizard-footer" style="flex-wrap:wrap;gap:12px">
             <button class="btn btn-secondary" onclick="App.rkZingsnis(2)"><svg class="ico" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Atgal į klausimus</button>
@@ -3057,6 +3084,7 @@ details[open] summary {
 <!-- Bendras AI proxy transportas (shared) - GP_AI_PROXY. Turi buti pries modulio inline scripta. -->
 <script src="../shared/ai-proxy.js"></script>
 <script src="../shared/busena.js"></script>
+<script src="../shared/viesos-sutartys.js"></script>
 <script src="../shared/saugykla.js"></script>
 <script src="../shared/pdf-darbininkas.js"></script>
 <!-- Biblioteka neįsikėlė (nėra ryšio, o ji dar neišsaugota darbui be interneto) - priežastis žmogui (GP_BIBLIOTEKOS) -->
@@ -5517,6 +5545,7 @@ const App = (() => {
   function rkZingsnis(n) {
     if (n === 2 || n === 3) rkPradek(true);
     rk.zingsnis = n; rk.redaguojamas = null;
+    if (n === 3) rkAdrInit();
     $$('#rkStepper .stepper-step').forEach(s => { const k = +s.dataset.rkStep; s.classList.toggle('active', k === n); s.classList.toggle('completed', k < n);
       if (k === n) s.setAttribute('aria-current', 'step'); else s.removeAttribute('aria-current'); });
     $$('.rk-step').forEach(s => { s.hidden = +s.dataset.rkStep !== n; });
@@ -5658,6 +5687,111 @@ const App = (() => {
       sekme: v => 'Atsisiunčiama: ' + v
     });
   }
+  /* ===== Galimi rinkos konsultacijos adresatai (2026-11-19, G-Procure ateities perspektyvų 3 žingsnis) =====
+     Kas laimėjo panašius pirkimus: Lietuvos viešos CVP IS sutartys (Valstybės duomenų agentūra) ir TED sutarčių sudarymo
+     skelbimai (Lietuva arba visa ES) per G-Procure serverį (shared/viesos-sutartys.js). Tik juridiniai asmenys; asmens vardu
+     pavadintos įmonės - tik suskaičiuojamos. Kam pranešti apie paskelbtą kvietimą, renkasi žmogus (pažymi ir nukopijuoja);
+     nieko neišsaugoma ir į kvietimą neįrašoma. Duomenys gaunami tik paspaudus mygtuką. */
+  const rkAdr = { duomenys: null, pazymeti: new Set(), apimtis: 'lt' };
+  function rkAdrInit() {
+    const V = window.GP_VIESOS_SUTARTYS;
+    const s = document.getElementById('rkAdrSiunciama');
+    if (s && !s.textContent && V) s.textContent = V.siunciama('rinka', 'lt');
+    const b = document.getElementById('rkAdrBvpz');
+    if (b && !b.dataset.klauso) { b.dataset.klauso = '1'; b.addEventListener('input', () => { b.dataset.zmogus = '1'; }); }
+    // BVPŽ - iš pirkimo konteksto ar TS kūrimo (juos pildo ir pirkimo kortelė); žmogaus įrašytas neperrašomas
+    if (b && !b.value && !b.dataset.zmogus) {
+      const v = ((document.getElementById('metaCpv') || {}).value || (document.getElementById('genCpv') || {}).value || '').trim();
+      if (v) b.value = v;
+    }
+    const p = document.getElementById('rkAdrPaaiskinimas');
+    if (p) p.textContent = 'Kvietimas konsultuotis skelbiamas CVP IS - jį mato visi (' + teise('rinkos_konsultacijos') + '). Šis sąrašas tik padeda informuoti galimus dalyvius, kad kvietimas paskelbtas: kam pranešti, renkatės jūs.';
+  }
+  async function rkAdresatai() {
+    rkAdrInit();
+    const V = window.GP_VIESOS_SUTARTYS, B = window.GP_BUSENA;
+    if (!V || !B) return;
+    const lauk = document.getElementById('rkAdrBvpz'), k = V.cpvPradzia(String(lauk.value || '').replace(/\s/g, ''));
+    document.getElementById('rkAdrRez').innerHTML = '';
+    rkAdr.duomenys = null; rkAdr.pazymeti = new Set();
+    if (!k) { B.rodyk('#rkAdrBusena', { tipas: 'klaida', tekstas: 'Įrašykite BVPŽ kodą (bent 3 pirmus skaitmenis, pvz., 31210000-8).' }); lauk.focus(); return; }
+    const ap = document.getElementById('rkAdrApimtis').value === 'es' ? 'es' : 'lt';
+    const r = await B.vykdyk('#rkAdrBusena', { tipas: 'eiga', tekstas: 'Ieškoma, kas laimėjo panašius pirkimus...', klaidosPriesdelis: 'Nepavyko gauti duomenų',
+      kartoti: () => rkAdresatai(),
+      veiksmas: async () => {
+        const x = await V.rinka(k, { ted: ap, eiga: () => B.rodyk('#rkAdrBusena', { tipas: 'eiga', tekstas: V.klaida('ruosiamaEiga', 'lt') }) });
+        if (!x.ok) throw new Error(V.klaida(x.rusis, 'lt'));
+        return x;
+      } });
+    if (!r.ok) return;
+    rkAdr.duomenys = r.reiksme; rkAdr.apimtis = ap;
+    B.slepk('#rkAdrBusena');
+    rkAdrPiesk();
+  }
+  const TED_NR = /^\d{1,8}-\d{4}$/;
+  function rkAdrEilute(saltinis, i, x) {
+    const id = 'rkAdr-' + saltinis + '-' + i;
+    const kodas = x.kodas ? ' <span class="rk-adr-pastaba">' + escapeHtml(x.kodas) + '</span>' : '';
+    const salis = saltinis === 'ted' && x.salis ? ' <span class="badge badge-neutral">' + escapeHtml(x.salis) + '</span>' : '';
+    const sk = 'sutarčių: ' + (+x.kiekis || 0) + (x.suma ? ' · ' + escapeHtml(new Intl.NumberFormat('lt-LT', { maximumFractionDigits: 0 }).format(x.suma)) + ' Eur' : '') + (x.paskutine ? ' · paskutinė ' + escapeHtml(x.paskutine) : '');
+    const ted = saltinis === 'ted' && x.skelbimas && TED_NR.test(x.skelbimas) ? ' · <a href="https://ted.europa.eu/lt/notice/-/detail/' + x.skelbimas + '" target="_blank" rel="noopener noreferrer">TED skelbimas</a>' : '';
+    return '<li><input type="checkbox" id="' + id + '" data-adr="' + saltinis + ':' + i + '"' + (rkAdr.pazymeti.has(saltinis + ':' + i) ? ' checked' : '') + '>'
+      + '<label for="' + id + '">' + escapeHtml(x.pav || 'pavadinimas nenurodytas') + kodas + salis + '</label><div class="rk-adr-sub">' + sk + ted + '</div></li>';
+  }
+  function rkAdrPiesk() {
+    const host = document.getElementById('rkAdrRez'), d = rkAdr.duomenys, V = window.GP_VIESOS_SUTARTYS;
+    if (!host || !d) return;
+    const kl = d.klaidos || {}, h = [];
+    const atn = d.meta && d.meta.atnaujinta ? V.atnaujinta(d.meta.atnaujinta, 'lt') : '';
+    h.push('<p class="rk-adr-meta">BVPŽ grupė ' + escapeHtml(d.prefiksas || '') + '. Sutartys nuo 10 000 Eur, sudarytos per 3 metus. Duomenys gauti ' + escapeHtml(atn) + (d.meta && d.meta.pasenusi ? ' (šaltinis neatsako - rodomi ankstesni duomenys)' : '') + '.</p>');
+    // Lietuva (CVP IS sutartys)
+    h.push('<h4 class="rk-adr-h">Lietuvoje (CVP IS sutartys)</h4>');
+    if (!d.lt) h.push('<p class="rk-adr-klaida">Lietuvos viešų sutarčių duomenų gauti nepavyko' + (kl.vda ? ' (' + escapeHtml(kl.vda) + ')' : '') + ' - būsena nežinoma.</p>');
+    else if (!d.lt.tiekeju) h.push('<p class="rk-adr-pastaba">Šios BVPŽ grupės sutarčių nuo 10 000 Eur per 3 metus viešuose duomenyse nerasta.</p>');
+    else {
+      h.push('<p class="rk-adr-pastaba">Sutarčių: ' + d.lt.sutarciu + (d.lt.apribota ? ' (naujausios ' + d.lt.sutarciu + ')' : '') + ', juridinių asmenų: ' + d.lt.tiekeju + '. Rikiuota pagal laimėtų sutarčių vertę.'
+        + (d.lt.paslepta ? ' Asmens vardu pavadintų įmonių: ' + d.lt.paslepta + ' (pavadinimai nerodomi).' : '')
+        + (d.lt.beTiekejo ? ' Sutarčių be paskelbto tiekėjo: ' + d.lt.beTiekejo + '.' : '') + '</p>');
+      h.push('<ul class="rk-adr-sarasas">' + d.lt.tiekejai.map((x, i) => rkAdrEilute('lt', i, x)).join('') + '</ul>');
+      if (d.lt.daugiau) h.push('<p class="rk-adr-pastaba">Dar juridinių asmenų: ' + d.lt.daugiau + ' (rodoma ' + d.lt.tiekejai.length + ').</p>');
+    }
+    // TED
+    h.push('<h4 class="rk-adr-h">' + (rkAdr.apimtis === 'es' ? 'Visoje ES (TED)' : 'Lietuvoje (TED)') + '</h4>');
+    if (!d.ted) h.push('<p class="rk-adr-klaida">TED duomenų gauti nepavyko' + (kl.ted ? ' (' + escapeHtml(kl.ted) + ')' : '') + ' - būsena nežinoma.</p>');
+    else if (!d.ted.laimetojai.length) h.push('<p class="rk-adr-pastaba">TED sutarčių sudarymo skelbimų su laimėtojais šiai BVPŽ grupei per 3 metus nerasta' + (d.ted.skelbimu ? ' (skelbimų be laimėtojo duomenų: ' + d.ted.skelbimu + ')' : '') + '.</p>');
+    else {
+      h.push('<p class="rk-adr-pastaba">Skelbimų: ' + d.ted.skelbimu + (d.ted.apribota ? ' (naujausi iš ' + d.ted.viso + ')' : '') + (d.ted.pasiulymuMediana != null ? ', pasiūlymų skaičiaus mediana - ' + String(d.ted.pasiulymuMediana).replace('.', ',') : '') + '. Laimėtojų duomenys TED skelbimuose - nuo 2024 m.'
+        + (d.ted.paslepta ? ' Asmens vardu pavadintų įmonių: ' + d.ted.paslepta + ' (pavadinimai nerodomi).' : '') + '</p>');
+      h.push('<ul class="rk-adr-sarasas">' + d.ted.laimetojai.map((x, i) => rkAdrEilute('ted', i, x)).join('') + '</ul>');
+    }
+    h.push('<div class="rk-adr-veiksmai"><button type="button" class="btn btn-secondary" id="rkAdrKopijuoti" onclick="App.rkAdrKopijuok()"' + (rkAdr.pazymeti.size ? '' : ' disabled') + '>Kopijuoti pažymėtų sąrašą</button><span class="rk-adr-pastaba" id="rkAdrPazymeta">Pažymėta: ' + rkAdr.pazymeti.size + '</span></div>');
+    h.push('<p class="form-help">' + escapeHtml(V.saltiniuTekstas(['vda', 'ted'], 'lt')) + ' Sąrašas niekur neišsaugomas ir į kvietimą neįrašomas.</p>');
+    host.innerHTML = h.join('');
+    if (!host.dataset.klauso) {
+      host.dataset.klauso = '1';
+      host.addEventListener('change', e => {
+        const t = e.target;
+        if (!t || !t.dataset || !t.dataset.adr) return;
+        if (t.checked) rkAdr.pazymeti.add(t.dataset.adr); else rkAdr.pazymeti.delete(t.dataset.adr);
+        const b = document.getElementById('rkAdrKopijuoti'), n = document.getElementById('rkAdrPazymeta');
+        if (b) b.disabled = !rkAdr.pazymeti.size;
+        if (n) n.textContent = 'Pažymėta: ' + rkAdr.pazymeti.size;
+      });
+    }
+  }
+  function rkAdrSarasas() {
+    const d = rkAdr.duomenys; if (!d) return [];
+    return [...rkAdr.pazymeti].map(raktas => {
+      const [s, i] = raktas.split(':'), x = s === 'lt' ? (d.lt && d.lt.tiekejai[+i]) : (d.ted && d.ted.laimetojai[+i]);
+      return x ? (x.pav || '') + (x.kodas ? ' (' + x.kodas + ')' : '') + (s === 'ted' && x.salis ? ', ' + x.salis : '') : null;
+    }).filter(Boolean);
+  }
+  function rkAdrKopijuok() {
+    const sar = rkAdrSarasas();
+    if (!sar.length) return Promise.resolve(false);
+    return GP_KOPIJA.kopijuok(sar.join('\n'), { sekme: 'Pažymėti adresatai nukopijuoti į iškarpinę.' });
+  }
+  function rkAdrBusena() { return rkAdr; }   // testams
   function rkKopijuok() {
     const itr = rk.klausimai.filter(k => k.itraukta);
     if (!itr.length) return toast('Nėra įtrauktų klausimų.', 'error');
@@ -5671,6 +5805,9 @@ const App = (() => {
     $$('#rkPriedai input').forEach(e => { e.checked = e.value === 'ts'; });
     const c = document.querySelector('input[name="rkForma"][value="cvpis"]'); if (c) c.checked = true;
     $('#rkFailoSarasas').innerHTML = ''; $('#rkIsKur').textContent = '';
+    // galimi adresatai - kito pirkimo sąrašas nelieka
+    rkAdr.duomenys = null; rkAdr.pazymeti = new Set(); $('#rkAdrRez').innerHTML = ''; if (window.GP_BUSENA) GP_BUSENA.slepk('#rkAdrBusena');
+    const adrB = $('#rkAdrBvpz'); if (adrB) { adrB.value = ''; delete adrB.dataset.zmogus; }
     rkFormosPokytis(); rkTekstoStat(ribotiSpec('')); rkTerminoUzuomina(); rkZingsnis(1); rkAtvertas();
   }
   // ===== RINKOS KONSULTACIJOS SUVESTINĖ (2026-10-15): 4 žingsnis. Variklis - RinkosSuvestine; būsena - tik atmintyje (rk.sv) =====
@@ -6075,7 +6212,7 @@ const App = (() => {
     runAnalysis, runRulesOnly,
     // Rinkos konsultacija (2026-10-15)
     rkZingsnis, rkNaudokTs, rkTekstoPokytis, rkFormosPokytis, rkTerminoUzuomina, rkSiulomasTerminas, rkPradek, rkSiulykTaisykles, rkSiulykDI,
-    rkPerjunk, rkRedaguok, rkIssaugok, rkAtsauk, rkSalink, rkPridek, rkItraukVisus, rkAtmeskNeitrauktus, rkPerziura, rkEksportuok, rkKopijuok, rkNaujas,
+    rkPerjunk, rkRedaguok, rkIssaugok, rkAtsauk, rkSalink, rkPridek, rkItraukVisus, rkAtmeskNeitrauktus, rkPerziura, rkEksportuok, rkKopijuok, rkNaujas, rkAdresatai, rkAdrKopijuok, rkAdrBusena,
     rkDuomenys, rkBusena, genBusena, rkAtvertas, renderFinalPreview,
     rkSvFailai, rkSvPriimk, rkSvIklijuok, rkSvPiesk, rkSvVardas, rkSvSalink, rkSvBusena, rkSvPriezastis, rkSvKita, rkSvKonf, rkSvTema, rkSvLaukas, rkSvSprendimas, rkSvKeisti,
     rkSvPazodziui, rkSvSkaiciai, rkSvViesaIsvalyk, rkSvEikIApibendrinima, rkSvNaudokDi, rkSvAtmeskDi, rkSvKetinimas, rkSvKaina, rkSvKainosPvm, rkSvNaudokKaina, rkSvDI, rkSvPerziura, rkSvEksportuok, rkSvNaujas,
