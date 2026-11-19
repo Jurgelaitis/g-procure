@@ -2625,6 +2625,97 @@ async function testaiDiUzduotys1108() {
    R-6 - taisyklių ir DI pastabos nesujungiamos, antraštė „Bendras vertinimas“, R-4 - žaliasis pirkimas savaime ir „'green'“ DI santraukoje,
    R-5 - PP-ts pats nekartoja DI užklausos po ilgo laukimo 502 / 504.
    ========================================================================== */
+/* Galimi rinkos konsultacijos adresatai (2026-11-19): kas laimėjo panašius pirkimus - Lietuvos CVP IS sutartys ir TED; žmogus pažymi
+   ir nukopijuoja; tik paspaudus; nepavykęs šaltinis - pasakoma, ne „nerasta“. Serverio atsakymas imituojamas (tinklas nenaudojamas). */
+function rkAdrAtsakymas(o){
+  return Object.assign({ ok: true, prefiksas: '3121', klaidos: {}, meta: { atnaujinta: '2026-11-19T08:00:00Z', pasenusi: false },
+    lt: { sutarciu: 40, apribota: false, beTiekejo: 2, tiekeju: 3, paslepta: 1, daugiau: 0, tiekejai: [
+      { pav: 'UAB "TETAS"', kodas: '300513148', kiekis: 5, suma: 1200000, didziausia: 500000, paskutine: '2026-05-01' },
+      { pav: 'UAB <img src=x onerror=window.__xss=1>', kodas: '111111111', kiekis: 1, suma: 20000, didziausia: 20000, paskutine: '2025-02-01' }] },
+    ted: { skelbimu: 6, viso: 6, apribota: false, beLaimetojo: 1, pasiulymuMediana: 2.5, paslepta: 0, laimetojai: [
+      { pav: 'Siemens Energy AB', salis: 'SWE', kodas: null, kiekis: 2, suma: 3000000, paskutine: '2025-09-01', skelbimas: '137503-2024' },
+      { pav: 'Kitas UAB', salis: 'LTU', kodas: '222222222', kiekis: 1, suma: 0, paskutine: '2024-06-01', skelbimas: 'javascript:alert(1)' }] } }, o || {});
+}
+async function testaiAdresatai1119() {
+  grupe('Rinkos konsultacija: galimi adresatai pagal viešus duomenis (2026-11-19)');
+  const kv = [], tikras = W().GP_VIESOS_SUTARTYS.rinka;
+  const stub = ats => { W().GP_VIESOS_SUTARTYS.rinka = async (k, o) => { kv.push([k, o.ted]); return typeof ats === 'function' ? ats() : ats; }; };
+
+  await testas('3 žingsnyje: BVPŽ iš pirkimo konteksto (įrašytas ranka neperrašomas), paaiškinimas - kvietimas skelbiamas CVP IS visiems (registro nuoroda), kas siunčiama; be paspaudimo nesiunčiama', async () => {
+    const { w, d } = rkParuosk({}); stub(rkAdrAtsakymas());
+    d.getElementById('metaCpv').value = '31211000-2';
+    M('App.rkZingsnis(3)');
+    lygu(d.getElementById('rkAdrBvpz').value, '31211000-2', 'BVPŽ iš konteksto');
+    turi(d.getElementById('rkAdrPaaiskinimas').textContent, 'skelbiamas CVP IS - jį mato visi (' + M('GP_TEISE.cit("rinkos_konsultacijos", "PI")') + ')', 'paaiškinimas su registro nuoroda');
+    turi(d.getElementById('rkAdrSiunciama').textContent, 'tik BVPŽ kodo pradžia', 'kas siunčiama');
+    d.getElementById('rkAdrBvpz').value = '45231000-5'; d.getElementById('rkAdrBvpz').dispatchEvent(new w.Event('input'));
+    M('App.rkZingsnis(2)'); M('App.rkZingsnis(3)');
+    lygu(d.getElementById('rkAdrBvpz').value, '45231000-5', 'ranka įrašytas neperrašomas');
+    lygu(kv.length, 0, 'be paspaudimo nesiunčiama');
+    tiesa(['rkAdrBvpz', 'rkAdrApimtis'].every(id => d.getElementById(id).hasAttribute('data-darbas-ne') && d.querySelector('label[for=' + id + ']')), 'laukai su pavadinimais');
+  });
+  await testas('Paspaudus: Lietuvos ir TED sąrašai su žymimaisiais langeliais, ekranuoti pavadinimai, TED nuoroda tik tikram skelbimo numeriui, pasiūlymų mediana, paslėptų skaičius, šaltiniai; pažymėti - kopijuojami per GP_KOPIJA', async () => {
+    const { w, d } = rkParuosk({}); stub(rkAdrAtsakymas()); M('App.rkZingsnis(3)');
+    d.getElementById('rkAdrBvpz').value = '31211000-2'; d.getElementById('rkAdrApimtis').value = 'es';
+    await M('App.rkAdresatai()');
+    lygu(kv[kv.length - 1], ['31211', 'es'], 'BVPŽ pradžia ir apimtis');
+    const r = d.getElementById('rkAdrRez'), t = r.textContent;
+    lygu(r.querySelectorAll('input[type=checkbox][data-adr]').length, 4, 'žymimieji langeliai');
+    await new Promise(x => setTimeout(x, 50));
+    tiesa(!r.querySelector('img') && !w.__xss && /UAB <img src=x onerror=window.__xss=1>/.test(t), 'pavadinimas - tik tekstas');
+    const a = [...r.querySelectorAll('a')].map(x => x.getAttribute('href'));
+    lygu(a, ['https://ted.europa.eu/lt/notice/-/detail/137503-2024'], 'TED nuoroda - tik tikram numeriui');
+    tiesa(/Visoje ES \(TED\)/.test(t) && /pasiūlymų skaičiaus mediana - 2,5/.test(t) && /Asmens vardu pavadintų įmonių: 1 \(pavadinimai nerodomi\)/.test(t), 'TED ir paslėptų skaičius');
+    tiesa(/CC BY 4\.0/.test(t) && /laisvai pakartotinai naudoti/.test(t) && /niekur neišsaugomas ir į kvietimą neįrašomas/.test(t), 'šaltiniai');
+    tiesa(d.getElementById('rkAdrKopijuoti').disabled, 'be pažymėtų - kopijuoti negalima');
+    const kop = []; const ok = w.GP_KOPIJA.kopijuok; w.GP_KOPIJA.kopijuok = (tx, o) => { kop.push(tx); return Promise.resolve(true); };
+    try {
+      r.querySelector('[data-adr="lt:0"]').click(); r.querySelector('[data-adr="ted:0"]').click();
+      lygu([d.getElementById('rkAdrKopijuoti').disabled, d.getElementById('rkAdrPazymeta').textContent], [false, 'Pažymėta: 2']);
+      d.getElementById('rkAdrKopijuoti').click(); await new Promise(x => setTimeout(x, 20));
+      lygu(kop, ['UAB "TETAS" (300513148)\nSiemens Energy AB, SWE']);
+    } finally { w.GP_KOPIJA.kopijuok = ok; }
+    lygu(M('App.rkBusena()').klausimai.some(k => /TETAS/.test(k.tekstas || '')), false, 'į kvietimą neįrašoma');
+    tiesa(!/TETAS/.test(d.getElementById('rkPerziura').textContent), 'kvietimo peržiūroje adresatų nėra');
+  });
+  await testas('Vienam šaltiniui nepavykus - jo dalyje „būsena nežinoma“ su priežastimi, kitas rodomas; tuščias - „nerasta“; klaida - su priežastimi ir „Bandyti dar kartą“; „Pradėti iš naujo“ išvalo', async () => {
+    const { w, d } = rkParuosk({}); M('App.rkZingsnis(3)'); d.getElementById('rkAdrBvpz').value = '31211000-2';
+    stub(rkAdrAtsakymas({ ted: null, klaidos: { ted: 'šaltinis atsakė klaida (HTTP 5xx)' } }));
+    await M('App.rkAdresatai()');
+    let t = d.getElementById('rkAdrRez').textContent;
+    tiesa(/TED duomenų gauti nepavyko \(šaltinis atsakė klaida \(HTTP 5xx\)\) - būsena nežinoma/.test(t) && /TETAS/.test(t) && !/TED.{0,60}nerasta/.test(t), t.slice(0, 300));
+    stub(rkAdrAtsakymas({ lt: Object.assign(rkAdrAtsakymas().lt, { tiekeju: 0, tiekejai: [], paslepta: 0 }), ted: Object.assign(rkAdrAtsakymas().ted, { laimetojai: [] }) }));
+    await M('App.rkAdresatai()');
+    t = d.getElementById('rkAdrRez').textContent;
+    tiesa(/sutarčių nuo 10 000 Eur per 3 metus viešuose duomenyse nerasta/.test(t) && /su laimėtojais šiai BVPŽ grupei per 3 metus nerasta/.test(t), t.slice(0, 300));
+    for (const [rusis, re] of [['neidiegta', /dar neįdiegta/], ['saltinis', /šaltinis neatsakė/], ['rysys', /Nėra ryšio/]]) {
+      stub({ ok: false, rusis: rusis });
+      await M('App.rkAdresatai()');
+      const b = d.getElementById('rkAdrBusena').textContent;
+      tiesa(re.test(b) && /Bandyti dar kartą/.test(b) && !d.getElementById('rkAdrRez').textContent, rusis + ': ' + b);
+    }
+    d.getElementById('rkAdrBvpz').value = ''; d.getElementById('rkAdrBvpz').dispatchEvent(new w.Event('input'));   // žmogus ištrynė - iš konteksto nebepildoma
+    await M('App.rkAdresatai()');
+    tiesa(/Įrašykite BVPŽ kodą/.test(d.getElementById('rkAdrBusena').textContent) && d.activeElement.id === 'rkAdrBvpz', 'be BVPŽ - klaida ir fokusas');
+    stub(rkAdrAtsakymas()); d.getElementById('rkAdrBvpz').value = '31211000-2'; await M('App.rkAdresatai()');
+    const oc = w.confirm; w.confirm = () => true;
+    try { M('App.rkNaujas()'); } finally { w.confirm = oc; }
+    lygu([d.getElementById('rkAdrRez').innerHTML, d.getElementById('rkAdrBvpz').value, M('App.rkAdrBusena()').duomenys], ['', '', null], '„Pradėti iš naujo“ išvalo');
+  });
+  await testas('Tikras klientas: GET su BVPŽ pradžia ir apimtimi į api.g-procure.com be slapukų; 404 - paslauga dar neįdiegta', async () => {
+    const { w, d } = rkParuosk({}); M('App.rkZingsnis(3)');
+    w.GP_VIESOS_SUTARTYS.rinka = tikras;
+    const q = []; const of = w.fetch;
+    w.fetch = (u, o) => { q.push([u, o.credentials, o.referrerPolicy]); return Promise.resolve({ status: 404, json: () => Promise.resolve({ klaida: 'x' }) }); };
+    try {
+      d.getElementById('rkAdrBvpz').value = '45231000-5'; d.getElementById('rkAdrApimtis').value = 'lt';
+      await M('App.rkAdresatai()');
+      lygu(q, [['https://api.g-procure.com/api/sutartys/rinka?cpv=45231&ted=lt', 'omit', 'no-referrer']]);
+      tiesa(/dar neįdiegta/.test(d.getElementById('rkAdrBusena').textContent), d.getElementById('rkAdrBusena').textContent);
+    } finally { w.fetch = of; }
+  });
+}
+
 async function testaiPilotas1110() {
   grupe('Pilotas su tikru pirkimu (2026-11-10): taisyklės, sujungimas, žaliasis savaime, kartojimas');
   const zen = (t, m) => taisykles(t, m).issues.filter(i => i.category === 'brand_restriction').map(i => i.title.replace(/^Prekės ženklas „|" be.*$/g, ''));
@@ -2873,6 +2964,7 @@ async function viskas() {
     await testaiLaukai1105();
     await testaiDiUzduotys1108();
     await testaiPilotas1110();
+    await testaiAdresatai1119();
 
     document.getElementById('busena').textContent =
       R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';
