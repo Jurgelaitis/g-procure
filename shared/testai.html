@@ -8913,7 +8913,7 @@ async function testaiSutikimas(){
         re.forEach(x => tiesa(x.test(b.textContent), b.getAttribute("data-kalba") + ": nėra " + x));
       tiesa(!/Google \(Google Fonts\)/.test(d.body.innerHTML) && lt.querySelector('a[href="slapukai.html"]') && en.querySelector('a[href="slapukai.html"]') && lt.querySelector("button[data-gp-slapukai]") && en.querySelector("button[data-gp-slapukai]"), "teikėjai ar nuorodos į slapukų politiką ir nustatymus");
       // Duomenų rūšys (nuo 2026-10-16 - blokais, ne 5 stulpelių lentele): pavadinimas ir keturios eilutės, paskutinė - teisinis pagrindas
-      tiesa(lt.querySelectorAll(".duomenu-irasas").length === 13 && en.querySelectorAll(".duomenu-irasas").length === 13, "duomenų rūšių - ne 13 (nuo 2026-10-18 - ir CVP IS pirkimo duomenys, nuo 2026-11-08 - sankcijų sąrašų patikra)");
+      tiesa(lt.querySelectorAll(".duomenu-irasas").length === 14 && en.querySelectorAll(".duomenu-irasas").length === 14, "duomenų rūšių - ne 14 (nuo 2026-10-18 - ir CVP IS pirkimo duomenys, nuo 2026-11-08 - sankcijų sąrašų patikra, nuo 2026-11-20 - viešų pirkimų sutarčių duomenys)");
       for (const [b, re, pav] of [[lt, /BDAR \d+ str\.|Elektroninių ryšių įstatymo 73 straipsnio 4 dal|organizacija/, ["Duomenys", "Kur ir kiek laiko", "Tikslas", "Teisinis pagrindas"]],
                                   [en, /Article \d+\(\d+\)|organisation/, ["Data", "Where and for how long", "Purpose", "Legal basis"]]])
         [...b.querySelectorAll(".duomenu-irasas")].forEach(x => {
@@ -12357,7 +12357,7 @@ async function testaiViesosSutartys1119(){
       await V.rinka("31210000-8", { ted: "es", fetch: su(ats(200, { lt: null, ted: null, klaidos: {} })) });
       await V.rinka("45231000-5", { ted: "x", fetch: su(ats(200, { lt: null, ted: null })) });
       await V.pajegumas("45231000-5", { apyvarta: 1500000.5, patirtis: 300000, fetch: su(ats(200, { pajegumas: { visi: 0 } })) });
-      lygu(kv.map(x => x[0]), ["https://api.g-procure.com/api/sutartys/pirkejas/302564383", "https://api.g-procure.com/api/sutartys/rinka?cpv=3121&ted=es",
+      lygu(kv.map(x => x[0]), ["https://api.g-procure.com/api/sutartys/busena", "https://api.g-procure.com/api/sutartys/pirkejas/302564383", "https://api.g-procure.com/api/sutartys/rinka?cpv=3121&ted=es",
         "https://api.g-procure.com/api/sutartys/rinka?cpv=45231&ted=lt", "https://api.g-procure.com/api/sutartys/pajegumas?cpv=45231&apyvarta=1500000.5&patirtis=300000"]);
       tiesa(kv.every(x => x[1].method === "GET" && x[1].credentials === "omit" && x[1].referrerPolicy === "no-referrer" && x[1].cache === "no-store" && !x[1].body), "GET be slapukų");
       lygu([V.cpvPradzia("31210000-8"), V.cpvPradzia(" 45000000 "), V.cpvPradzia("312"), V.cpvPradzia("31"), V.cpvPradzia("31210000-88"), V.cpvPradzia(null)], ["3121", "450", "312", null, null, null]);
@@ -12381,6 +12381,26 @@ async function testaiViesosSutartys1119(){
       lygu((await r(ats(200, {}), { signal: ctl.signal })).rusis, "atsaukta");
       const p = await V.pajegumas("3121", { patirtis: 5, fetch: () => Promise.resolve(ats(200, { pajegumas: { visi: "3" } })) });
       lygu(p.rusis, "rysys", "netinkamas skaičius - ne duomenys");
+    } finally { f.remove(); }
+  });
+  await testas("Paslaugos patikra (2026-11-20): pirmiausia GET /busena be duomenų; 404 - „neidiegta“ ir užklausa su kodu nesiunčiama (nginx ją įrašytų į bendrą prieigos žurnalą); ryšio klaida - „rysys“; paslauga yra - įsimenama, 404 - ne", async () => {
+    const { f, w } = await ramasVs();
+    try {
+      const V = w.GP_VIESOS_SUTARTYS, kv = [];
+      let busena = 404;
+      const fk = (u, o) => { kv.push([u, o.credentials, o.referrerPolicy, o.method]); if (/\/busena$/.test(u)) return busena === "klaida" ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve(ats(busena, {}));
+        return Promise.resolve(ats(200, { zemelapis: { laikotarpis: { siandien: "2026-11-20" }, grupes: [] } })); };
+      lygu((await V.pirkejas("302564383", { fetch: fk })).rusis, "neidiegta", "404");
+      lygu(kv, [["https://api.g-procure.com/api/sutartys/busena", "omit", "no-referrer", "GET"]], "404 - tik būsenos užklausa, be kodo");
+      busena = "klaida";
+      lygu([(await V.pajegumas("3121", { apyvarta: 5, fetch: fk })).rusis, kv.length], ["rysys", 2], "ryšio klaida - duomenys nesiunčiami");
+      busena = 404;
+      lygu((await V.rinka("3121", { fetch: fk })).rusis, "neidiegta", "404 neįsimenamas - tikrinama vėl");
+      busena = 503;
+      tiesa((await V.pirkejas("302564383", { fetch: fk })).ok, "paslauga yra - užklausa išsiųsta");
+      lygu(kv.slice(3).map(x => x[0]), ["https://api.g-procure.com/api/sutartys/busena", "https://api.g-procure.com/api/sutartys/pirkejas/302564383"]);
+      await V.pirkejas("302564383", { fetch: fk });
+      lygu(kv.slice(5).map(x => x[0]), ["https://api.g-procure.com/api/sutartys/pirkejas/302564383"], "paslauga įsiminta - būsena antrą kartą netikrinama");
     } finally { f.remove(); }
   });
   await testas("Tekstai LT ir EN: nepavykęs gavimas niekada nėra „nerasta“, kas siunčiama, šaltiniai su licencija; be ilgojo brūkšnio; atnaujinimo laikas - Lietuvos", async () => {

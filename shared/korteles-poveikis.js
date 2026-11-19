@@ -38,7 +38,7 @@
       laukai: ["objektas", "pavadinimas", "vykdytojas"] },
     "pp-salygos": { lt: "Pirkimo sąlygų generatorius", en: "Procurement conditions generator", kelias: "PP-salygos/PP-SALYGOS.html",
       laukai: ["budas", "bvpz", "nacsaugumas", "objektas", "paskelbimas", "pavadinimas", "rezimas", "verte", "vykdytojas",
-               "numeris", "dalys", "trukmeMen", "kriterijus", "kvalifikacija", "zaliasis", "esLesos", "organizatoriausKontaktai", "grafikas", "vertinimas"] },
+               "numeris", "dalys", "trukmeMen", "kriterijus", "kvalifikacija", "zaliasis", "esLesos", "organizatoriausKontaktai", "grafikas", "vertinimas", "nziaTaikymas"] },
     "pp-ts": { lt: "TS asistentas", en: "TS assistant", kelias: "PP-ts/TS_Asistentas.html",
       laukai: ["budas", "bvpz", "dalys", "kriterijus", "objektas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas", "zaliasis"] },
     "pp-qual": { lt: "Kvalifikaciniai reikalavimai", en: "Qualification requirements", kelias: "PP-qual/PP-QUAL.html",

@@ -95,6 +95,25 @@
     });
   }
 
+  // Paslaugos patikra (2026-11-20): prieš pirmą užklausą su duomenimis - GET /busena be jokių duomenų. Kol paslauga serveryje
+  // neįdiegta, nginx užklausą su įmonės ar BVPŽ kodu priimtų numatytuoju bloku ir įrašytų į bendrą prieigos žurnalą, o privatumo
+  // politika sako, kad šios užklausos į žurnalą neįrašomos. 404 - „neidiegta“ ir duomenys nesiunčiami; kitas atsakymas - paslauga yra
+  // (įsimenama šiam puslapiui); ryšio klaida - „rysys“. 404 neįsimenamas - įdiegus kitas paspaudimas veiks.
+  var paslaugaYra = false;
+  function patikrinkPaslauga(f, o) {
+    if (paslaugaYra) return Promise.resolve(null);
+    if (o.signal && o.signal.aborted) return Promise.resolve({ ok: false, rusis: "atsaukta" });
+    return Promise.resolve().then(function () {
+      return f(API_BAZE + "/busena", { method: "GET", credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store", headers: { "Accept": "application/json" }, signal: o.signal });
+    }).then(function (r) {
+      if (r && r.status === 404) return { ok: false, rusis: "neidiegta" };
+      paslaugaYra = true;
+      return null;
+    }, function () {
+      return { ok: false, rusis: o.signal && o.signal.aborted ? "atsaukta" : "rysys" };
+    });
+  }
+
   function kviesk(kelias, o, tinka) {
     o = o || {};
     var f = o.fetch || global.fetch;
@@ -128,7 +147,7 @@
         return baik({ ok: false, rusis: o.signal && o.signal.aborted ? "atsaukta" : "rysys" });
       });
     }
-    return vienas();
+    return patikrinkPaslauga(f, o).then(function (x) { return x || vienas(); });
   }
   function metaIs(j) { var m = j.meta && typeof j.meta === "object" ? j.meta : {}; return { atnaujinta: typeof m.atnaujinta === "string" ? m.atnaujinta : null, pasenusi: m.pasenusi === true, klaida: m.klaida && typeof m.klaida === "object" ? m.klaida : null }; }
 
