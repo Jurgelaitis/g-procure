@@ -122,6 +122,12 @@
     if (vidus) b.focus();
     e.stopPropagation();
   }, true);
+  // Pasikeitus lango pločiui (telefono pasukimas, siauresnis langas) atvertas paaiškinimas sutalpinamas iš naujo (2026-11-19):
+  // iki tol jis likdavo ten, kur buvo sutalpintas platesniame lange, ir 320 px ekrane dalis jo būdavo už kairiojo krašto
+  global.addEventListener("resize", function () {
+    var pop = atviras ? popas(atviras) : null;
+    if (pop && !pop.hidden) sutalpink(pop);
+  });
 
   global.GP_PAAISKINIMAS = { html: html, uzverk: uzverk, atverk: function (btn) { atverk(btn, true); } };
 })(typeof window !== "undefined" ? window : this);

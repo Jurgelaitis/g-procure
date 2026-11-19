@@ -98,7 +98,24 @@
   ];
   /* esLesos (2026-11-12, antras pilotas su tikrais pirkimais) - ar pirkimas finansuojamas ES lėšomis: "taip" / "ne" / null (nenurodyta;
      senos kortelės be lauko - null). Šaltiniai - kortelės forma, CVP IS duomenys (euFunding), PP-plan „ES lėšos“. */
-  var SPRENDIMAI = { kriterijus: KRITERIJAI, zaliasis: TAIP_NE, nacsaugumas: TAIP_NE, kvalifikacija: KVALIFIKACIJA, cpo: CPO, esLesos: TAIP_NE };
+  /* Prekių duomenų reikalavimai (2026-11-19, krypties 4 etapas, naudotojo „Darome“): ką pirkimo vykdytojas, rengdamas pirkimą,
+     nusprendė reikalauti iš tiekėjų apie siūlomas prekes - kilmės šalies, anglies pėdsako deklaracijos (EPD ar GWP), skaitmeninio
+     gaminio paso nuorodos ar identifikatoriaus - ir ar pirkimui taikomi Reglamento (ES) 2024/1735 (nulinio balanso technologijos)
+     viešųjų pirkimų reikalavimai. Tai sprendimai, ne pasiūlymuose gauti duomenys (sutarties valdymas praleidžiamas, naudotojo
+     sprendimas 2026-11-14). "" - nenurodyta (numatytųjų nėra; senos kortelės be laukų - ""). */
+  var REIKALAVIMAS = [
+    { id: "taip", lt: "Reikalaujama", en: "Required" },
+    { id: "ne", lt: "Nereikalaujama", en: "Not required" },
+    { id: "netaikoma", lt: "Netaikoma šiam pirkimui", en: "Not applicable to this procurement" }
+  ];
+  var NZIA = [
+    { id: "taikoma", lt: "Taikomi", en: "Apply" },
+    { id: "netaikoma", lt: "Netaikomi", en: "Do not apply" },
+    { id: "neivertinta", lt: "Dar neįvertinta - reikia teisės specialisto vertinimo", en: "Not yet assessed - a legal assessment is needed" }
+  ];
+  var PREKIU_LAUKAI = ["kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas"];
+  var SPRENDIMAI = { kriterijus: KRITERIJAI, zaliasis: TAIP_NE, nacsaugumas: TAIP_NE, kvalifikacija: KVALIFIKACIJA, cpo: CPO, esLesos: TAIP_NE,
+    kilmesReikalavimas: REIKALAVIMAS, pedsakoReikalavimas: REIKALAVIMAS, pasoReikalavimas: REIKALAVIMAS, nziaTaikymas: NZIA };
 
   /* Laukų pavadinimai žmogui (pranešimams ir kortelės formai). */
   var LAUKAI = {
@@ -128,6 +145,10 @@
     kvalifikacija: { lt: "Tiekėjų patikra", en: "What is checked" },
     cpo: { lt: "CPO LT katalogas", en: "CPO LT catalogue" },
     esLesos: { lt: "Finansuojama ES lėšomis", en: "Financed from EU funds" },
+    kilmesReikalavimas: { lt: "Prekių kilmės šalies nurodymas", en: "Country of origin of goods" },
+    pedsakoReikalavimas: { lt: "Anglies pėdsako deklaracija (EPD ar GWP)", en: "Carbon footprint declaration (EPD or GWP)" },
+    pasoReikalavimas: { lt: "Skaitmeninio gaminio paso nuoroda ar identifikatorius", en: "Digital product passport link or identifier" },
+    nziaTaikymas: { lt: "Nulinio balanso technologijų reikalavimai (Reglamentas (ES) 2024/1735)", en: "Net-zero technology requirements (Regulation (EU) 2024/1735)" },
     busena: { lt: "Būsena", en: "Status" }
   };
 
@@ -160,7 +181,8 @@
   /* Tekstiniai laukai (visada eilutė, "" - nenurodyta). */
   var TEKSTAI = ["pavadinimas", "numeris", "cvpisNr", "vykdytojas", "rezimas", "objektas", "bvpz", "budas",
                  "pradzia", "paskelbimas", "sutartiesData", "pasiulymuTerminas", "iniciatorius", "organizatorius", "busena",
-                 "organizatoriausKontaktai", "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo"];
+                 "organizatoriausKontaktai", "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo",
+                 "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas"];
 
   function tuscia(laukai) {
     var dabar = new Date().toISOString();
@@ -178,6 +200,7 @@
       iniciatorius: "", organizatorius: "", organizatoriausKontaktai: "",
       kriterijus: "", zaliasis: "", nacsaugumas: "", kvalifikacija: "", cpo: "",   // 2026-11-09 - žr. SPRENDIMAI
       esLesos: null,                       // 2026-11-12: "taip" / "ne" / null - žr. SPRENDIMAI
+      kilmesReikalavimas: "", pedsakoReikalavimas: "", pasoReikalavimas: "", nziaTaikymas: "",   // 2026-11-19 - žr. PREKIU_LAUKAI
       veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
       busena: "", archyvuota: false,      // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
       istorija: [], kilme: {}, istorijaPraleista: 0,  // pakeitimų istorija ir laukų kilmė (2026-11-14; rašo tik issaugok) - žr. ISTORIJOS_RIBA
@@ -1627,7 +1650,7 @@
 
   global.GP_KORTELE = {
     SCHEMA: SCHEMA, RAKTAS: RAKTAS,
-    OBJEKTAI: OBJEKTAI, BUSENOS: BUSENOS, REZIMAI: REZIMAI, LAUKAI: LAUKAI, SPRENDIMAI: SPRENDIMAI,
+    OBJEKTAI: OBJEKTAI, BUSENOS: BUSENOS, REZIMAI: REZIMAI, LAUKAI: LAUKAI, SPRENDIMAI: SPRENDIMAI, PREKIU_LAUKAI: PREKIU_LAUKAI,
     vykdytojai: vykdytojai, vykdytojas: vykdytojas,
     tuscia: tuscia, normalizuok: normalizuok, sandara: sandara,
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
