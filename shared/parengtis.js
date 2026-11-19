@@ -32,7 +32,7 @@
       vaidmuo: { skelbimas: "Skelbimas", sps: "SPS", bps: "BPS", ts: "Techninė specifikacija", sutartis: "Sutarties projektas (specialiosios sąlygos)",
                  sutartis_bendrosios: "Sutarties bendrosios sąlygos", pasiulymas: "Pasiūlymo forma", paraiska: "Paraiškos forma", ebvpd: "EBVPD",
                  paaiskinimas: "Paaiškinimai ir atsakymai", priedas: "Kitas priedas", kita: "Kita" },
-      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės", privalomi: "Privalomi dokumentų elementai", kvalifikacija: "Kvalifikacijos reikalavimai (Metodika)", sutarties_elementai: "Privalomi sutarties elementai", nuoseklumas: "TS, SPS ir sutartis" },
+      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės", privalomi: "Privalomi dokumentų elementai", kvalifikacija: "Kvalifikacijos reikalavimai (Metodika)", sutarties_elementai: "Privalomi sutarties elementai", nuoseklumas: "TS, SPS ir sutartis", nzia_kiber: "NZIA ir kibernetinis saugumas" },
       patikra: {
         dokumentai: "Ar yra visi dokumentai pagal būdą", priedai: "SPS priedų sąrašas ir failai", neperskaityti: "Perskaityti failai",
         kalba: "Pasiūlymų kalba: skelbimas ir SPS", pavadinimas: "Pavadinimas: skelbimas ir SPS", dalys: "Dalys: skelbimas ir SPS",
@@ -40,7 +40,7 @@
         trukme: "Sutarties trukmė: skelbimas ir sutartis", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
         kortele: "Kortelė ir skelbimas", punktai: "Pasikartojantys punktų numeriai", alternatyvos: "Paliktos šablono alternatyvos",
         laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", kalbu_sutapimas: "Sumos, procentai, datos ir terminai lietuviškai ir angliškai", skaiciai_zodziai: "Skaičiai ir žodžiai", grafikas: "SPS grafiko datų tvarka",
-        nuos_terminai: "Pristatymo ar atlikimo terminas: TS ir sutartis", nuos_zalieji: "Žaliųjų reikalavimų vieta: SPS, TS ir sutartis", nuos_kvalifikacija: "Tiekėjo reikalavimai techninėje specifikacijoje", nuos_standartai: "Nuorodos į standartus su „arba lygiavertis“",
+        nuos_terminai: "Pristatymo ar atlikimo terminas: TS ir sutartis", nuos_zalieji: "Žaliųjų reikalavimų vieta: SPS, TS ir sutartis", nuos_kvalifikacija: "Tiekėjo reikalavimai techninėje specifikacijoje", nuos_standartai: "Nuorodos į standartus su „arba lygiavertis“", nzia_salygos: "Poveikio klimatui neutralizavimo pramonės akto 25 straipsnio sąlygos", kiber_reikalavimai: "Kibernetinio saugumo reikalavimai SPS ir sutartyje",
         vykdytojo_savoka: "Pirkimo vykdytojo sąvoka: BPS ir SPS", rezimas_salygos: "Taikomas įstatymas: skelbimas ir pirkimo sąlygos",
         rezimo_savokos: "Taikomo įstatymo sąvokos visuose dokumentuose",
         privalomi: "Privalomi dokumentų elementai", privalomi_kiti: "Kiti įstatyme išvardyti elementai",
@@ -122,6 +122,11 @@
       privNeikeltas: "privalomų elementų katalogas neįkeltas", privBeBudo: "pirkimo būdas nežinomas (nėra kortelės ir skelbimo)", privNeAtviras: "ne atviras konkursas",
       privKiti: "automatiškai netikrinama (taikoma tik tam tikrais atvejais arba tikrinama kitur): {s}",
       kvalNeikeltas: "kvalifikacijos patikra neįkelta",
+      nkRasta: "Rasta galimai susijusi nuostata: {e} ({c}). Patikrinkite, ar ji atitinka reikalavimą - tikrinami tik žodžiai, ne turinys.",
+      nkNerasta: "Nerasta: {e} ({c}). Ieškota {kur}. Įrašykite nuostatą; jei ji suformuluota kitaip, patikrinkite rankiniu būdu.",
+      nkKur: { sps: "SPS ir BPS", sutartis: "sutarties specialiosiose ir bendrosiose sąlygose", sps_sutartis: "SPS, BPS ir sutarties sąlygose", ts: "techninėje specifikacijoje" },
+      nkBeDok: "pakete nėra dokumento ({kur}), nepatikrinta: {n}", nkTurinys: "ieškota raktinių žodžių - turinio atitiktis nevertinama",
+      nkBeZodziu: "kitus reikalavimus ({n}) patikrinkite patys pagal sąrašą 4 žingsnyje",
       sutNerasta: "Sutarties projekte nerasta: {e}. Ieškota: {kur}. Jei tai parašyta kitais žodžiais ar kitame sutarties dokumente, tai nėra klaida - nurodykite vietą sprendimo pagrindime.",
       sutNerastaJei: "Sutarties projekte nerasta: {e}. Įstatymas tai numato tik tam tikrais atvejais - patikrinkite, ar taikoma šiai sutarčiai.",
       sutMazaVerte: "Sutarties projekte nerasta: {e}. Numatoma vertė mažesnė kaip {riba} Eur be PVM - šių reikalavimų galima netaikyti; patikrinkite, ar taip nuspręsta.",
@@ -139,7 +144,7 @@
       vaidmuo: { skelbimas: "Notice", sps: "SPS", bps: "BPS", ts: "Technical specification", sutartis: "Draft contract (special conditions)",
                  sutartis_bendrosios: "General contract conditions", pasiulymas: "Tender form", paraiska: "Application form", ebvpd: "ESPD",
                  paaiskinimas: "Clarifications and answers", priedas: "Other annex", kita: "Other" },
-      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules", privalomi: "Required document elements", kvalifikacija: "Qualification requirements (Methodology)", sutarties_elementai: "Required contract elements", nuoseklumas: "TS, SPC and contract" },
+      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules", privalomi: "Required document elements", kvalifikacija: "Qualification requirements (Methodology)", sutarties_elementai: "Required contract elements", nuoseklumas: "TS, SPC and contract", nzia_kiber: "NZIA and cybersecurity" },
       patikra: {
         dokumentai: "All documents for the procedure", priedai: "SPS list of annexes and files", neperskaityti: "Files read",
         kalba: "Tender language: notice and SPS", pavadinimas: "Title: notice and SPS", dalys: "Lots: notice and SPS",
@@ -147,7 +152,7 @@
         trukme: "Contract duration: notice and contract", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
         kortele: "Card and notice", punktai: "Repeated clause numbers", alternatyvos: "Template alternatives left in",
         laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", kalbu_sutapimas: "Amounts, percentages, dates and periods in Lithuanian and English", skaiciai_zodziai: "Numbers and words", grafikas: "Order of SPS schedule dates",
-        nuos_terminai: "Delivery or completion period: TS and contract", nuos_zalieji: "Where the green requirements are: SPC, TS and contract", nuos_kvalifikacija: "Supplier requirements in the technical specification", nuos_standartai: "References to standards with “or equivalent”",
+        nuos_terminai: "Delivery or completion period: TS and contract", nuos_zalieji: "Where the green requirements are: SPC, TS and contract", nuos_kvalifikacija: "Supplier requirements in the technical specification", nuos_standartai: "References to standards with “or equivalent”", nzia_salygos: "Article 25 Net-Zero Industry Act conditions", kiber_reikalavimai: "Cybersecurity requirements in the SPC and contract",
         vykdytojo_savoka: "Contracting body term: BPS and SPS", rezimas_salygos: "Regime: notice and procurement conditions",
         rezimo_savokos: "Terms of the applicable law in all documents",
         privalomi: "Required document elements", privalomi_kiti: "Other elements listed in the law",
@@ -229,6 +234,11 @@
       privNeikeltas: "the catalogue of required elements is not loaded", privBeBudo: "the procedure is unknown (no card and no notice)", privNeAtviras: "not an open procedure",
       privKiti: "not checked automatically (applies only in certain cases or is checked elsewhere): {s}",
       kvalNeikeltas: "the qualification check is not loaded",
+      nkRasta: "A possibly related provision was found: {e} ({c}). Check that it meets the requirement - only words are checked, not content.",
+      nkNerasta: "Not found: {e} ({c}). Searched {kur}. Add the provision; if it is worded differently, check manually.",
+      nkKur: { sps: "in the SPC and GPC", sutartis: "in the special and general conditions of the contract", sps_sutartis: "in the SPC, GPC and contract conditions", ts: "in the technical specification" },
+      nkBeDok: "the package has no document ({kur}), not checked: {n}", nkTurinys: "keywords were searched - compliance of content is not assessed",
+      nkBeZodziu: "check the other requirements ({n}) yourself using the list in step 4",
       sutNerasta: "Not found in the draft contract: {e}. Searched: {kur}. If it is worded differently or is in another contract document, that is fine - give the location in the decision note.",
       sutNerastaJei: "Not found in the draft contract: {e}. The law requires this only in certain cases - check whether it applies to this contract.",
       sutMazaVerte: "Not found in the draft contract: {e}. The estimated value is below EUR {riba} excluding VAT - these requirements may be disapplied; check that this was decided.",
@@ -1118,6 +1128,33 @@
         var tt = teise(["sut_tipines"]);
         patikra("sut_tipines", "sutarties_elementai", "nepatikrinta", sub(X.sutTipines, { t: tt[0] ? tt[0].cit : "" }));
       }
+    }
+
+    /* ---- N. NZIA 25 straipsnio sąlygos ir kibernetinio saugumo reikalavimai (2026-11-19). Sąrašą paduoda modulis (o.privalomos:
+       [{ id, saltinis: "nzia" | "kiber", kur: "sps" | "sutartis" | "ts", pav, cit, zodziai }] iš GP_NZIA.vertink ir GP_KIBER.parink); čia
+       tik ieškoma raktinių žodžių atitinkamuose dokumentuose. Rasta - informacija „patikrinkite“, nerasta - „Patikrinkite“; niekada
+       „atitinka“: žodžiai nepasako, ar nuostata tinkama. Be sąrašo grupės nėra (tikrinimo skirtuke klausimų nėra). */
+    if (o.privalomos && o.privalomos.length) {
+      var NKDOK = { sps: (P.spsVisi || []).concat(P.bpsVisi || []), sutartis: (P.sutartisVisi || []).concat(P.sutartis_bendrosiosVisi || []), ts: P.tsVisi || [] };
+      NKDOK.sps_sutartis = NKDOK.sps.concat(NKDOK.sutartis);   // sutarties įvykdymo sąlygos nurodomos ir pirkimo sąlygose
+      ["nzia", "kiber"].forEach(function (sal) {
+        var sar = o.privalomos.filter(function (x) { return x && x.saltinis === sal && NKDOK[x.kur]; });
+        if (!sar.length) return;
+        var pid = sal === "nzia" ? "nzia_salygos" : "kiber_reikalavimai", nerasta = 0, rasta = 0, beDok = {}, beZod = 0;
+        sar.forEach(function (x) {
+          if (!x.zodziai) { beZod++; return; }
+          var dd = NKDOK[x.kur];
+          if (!dd.length) { beDok[x.kur] = (beDok[x.kur] || 0) + 1; return; }
+          var re; try { re = new RegExp(x.zodziai); } catch (e) { beZod++; return; }
+          var hit = null;
+          dd.some(function (d) { return eilutes(d).some(function (e) { if (re.test(be(e.t))) { hit = { d: d, e: e }; return true; } return false; }); });
+          if (hit) { rasta++; radinys({ id: pid, grupe: "nzia_kiber", lygis: "info", tekstas: sub(X.nkRasta, { e: x.pav, c: x.cit || "" }), vietos: [docVieta(hit.d, hit.e, l)] }); }
+          else { nerasta++; radinys({ id: pid, grupe: "nzia_kiber", lygis: "tikrinti", tekstas: sub(X.nkNerasta, { e: x.pav, c: x.cit || "", kur: X.nkKur[x.kur] }), vietos: [] }); }
+        });
+        var past = [X.nkTurinys].concat(Object.keys(beDok).map(function (kk) { return sub(X.nkBeDok, { kur: X.nkKur[kk], n: beDok[kk] }); }))
+          .concat(beZod ? [sub(X.nkBeZodziu, { n: beZod })] : []).join("; ");
+        patikra(pid, "nzia_kiber", nerasta ? "radinys" : Object.keys(beDok).length || !rasta ? "nepatikrinta" : "gerai", past);
+      });
     }
 
     /* ---- T. Taisyklių variklis (A3): kortelė, o be jos - skelbimo duomenys */

@@ -125,6 +125,66 @@
       patvirtintaEn: "PPO Director's Order No 1S-94 of 27 June 2017 (as worded by Order No 1S-14 of 24 January 2019)",
       redakcija: "suvestinė redakcija nuo 2024-05-01 (pakeista 2023-12-21 Nr. 1S-176 ir 2024-04-26 Nr. 1S-56)",
       url: "https://www.e-tar.lt/portal/lt/legalAct/b73b69f05bd711e79198ffdb108a3753/asr"
+    },
+    /* ES aktai, tiesiogiai taikomi ir perkančiosioms organizacijoms, ir perkantiesiems subjektams (2026-11-19, NZIA 25 str. ir kibernetinio
+       saugumo reikalavimai - shared/nzia.js, shared/kibernetinis-saugumas.js). Perskaityta lietuviškai ES leidinių biuro saugykloje
+       (publications.europa.eu/resource/celex/<CELEX>), konsoliduota redakcija, kur ji yra. `es` - nuorodos forma „Reglamento (ES) ... N str.“. */
+    NZIA: {
+      es: "Reglamento (ES) 2024/1735", esEn: "Regulation (EU) 2024/1735",
+      trumpai: "Poveikio klimatui neutralizavimo pramonės aktas",
+      pavadinimas: "2024 m. birželio 13 d. Europos Parlamento ir Tarybos reglamentas (ES) 2024/1735 dėl priemonių sistemos Europos nulinio balanso technologijų gamybos ekosistemai stiprinti sukūrimo (Poveikio klimatui neutralizavimo pramonės aktas)",
+      redakcija: "konsoliduota redakcija 2025-08-17 (priedas - Komisijos deleguotojo reglamento (ES) 2025/1463 redakcija)",
+      celex: "02024R1735-20250817",
+      url: "https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:02024R1735-20250817"
+    },
+    NZIA_IR: {
+      es: "Įgyvendinimo reglamento (ES) 2026/718", esEn: "Implementing Regulation (EU) 2026/718",
+      trumpai: "Įgyvendinimo reglamentas (ES) 2026/718",
+      pavadinimas: "2026 m. kovo 20 d. Komisijos įgyvendinimo reglamentas (ES) 2026/718 (minimalieji aplinkos tvarumo reikalavimai, nurodyti Reglamento (ES) 2024/1735 25 straipsnio 1 dalyje)",
+      celex: "32026R0718",
+      url: "https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:32026R0718"
+    },
+    NZIA_KOM: {
+      es: "Komisijos komunikato C/2025/3236", esEn: "Commission Communication C/2025/3236",
+      trumpai: "Komisijos komunikatas dėl priklausomybės (C/2025/3236)",
+      pavadinimas: "Komisijos komunikatas, kuriuo pateikiama atnaujinta informacija, kad būtų galima nustatyti į Europos Sąjungą tiekiamų galutinių produktų ir jų pagrindinių specifinių komponentų iš skirtingų trečiųjų valstybių dalis pagal Reglamentą (ES) 2024/1735 (C/2025/3236)",
+      celex: "52025XC03236",
+      url: "https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:52025XC03236"
+    },
+    NZIA_GAIRES: {
+      es: "Komisijos gairių C/2026/4623", esEn: "Commission Guidance C/2026/4623",
+      trumpai: "Komisijos gairės dėl 25 straipsnio taikymo (C/2026/4623)",
+      pavadinimas: "Komisijos komunikatas „Gairės Europos Parlamento ir Tarybos reglamento (ES) 2024/1735 ... 25 straipsnio taikymo“ (C/2026/4623; teisiškai neprivalomos)",
+      celex: "52026XC04623",
+      url: "https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:52026XC04623"
+    },
+    NCCS: {
+      es: "Deleguotojo reglamento (ES) 2024/1366", esEn: "Delegated Regulation (EU) 2024/1366",
+      trumpai: "Tinklo kodeksas dėl kibernetinio saugumo",
+      pavadinimas: "2024 m. kovo 11 d. Komisijos deleguotasis reglamentas (ES) 2024/1366, kuriuo Europos Parlamento ir Tarybos reglamentas (ES) 2019/943 papildomas nustatant tinklo kodeksą dėl tarpvalstybinių elektros energijos srautų kibernetinio saugumo aspektų sektorinių taisyklių",
+      redakcija: "konsoliduota redakcija 2025-09-14",
+      celex: "02024R1366-20250914",
+      url: "https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:02024R1366-20250914"
+    },
+    CRA: {
+      es: "Reglamento (ES) 2024/2847", esEn: "Regulation (EU) 2024/2847",
+      trumpai: "Kibernetinio atsparumo aktas",
+      pavadinimas: "2024 m. spalio 23 d. Europos Parlamento ir Tarybos reglamentas (ES) 2024/2847 dėl horizontaliųjų kibernetinio saugumo reikalavimų, keliamų produktams su skaitmeniniais elementais (Kibernetinio atsparumo aktas)",
+      celex: "32024R2847",
+      url: "https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:32024R2847"
+    },
+    // Kibernetinio saugumo įstatymas (2024 m. nauja redakcija; perskaityta e-tar 2026-11-19) ir jį įgyvendinantis Vyriausybės aprašas
+    KSI: {
+      trumpai: "Kibernetinio saugumo įstatymas",
+      pavadinimas: "Lietuvos Respublikos kibernetinio saugumo įstatymas",
+      url: "https://www.e-tar.lt/portal/lt/legalAct/5468a25089ef11e4a98a9f2247652cf4/asr"
+    },
+    KSA: {
+      trumpai: "Kibernetinio saugumo reikalavimų aprašas",
+      pavadinimas: "Kibernetinio saugumo reikalavimų aprašas",
+      patvirtinta: "Vyriausybės 2018-08-13 nutarimas Nr. 818 „Dėl Lietuvos Respublikos kibernetinio saugumo įstatymo įgyvendinimo“ (suvestinė redakcija)",
+      patvirtintaEn: "Government Resolution No 818 of 13 August 2018",
+      url: "https://www.e-tar.lt/portal/lt/legalAct/aea15050a53411e8acb39f2e6db7935b/asr"
     }
   };
 
@@ -706,9 +766,136 @@
       bendra: { a: "VVM", p: "37" } },
     dalys_isimtys_kartu: { tikrinta: "2026-11-07", apie: "kai numatoma vertė lygi tarptautinio pirkimo ribai ar ją viršija ir naudojamasi supaprastintų bei mažos vertės pirkimų dalims išimtimis, šių dalių bendra vertė - ne didesnė kaip 20 procentų bendros visų pirkimo dalių vertės",
       PI: { a: "PI", s: 13, d: 10 }, VPI: { a: "VPI", s: 5, d: 10 } },
+    /* ---- Poveikio klimatui neutralizavimo pramonės aktas (NZIA), 25 str. (2026-11-19, perskaityta LT ES leidinių biuro saugykloje). ES reglamentas -
+       ta pati nuoroda abiem įstatymams (`bendra`). Naudoja shared/nzia.js. */
+    nzia_technologijos: { tikrinta: "2026-11-19", apie: "nulinio balanso technologijos, kurioms taikomas reglamentas: a) saulės, b) sausumos vėjo ir jūros atsinaujinančiųjų išteklių, c) baterijų ir energijos kaupimo, d) šilumos siurbliai ir geoterminė, e) vandenilio, f) tvarios biodujų ir biometano, g) CCS, h) elektros tinklų technologijos, įskaitant elektros įkrovimo technologijas transporto reikmėms ir tinklo skaitmeninimo technologijas, i) branduolių dalijimosi, j) tvarių alternatyviųjų degalų, k) hidroenergijos technologijos (25 straipsnis taikomas a-k punktams)",
+      bendra: { a: "NZIA", s: 4, d: 1 } },
+    nzia_priedas: { tikrinta: "2026-11-19", apie: "galutinių produktų ir specifinių komponentų sąrašas; elektros tinklų technologijoms - sausumos ir jūrinės pastotės, perdavimo ir skirstymo kabeliai ir linijos, skirstomieji įrenginiai, grandinės išjungikliai, apsauginės relės, galios transformatoriai, skyrikliai, šynų sistemos, perdavimo ir skirstymo bokštai, pastočių automatizavimo sistemos, išmanieji skaitikliai, FACTS, aukštosios ir vidutinės įtampos galios elektronika; baterijų technologijoms - baterijos, sudėtinės baterijos, baterijų moduliai ir elementai, baterijų valdymo sistemos",
+      bendra: { a: "NZIA", vieta: "priedas", vietaEn: "Annex" } },
+    nzia_aplinkos: { tikrinta: "2026-11-19", apie: "viešųjų pirkimų procedūroms, kurioms taikomos direktyvos 2014/23/ES, 2014/24/ES arba 2014/25/ES, kai į sutarčių dalyką ar darbų sutartį įtrauktos 4 straipsnio 1 dalies a-k punktų technologijos, taikomi minimalieji privalomi aplinkos tvarumo reikalavimai, nustatyti įgyvendinimo akte",
+      bendra: { a: "NZIA", s: 25, d: 1 } },
+    nzia_darbai: { tikrinta: "2026-11-19", apie: "darbų pirkimo sutartims, į kurias įtrauktos šios technologijos, taikoma bent viena iš trijų sąlygų: socialinė ar užimtumo sutarties įvykdymo sąlyga, reikalavimas įrodyti atitiktį kibernetinio saugumo reikalavimams arba sutartinis įsipareigojimas laiku pateikti komponentą",
+      bendra: { a: "NZIA", s: 25, d: 3 } },
+    nzia_socialine: { tikrinta: "2026-11-19", apie: "speciali sąlyga, susijusi su socialiniais ar su užimtumu susijusiais aspektais, išdėstyta kaip sutarčių įvykdymo sąlyga (Direktyvos 2014/25/ES 87 straipsnis)",
+      bendra: { a: "NZIA", s: 25, d: 3, p: "a" } },
+    nzia_kiber: { tikrinta: "2026-11-19", apie: "reikalavimas įrodyti atitiktį taikytiniems kibernetinio saugumo reikalavimams, nustatytiems Reglamente dėl kibernetinio atsparumo, be kita ko, naudojantis Europos kibernetinio saugumo sertifikavimo schema, kai tai tikslinga ir jei tokia schema yra prieinama",
+      bendra: { a: "NZIA", s: 25, d: 3, p: "b" } },
+    nzia_laiku: { tikrinta: "2026-11-19", apie: "konkretus sutartinis įsipareigojimas laiku pateikti sutartyje numatytą komponentą, susijusį su nulinio balanso technologijomis, dėl kurio neįvykdymo gali atsirasti pareiga sumokėti mokestį ir kuris viršija nacionalinės teisės reikalavimus",
+      bendra: { a: "NZIA", s: 25, d: 3, p: "c" } },
+    nzia_atsparumas: { tikrinta: "2026-11-19", apie: "kai Komisija nustatė, kad technologijos ar jos pagrindinių specifinių komponentų iš vienos trečiosios valstybės tiekiama daugiau kaip 50 % (arba bent 40 % ir dalis dvejus metus iš eilės didėjo vidutiniškai bent 10 procentinių punktų), į procedūrą įtraukiamos a-d punktų sąlygos",
+      bendra: { a: "NZIA", s: 25, d: 7 } },
+    nzia_atsp_a: { tikrinta: "2026-11-19", apie: "sutarties laikotarpiu tiekti ne daugiau kaip 50 % technologijos vertės iš kiekvienos atskiros Komisijos nustatytos trečiosios valstybės",
+      bendra: { a: "NZIA", s: 25, d: 7, p: "a" } },
+    nzia_atsp_b: { tikrinta: "2026-11-19", apie: "konkurso laimėtojas arba subrangovas iš kiekvienos atskiros Komisijos nustatytos trečiosios valstybės tiesiogiai tiekia ne daugiau kaip 50 % technologijos pagrindinių specifinių komponentų vertės",
+      bendra: { a: "NZIA", s: 25, d: 7, p: "b" } },
+    nzia_atsp_c: { tikrinta: "2026-11-19", apie: "pareiga perkančiajam subjektui pareikalavus pateikti tinkamus įrodymus dėl a ar b punkto ne vėliau kaip iš karto po sutarties įvykdymo",
+      bendra: { a: "NZIA", s: 25, d: 7, p: "c" } },
+    nzia_atsp_d: { tikrinta: "2026-11-19", apie: "nesilaikant a ar b punkto - pareiga sumokėti proporcingą mokestį, ne mažesnį kaip 10 % pagal sutartį pateiktų konkrečių nulinio balanso technologijų vertės",
+      bendra: { a: "NZIA", s: 25, d: 7, p: "d" } },
+    nzia_svp: { tikrinta: "2026-11-19", apie: "sutarčių, kurioms taikomas SVP Sąjungos I priedėlis ir kiti Sąjungai privalomi tarptautiniai susitarimai, atveju 7 dalies a-d punktų reikalavimai netaikomi tuos susitarimus pasirašiusių šalių ekonominės veiklos vykdytojams, jei technologija ar jos komponentai kilę iš tų šalių",
+      bendra: { a: "NZIA", s: 25, d: 8 } },
+    nzia_isimtis_vienas: { tikrinta: "2026-11-19", apie: "išimties tvarka galima netaikyti 1-4 dalių, jeigu reikalingą technologiją gali tiekti tik konkretus ekonominės veiklos vykdytojas, nėra priimtinos alternatyvos ar pakaitalo, o konkurencijos nebuvimą lėmė ne dirbtinis procedūros parametrų susiaurinimas",
+      bendra: { a: "NZIA", s: 25, d: 9, p: "a" } },
+    nzia_isimtis_ankstesne: { tikrinta: "2026-11-19", apie: "išimties tvarka galima netaikyti 1-4 dalių, jeigu panašioje procedūroje, pradėtoje per dvejus metus iki naujos, nebuvo pateikta tinkamų pasiūlymų ar tinkamų prašymų dalyvauti",
+      bendra: { a: "NZIA", s: 25, d: 9, p: "b" } },
+    nzia_isimtis_sanaudos: { tikrinta: "2026-11-19", apie: "išimties tvarka galima netaikyti 1-4 dalių, jeigu jų taikymas įpareigotų įsigyti įrangos, kurios sąnaudos būtų neproporcingos arba dėl kurios atsirastų techninis nesuderinamumas eksploatavimo ir techninės priežiūros srityse",
+      bendra: { a: "NZIA", s: 25, d: 9, p: "c" } },
+    nzia_sanaudos_20: { tikrinta: "2026-11-19", apie: "galima preziumuoti, kad remiantis objektyviais ir skaidriais duomenimis apskaičiuoti sąnaudų skirtumai, viršijantys 20 %, yra neproporcingi",
+      bendra: { a: "NZIA", s: 25, d: 10 } },
+    nzia_netinkami: { tikrinta: "2026-11-19", apie: "kai dėl 7 dalies taikymo nebuvo pateikta tinkamų pasiūlymų ar prašymų dalyvauti, išimties tvarka galima naudoti derybas be išankstinio skelbimo arba 7 dalies netaikyti vėlesnėje procedūroje tiems patiems poreikiams",
+      bendra: { a: "NZIA", s: 25, d: 11 } },
+    nzia_taikymas: { tikrinta: "2026-11-19", apie: "iki 2026-06-30 25 straipsnio 1 dalis taikyta tik centrinių perkančiųjų organizacijų sutartims ir sutartims, kurių vertė - 25 mln. EUR ar didesnė; nuo 2026-06-30 - visoms 1 dalyje nurodytoms procedūroms",
+      bendra: { a: "NZIA", s: 49, d: 3 } },
+    nzia_vejas: { tikrinta: "2026-11-19", apie: "sausumos ir jūros vėjo technologijų vėjo jėgainių menčių perdirbimo lygis - bent 70 proc.; įrodomas ne vėliau kaip įvykdžius sutartį; taikoma nuo 2026-06-30 (kitoms technologijoms minimaliųjų aplinkos tvarumo reikalavimų įgyvendinimo akte nėra)",
+      bendra: { a: "NZIA_IR", s: 2, d: 1 } },
+    nzia_priklausomybe: { tikrinta: "2026-11-19", apie: "Komisijos nustatytos tiekimo į Sąjungą iš trečiųjų valstybių dalys; 1 lentelėje didelės priklausomybės atvejai pažymėti paryškintu šriftu; perkantieji subjektai remiasi komunikatu, patys dalių neskaičiuoja; komunikatas atnaujinamas kasmet",
+      bendra: { a: "NZIA_KOM", vieta: "1 lentelė", vietaEn: "Table 1" } },
+    nzia_gaires: { tikrinta: "2026-11-19", apie: "taikytina teisė - galiojusi kvietimo dalyvauti konkurse paskelbimo ar procedūros pradžios metu; 25 straipsnis taikomas ir DPS bei preliminariosioms sutartims, kurių vertė siekia direktyvų ribas; taikomas, kai į sutarties dalyką įtrauktas galutinis nulinio balanso technologijos produktas; skaidant į dalis - vertinama kiekviena dalis; komunikatas dėl priklausomybės taikytinas nuo 2025-12-30",
+      bendra: { a: "NZIA_GAIRES", vieta: "II-III dalys", vietaEn: "Parts II-III" } },
+    /* ---- Kibernetinis saugumas (2026-11-19). Kibernetinio saugumo įstatymas ir Vyriausybės aprašas - e-tar per Lietuvos viešųjų duomenų jungtį;
+       Tinklo kodeksas dėl kibernetinio saugumo ir Kibernetinio atsparumo aktas - LT ES leidinių biuro saugykloje. Naudoja shared/kibernetinis-saugumas.js */
+    ksi_reikalavimai: { tikrinta: "2026-11-19", apie: "kibernetinio saugumo subjektai užtikrina tinklų ir informacinių sistemų atitiktį Vyriausybės tvirtinamiems kibernetinio saugumo reikalavimams; reikalavimai apima ir tiekimo grandinės saugumą (5 p.) bei tinklų ir informacinių sistemų įsigijimo, plėtojimo ir priežiūros saugumą (6 p.)",
+      bendra: { a: "KSI", s: 14, d: 5 } },
+    ksi_auditas: { tikrinta: "2026-11-19", apie: "kibernetinio saugumo auditas atliekamas ne rečiau kaip kartą per 3 metus",
+      bendra: { a: "KSI", s: 14, d: 8 } },
+    ksa_tvarka: { tikrinta: "2026-11-19", apie: "kibernetinio saugumo subjekto vadovas nustato tiekimo grandinės saugumo valdymo tvarką, taikomą paslaugų, darbų ar įrangos pirkimams, susijusiems su tinklų ir informacinių sistemų projektavimu, kūrimu, diegimu, naudojimu, priežiūra, modernizavimu ir (ar) kibernetinio saugumo užtikrinimu",
+      bendra: { a: "KSA", p: "32" } },
+    ksa_atranka: { tikrinta: "2026-11-19", apie: "tinklų ir informacinių sistemų tiekėjų atrankos kriterijai: tiekėjo atitiktis Apraše nustatytiems reikalavimams (33.1), kokybės reikalavimai produktams ir paslaugoms (33.2), prieigų valdymas, įskaitant prieigų laikotarpio ribojimą (33.3)",
+      bendra: { a: "KSA", p: "33" } },
+    ksa_sutartis: { tikrinta: "2026-11-19", apie: "sutartyse su tiekėjais (įskaitant subtiekėjus) numatoma: atitiktis Aprašui, personalo įgūdžiai ar sertifikatai, pranešimas apie incidentus ir tyrimo ataskaita, audito teisė (ir neplaninio), spragų valdymas, konfidencialumas, paslaugų lygiai (SLA), loginės ir fizinės prieigos lygiai, reikalavimai patalpoms, įrangai ir informacijos perdavimui, šalių teisės ir pareigos (34.1-34.10)",
+      bendra: { a: "KSA", p: "34" } },
+    ksa_rizika: { tikrinta: "2026-11-19", apie: "tiekimo grandinės saugumo valdymo tvarkoje numatomi tinklų ir informacinių sistemų paslaugų teikėjų rizikos vertinimo reikalavimai",
+      bendra: { a: "KSA", p: "35" } },
+    ksa_kontrole: { tikrinta: "2026-11-19", apie: "kibernetinio saugumo subjektas vykdo sutartyje su tiekėju nurodytų kibernetinio saugumo reikalavimų įgyvendinimo kontrolę",
+      bendra: { a: "KSA", p: "38" } },
+    ksa_sarasas: { tikrinta: "2026-11-19", apie: "kibernetinio saugumo subjektas sudaro tiekėjų sąrašą, jį tvarko ir peržiūri pasikeitus sutartims, numatytu periodiškumu ir įvykus reikšmingiems pokyčiams ar incidentams",
+      bendra: { a: "KSA", p: "39" } },
+    ksa_isigijimas: { tikrinta: "2026-11-19", apie: "tinklų ir informacinių sistemų įsigijimo, plėtojimo ir priežiūros saugumo tvarka apima įsigijimo ir diegimo reikalavimus",
+      bendra: { a: "KSA", p: "40.1" } },
+    ksa_terminas: { tikrinta: "2026-11-19", apie: "kibernetinio saugumo reikalavimai įgyvendinami ne vėliau kaip per 12 mėnesių nuo subjekto įregistravimo Kibernetinio saugumo informacinėje sistemoje (techniniai 72 p. reikalavimai - per 24 mėnesius)",
+      bendra: { a: "KSA", p: "71" } },
+    nccs_tiekimas: { tikrinta: "2026-11-19", apie: "būtinoji kibernetinio saugumo kontrolė tiekimo grandinėje: rekomenduojamos viešojo pirkimo kibernetinio saugumo specifikacijos - tiekėjo darbuotojų asmens patikrinimai, saugaus projektavimo ir gamybos procesai, sandara, kurioje įrenginiai nelaikomi patikimais, tiekėjo prieiga prie turto, neskelbtinos informacijos apsauga, specifikacijos subrangovams, atsekamumas, saugumo naujiniai per visą naudojimo laikotarpį, audito teisė, tiekėjo rizikos profilio vertinimas",
+      bendra: { a: "NCCS", s: 33, d: 2, p: "a" } },
+    nccs_atranka: { tikrinta: "2026-11-19", apie: "kriterijai atrinkti tiekėjus, galinčius įvykdyti kibernetinio saugumo specifikacijas, ir kriterijai diversifikuoti tiekimo šaltinius bei mažinti susaistymo su pardavėju riziką",
+      bendra: { a: "NCCS", s: 33, d: 2, p: "d" } },
+    nccs_patikra: { tikrinta: "2026-11-19", apie: "sustiprinta kontrolė: ypatingos svarbos poveikio subjektas viešojo pirkimo metu patikrina, ar IRT produktai, paslaugos ir procesai, kurie bus naudojami kaip ypatingos svarbos poveikio turtas, atitinka kibernetinio saugumo specifikacijas (Europos sertifikavimo schema arba subjekto organizuojamas tikrinimas), ir tai dokumentuoja",
+      bendra: { a: "NCCS", s: 33, d: 4 } },
+    nccs_taikymas: { tikrinta: "2026-11-19", apie: "kontrolė taikoma didelio poveikio ir ypatingos svarbos poveikio subjektų viešojo pirkimo procesams, pradedamiems praėjus šešiems mėnesiams nuo būtinosios ir sustiprintos kontrolės priemonių patvirtinimo ar atnaujinimo",
+      bendra: { a: "NCCS", s: 33, d: 5 } },
+    nccs_rekomendacijos: { tikrinta: "2026-11-19", apie: "PSO, padedami ENTSO-E, rengia neprivalomas kibernetinio saugumo viešojo pirkimo rekomendacijas didelio poveikio ir ypatingos svarbos poveikio perimetrų IRT produktams, paslaugoms ir procesams",
+      bendra: { a: "NCCS", s: 35, d: 1 } },
+    cra_pirkimai: { tikrinta: "2026-11-19", apie: "perkant produktus su skaitmeniniais elementais, valstybės narės užtikrina, kad viešųjų pirkimų procese būtų atsižvelgiama į atitiktį I priedo esminiams kibernetinio saugumo reikalavimams, įskaitant gamintojų gebėjimą veiksmingai valdyti pažeidžiamumus",
+      bendra: { a: "CRA", s: 5, d: 2 } },
+    cra_palaikymas: { tikrinta: "2026-11-19", apie: "gamintojas nustato palaikymo laikotarpį, atspindintį tikėtiną naudojimo laikotarpį; jis turi būti bent penkeri metai (jei produktas bus naudojamas trumpiau - tikėtinas naudojimo laikas)",
+      bendra: { a: "CRA", s: 13, d: 8 } },
+    cra_naujiniai: { tikrinta: "2026-11-19", apie: "kiekvienas per palaikymo laikotarpį pateiktas saugumo naujinys lieka prieinamas ne trumpiau kaip 10 metų arba likusį palaikymo laikotarpį (kuris ilgesnis)",
+      bendra: { a: "CRA", s: 13, d: 9 } },
+    cra_kontaktas: { tikrinta: "2026-11-19", apie: "gamintojas paskiria vieną bendrą kontaktinį punktą, per kurį naudotojai gali tiesiogiai ir greitai susisiekti, be kita ko, pranešti apie pažeidžiamumus",
+      bendra: { a: "CRA", s: 13, d: 17 } },
+    cra_pabaigos_data: { tikrinta: "2026-11-19", apie: "palaikymo laikotarpio pabaigos data, įskaitant bent mėnesį ir metus, aiškiai nurodoma pirkimo metu",
+      bendra: { a: "CRA", s: 13, d: 19 } },
+    cra_deklaracija: { tikrinta: "2026-11-19", apie: "gamintojas kartu su produktu pateikia ES atitikties deklaracijos kopiją arba supaprastintą ES atitikties deklaraciją su visos deklaracijos interneto adresu",
+      bendra: { a: "CRA", s: 13, d: 20 } },
+    cra_sbom: { tikrinta: "2026-11-19", apie: "gamintojas parengia programinės įrangos medžiagų žiniaraštį įprastu ir kompiuterio skaitomu formatu, apimantį bent aukščiausio lygio priklausomybes",
+      bendra: { a: "CRA", priedas: "I", dalis: "II", p: "1" } },
+    cra_atskleidimas: { tikrinta: "2026-11-19", apie: "gamintojas taiko koordinuoto pažeidžiamumo atskleidimo politiką ir užtikrina jos vykdymą",
+      bendra: { a: "CRA", priedas: "I", dalis: "II", p: "5" } },
+    cra_nemokami: { tikrinta: "2026-11-19", apie: "saugumo naujiniai išplatinami nedelsiant ir, jei gaminant pagal užsakymą nesusitarta kitaip, nemokamai, su patariamosiomis žinutėmis naudotojams",
+      bendra: { a: "CRA", priedas: "I", dalis: "II", p: "8" } },
+    cra_taikymas: { tikrinta: "2026-11-19", apie: "reglamentas taikomas nuo 2027-12-11; 14 straipsnis (gamintojų pranešimai apie aktyviai išnaudojamus pažeidžiamumus ir incidentus) - nuo 2026-09-11",
+      bendra: { a: "CRA", s: 71, d: 2 } },
     planu_suvestine: { tikrinta: "2026-11-07", apie: "einamųjų kalendorinių metų pirkimų planai parengiami ir patvirtinami, o planuojamų pirkimų suvestinė paskelbiama CVP IS ne vėliau kaip iki kovo 15 dienos, patikslinus planus - ne vėliau kaip per 5 darbo dienas",
       PI: { a: "PI", s: 38, d: 1 }, VPI: { a: "VPI", s: 26, d: 1 } }
   };
+  /* Kibernetinio saugumo reikalavimų aprašo 33.1-33.3 ir 34.1-34.10 papunkčiai ir Tinklo kodekso dėl kibernetinio saugumo 33 str. 2 d. a p.
+     i-x papunkčiai - po vieną raktą, `apie` - teisės akto tekstas pažodžiui (perskaityta 2026-11-19; shared/kibernetinis-saugumas.js
+     reikalavimus rodo šiais žodžiais, ne savo formuluotėmis). */
+  [["33.1", "tiekėjo atitiktį Apraše nustatytiems kibernetinio saugumo reikalavimams"],
+   ["33.2", "kokybės reikalavimus tinklų ir informacinių sistemų produktams, paslaugoms"],
+   ["33.3", "prieigų valdymą, įskaitant prieigų laikotarpio ribojimą"],
+   ["34.1", "tiekėjo atitikties šiam Aprašui reikalavimus"],
+   ["34.2", "tiekėjo personalui reikalingus įgūdžius ir (ar) mokymus, ir (ar) sertifikatus, ir (ar) kvalifikaciją"],
+   ["34.3", "tiekėjo pareigą pranešti kibernetinio saugumo subjektui apie visus didelius ir (ar) kitus incidentus, susijusius su kibernetinio saugumo subjekto tinklų ir informacinėmis sistemomis, kai tik tiekėjas sužino apie incidentą, ir pateikti kibernetinio saugumo subjektui kibernetinio incidento tyrimo ataskaitą"],
+   ["34.4", "teisę kibernetinio saugumo subjektui arba jo įgaliotiems paslaugų teikėjams atlikti tiekėjo atitikties Aprašui auditą (įskaitant neplaninį) ir tiekėjo pareigą sudaryti sąlygas tokiam auditui atlikti sutarties vykdymo laikotarpiu ar įvykus dideliam incidentui"],
+   ["34.5", "pareigą užtikrinti spragų, keliančių riziką kibernetinio saugumo subjekto tinklams ir informacinėms sistemoms, valdymą"],
+   ["34.6", "konfidencialumo ir duomenų neatskleidimo įsipareigojimus"],
+   ["34.7", "paslaugų teikimo lygmenis (angl. Service Level Agreement, SLA)"],
+   ["34.8", "apibrėžti tiekėjų prieigos (loginės ir fizinės) prie tinklų ir informacinės sistemos lygius ir sąlygas"],
+   ["34.9", "numatyti reikalavimus, keliamus tiekėjo patalpoms, įrangai, tinklų ir informacinių sistemų priežiūrai, informacijos perdavimui tinklais"],
+   ["34.10", "numatyti tiekėjo ir kibernetinio saugumo subjekto teises ir pareigas"]
+  ].forEach(function (x) { N["ksa_" + x[0].replace(".", "_")] = { tikrinta: "2026-11-19", apie: x[1], bendra: { a: "KSA", p: x[0] } }; });
+  [["i", "asmens patikrinimus, taikomus tiekėjo darbuotojams, dalyvaujantiems tiekimo grandinėje ir dirbantiems su neskelbtina informacija arba turintiems prieigą prie subjekto didelio poveikio arba ypatingos svarbos poveikio turto; asmens patikrinimai turi būti proporcingi ir griežtai apsiriboti tuo, kas būtina"],
+   ["ii", "saugaus ir kontroliuojamo IRT produktų, paslaugų ir procesų projektavimo, kūrimo ir gamybos procesus, kuriais skatinamas IRT produktų, paslaugų ir procesų projektavimas ir kūrimas, apimantis tinkamas technines priemones kibernetiniam saugumui užtikrinti"],
+   ["iii", "tinklų ir informacinių sistemų sandarą, kurioje įrenginiai nelaikomi patikimais, net jei jie yra saugiame perimetre, reikalaujama tikrinti visas gaunamas užklausas ir taikomas minimaliosios prieigos teisės principas"],
+   ["iv", "tiekėjo prieigą prie subjekto turto"],
+   ["v", "sutartines tiekėjo pareigas apsaugoti subjekto neskelbtiną informaciją ir apriboti prieigą prie jos"],
+   ["vi", "pagrindines kibernetinio saugumo viešųjų pirkimų specifikacijas tiekėjo subrangovams"],
+   ["vii", "kibernetinio saugumo specifikacijų taikymo atsekamumą nuo IRT produktų, paslaugų ar procesų kūrimo ir gamybos iki pateikimo"],
+   ["viii", "saugumo naujinių palaikymą per visą IRT produktų, paslaugų ar procesų naudojimo laikotarpį"],
+   ["ix", "teisę atlikti tiekėjo projektavimo, kūrimo ir gamybos procesų kibernetinio saugumo auditą"],
+   ["x", "tiekėjo rizikos profilio vertinimą"]
+  ].forEach(function (x) { N["nccs_a_" + x[0]] = { tikrinta: "2026-11-19", apie: x[1], bendra: { a: "NCCS", s: 33, d: 2, p: "a", pp: x[0] } }; });
+
   /* VPĮ atitikmenys (2026-09-26) esamiems PĮ raktams: aiškumas ir objekto kiekis - VPĮ 35 str. */
   N.dokumentu_aiskumas.VPI = { a: "VPI", s: 35, d: 4 };
   N.kiekis.VPI = { a: "VPI", s: 35, d: 2, p: 8 };
@@ -765,6 +952,20 @@
     if (n.a === "NSOAI") return (en ? "Law on the Protection of Objects of Importance to Ensuring National Security, Art. " + n.s
       + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "")
       : "Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : ""));
+    if (n.a === "KSA") return en ? "Cybersecurity Requirements Description, point " + n.p : "Kibernetinio saugumo reikalavimų aprašo " + n.p + " p.";
+    if (n.a === "KSI") return en ? "Law on Cybersecurity, Art. " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "")
+      : "Kibernetinio saugumo įstatymo " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : "");
+    // ES aktai (2026-11-19): „Reglamento (ES) 2024/1735 25 str. 7 d. a p.“, priedas - „... I priedo II dalies 1 p.“, komunikatas - vieta tekstu
+    var es = AKTAI[n.a] && AKTAI[n.a].es;
+    if (es) {
+      var akte = AKTAI[n.a];
+      if (n.vieta) return (en ? akte.esEn + ", " + n.vietaEn : akte.es + " " + n.vieta);
+      if (n.priedas) return en ? akte.esEn + ", Annex " + n.priedas + (n.dalis ? ", Part " + n.dalis : "") + (n.p ? ", point " + n.p : "")
+        : akte.es + " " + n.priedas + " priedo" + (n.dalis ? " " + n.dalis + " dalies" : "") + (n.p ? " " + n.p + " p." : "");
+      if (!n.s) klaida("netinkama nuoroda " + JSON.stringify(n));
+      return en ? akte.esEn + ", Art. " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "") + (n.pp ? "(" + n.pp + ")" : "")
+        : akte.es + " " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : "") + (n.pp ? " " + n.pp + " papunktis" : "");
+    }
     var akt = AKTAI[n.a];
     if (!akt || !n.s) klaida("netinkama nuoroda " + JSON.stringify(n));
     if (en && pilnas && akt.en) return "Article " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "") + " of the " + akt.en;
