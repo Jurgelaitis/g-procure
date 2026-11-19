@@ -1829,6 +1829,95 @@ async function testaiPilotas1110(){
   });
 }
 
+/* Rinkos pajėgumas (2026-11-19): kiek juridinių asmenų atitiktų apyvartos ir patirties ribą pagal viešus duomenis - tik skaičiai,
+   tik paspaudus; ribos iš skaičiuoklės, BVPŽ - iš kortelės; nepavykęs gavimas - ne „nėra“. Serverio atsakymas imituojamas. */
+function rpAtsakymas(o){
+  return Object.assign({ ok: true, prefiksas: "3121", meta: { atnaujinta: "2026-11-19T08:00:00Z", pasenusi: false },
+    pajegumas: { visi: 12, apyvarta: { atitiktu: 3, neatitiktu: 5, nezinoma: 4 }, patirtis: { atitiktu: 7, neatitiktu: 5 }, finansiniaiMetai: { nuo: 2024, iki: 2025 },
+      saltiniai: { lt: true, ted: true, finansai: true }, sutarciu: 200, apribota: false } }, o || {});
+}
+async function testaiRinkosPajegumas1119(){
+  dabartine = grupe("Rinkos pajėgumas pagal viešus duomenis (2026-11-19)");
+  const { f, V } = await modulisSuKortele();
+  const $$ = id => V.document.getElementById(id);
+  const kv = [];
+  const stub = ats => { V.GP_VIESOS_SUTARTYS.pajegumas = async (k, o) => { kv.push([k, o.apyvarta, o.patirtis]); return typeof ats === "function" ? ats() : ats; }; };
+  const lauk2 = async s => { for (let i = 0; i < 160 && !s(); i++) await miegok(25); return s(); };
+  try {
+    await testas("Skaičiuoklės skirtuke: ribos siūlomos iš skaičiuoklės (Metodikos pajamų riba ir patirties rekomendacija), žmogaus įrašytos neperrašomos; BVPŽ - iš pirkimo kortelės; kas siunčiama; Metodikos nuoroda iš registro; be paspaudimo nesiunčiama", async () => {
+      stub(rpAtsakymas());
+      V.switchView("calc");
+      $$("calc-value").value = "1200000"; $$("calc-type").value = "Prekės"; $$("calc-men").value = "12"; V.runCalc();
+      const c = V.eval("proporcingumas(formosPirkimas('calc'))");
+      lygu([$$("rp-apyvarta").value, $$("rp-patirtis").value], [String(Math.round(c.pajamos.metodikosRiba)), String(Math.round(c.patirtis.rekomenduojama))], "siūlomos ribos");
+      $$("rp-patirtis").value = "500000"; $$("rp-patirtis").dispatchEvent(new V.Event("input"));
+      $$("calc-value").value = "2000000"; V.runCalc();
+      lygu($$("rp-patirtis").value, "500000", "žmogaus įrašyta riba neperrašoma");
+      tiesa($$("rp-apyvarta").value === String(Math.round(V.eval("proporcingumas(formosPirkimas('calc'))").pajamos.metodikosRiba)), "nepaliesta - atsinaujina");
+      tiesa(/tik BVPŽ kodo pradžia ir ribos eurais/.test($$("rp-siunciama").textContent) && /tik skaičius/.test($$("rp-siunciama").textContent), "kas siunčiama");
+      tiesa(/Metodikos 7\.4 p\./.test($$("rp-teise").textContent), "registro nuoroda: " + $$("rp-teise").textContent);
+      const K = V.GP_KORTELE, id = K.issaugok(K.tuscia({ pavadinimas: "Transformatorių pirkimas", vykdytojas: "litgrid", rezimas: "PI", objektas: "prekes", verte: 1200000, bvpz: "31211000-2" })).kortele.id;
+      const api = V.eval("KORTELE"); api.atnaujink(); await api.pasirink(id);
+      $$("rp-bvpz").value = ""; V.rpPrefill();
+      lygu($$("rp-bvpz").value, "31211000-2", "BVPŽ iš kortelės");
+      lygu(kv.length, 0, "be paspaudimo nesiunčiama");
+      tiesa(["rp-bvpz", "rp-apyvarta", "rp-patirtis"].every(x => $$(x).hasAttribute("data-darbas-ne") && V.document.querySelector("label[for=" + x + "]")), "laukai su pavadinimais, ne neišsaugotas darbas");
+    });
+    await testas("Netinkama įvestis - klaida prie veiksmo ir fokusas į lauką, užklausos nėra", async () => {
+      const iras = (id, v) => { $$(id).value = v; $$(id).dispatchEvent(new V.Event("input")); };
+      const bandyk = async (bv, ap, pt) => { iras("rp-bvpz", bv); iras("rp-apyvarta", ap); iras("rp-patirtis", pt); await V.rpGauti(); return [$$("rp-busena").textContent, V.document.activeElement && V.document.activeElement.id]; };
+      let r = await bandyk("", "1000", "1000"); tiesa(/Įrašykite BVPŽ kodą/.test(r[0]) && r[1] === "rp-bvpz", r.join(" | "));
+      r = await bandyk("31", "1000", ""); tiesa(/Įrašykite BVPŽ kodą/.test(r[0]), r[0]);
+      r = await bandyk("31211000-2", "abc", ""); tiesa(/didesnės už nulį/.test(r[0]) && r[1] === "rp-apyvarta", r.join(" | "));
+      r = await bandyk("31211000-2", "", "-5"); tiesa(/didesnės už nulį/.test(r[0]) && r[1] === "rp-patirtis", r.join(" | "));
+      r = await bandyk("31211000-2", "", ""); tiesa(/apyvartos arba patirties ribą/.test(r[0]), r[0]);
+      lygu(kv.length, 0, "užklausų nėra");
+    });
+    await testas("Rezultatas - tik skaičiai: „atitiktų N iš M“, „nežinoma“, finansiniai metai, paaiškinimas su Metodikos nuoroda, šaltiniai ir licencija; įmonių pavadinimų ir kodų nėra", async () => {
+      stub(rpAtsakymas());
+      $$("rp-bvpz").value = "31211000-2"; $$("rp-apyvarta").value = "2 400 000"; $$("rp-patirtis").value = "600000";
+      await V.rpGauti(); await lauk2(() => $$("rp-rez").textContent);
+      lygu(kv[kv.length - 1], ["31211", 2400000, 600000], "siunčiama BVPŽ pradžia ir skaičiai");
+      const t = $$("rp-rez").textContent;
+      tiesa(/laimėjo 12 juridinių asmenų \(Lietuvos CVP IS sutarčių: 200\)/.test(t), t.slice(0, 160));
+      tiesa(/Metinės pajamos ne mažesnės kaip 2\s400\s000 EUR\s*atitiktų 3 iš 12\s*neatitiktų - 5, nežinoma - 4 \(finansiniai metai 2024-2025\)/.test(t), "apyvarta: " + t);
+      tiesa(/atitiktų 7 iš 12\s*neatitiktų - 5/.test(t), "patirtis");
+      tiesa(/Metodikos 7\.4 p\./.test(t) && /ne tiekėjų kvalifikacijos vertinimas/.test(t) && /CC BY 4\.0/.test(t) && /naudojama tik suskaičiuoti/.test(t) && /Duomenys gauti 2026-11-19 10:00/.test(t), "paaiškinimas ir šaltiniai");
+      tiesa(!/\b\d{9}\b/.test(t) && !/UAB|AB /.test(t), "be įmonių kodų ir pavadinimų");
+    });
+    await testas("Daliniai ir nepavykę duomenys - pasakoma (finansų nėra - apyvarta neįvertinta; tik TED; nei vieno - klaida), nerasta - tik kai duomenys gauti; klaida - su priežastimi ir „Bandyti dar kartą“", async () => {
+      const p0 = rpAtsakymas().pajegumas;
+      stub(rpAtsakymas({ pajegumas: Object.assign({}, p0, { saltiniai: { lt: false, ted: true, finansai: false } }) }));
+      await V.rpGauti(); await lauk2(() => $$("rp-rez").textContent);
+      let t = $$("rp-rez").textContent;
+      tiesa(/Finansinių ataskaitų duomenų gauti nepavyko - apyvartos atitikties įvertinti negalima/.test(t) && /įvertinta tik pagal TED/.test(t) && !/atitiktų 3 iš 12/.test(t), t);
+      stub(rpAtsakymas({ pajegumas: Object.assign({}, p0, { saltiniai: { lt: false, ted: false, finansai: false } }) }));
+      await V.rpGauti(); await lauk2(() => $$("rp-rez").textContent);
+      tiesa(/gauti nepavyko - pajėgumo įvertinti negalima/.test($$("rp-rez").textContent) && !/nerasta/.test($$("rp-rez").textContent), $$("rp-rez").textContent);
+      stub(rpAtsakymas({ pajegumas: Object.assign({}, p0, { visi: 0 }) }));
+      await V.rpGauti(); await lauk2(() => $$("rp-rez").textContent);
+      tiesa(/BVPŽ grupėje 3121 per 3 metus panašių sutarčių \(nuo 10 000 Eur\) viešuose duomenyse nerasta/.test($$("rp-rez").textContent), $$("rp-rez").textContent);
+      for (const [rusis, re] of [["neidiegta", /dar neįdiegta/], ["saltinis", /šaltinis neatsakė/], ["uzimta", /per daug užklausų/]]) {
+        stub({ ok: false, rusis: rusis });
+        await V.rpGauti(); await lauk2(() => /Nepavyko/.test($$("rp-busena").textContent));
+        tiesa(re.test($$("rp-busena").textContent) && /Bandyti dar kartą/.test($$("rp-busena").textContent) && !$$("rp-rez").textContent, rusis + ": " + $$("rp-busena").textContent);
+      }
+    });
+    await testas("Tikras klientas: GET su BVPŽ pradžia ir ribomis į api.g-procure.com be slapukų; 503 - šaltinis neatsakė", async () => {
+      const { f: f2, V: V2 } = await modulisSuKortele();
+      try {
+        const q = []; V2.fetch = (u, o) => { q.push([u, o.credentials]); return Promise.resolve({ status: 503, json: () => Promise.resolve({ klaida: "x" }) }); };
+        V2.switchView("calc");
+        const g = id => V2.document.getElementById(id);
+        g("rp-bvpz").value = "45231000-5"; g("rp-apyvarta").value = "1500000,5"; g("rp-patirtis").value = "300000";
+        await V2.rpGauti(); await lauk2(() => /Nepavyko/.test(g("rp-busena").textContent));
+        lygu(q, [["https://api.g-procure.com/api/sutartys/pajegumas?cpv=45231&apyvarta=1500000.5&patirtis=300000", "omit"]]);
+        tiesa(/šaltinis neatsakė/.test(g("rp-busena").textContent), g("rp-busena").textContent);
+      } finally { f2.remove(); }
+    });
+  } finally { f.remove(); }
+}
+
 (async function(){
   try {
     await modulis();
@@ -1849,6 +1938,7 @@ async function testaiPilotas1110(){
     await testaiU2();
     await testaiPilotas1110();
     await testaiLygiaverciai1111();
+    await testaiRinkosPajegumas1119();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

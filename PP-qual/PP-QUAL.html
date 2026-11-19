@@ -35,6 +35,7 @@
 <script src="../shared/ai-proxy.js"></script>
 <!-- Vienodos būsenos (Q3): AI eiga su „Atšaukti“, klaida su „Bandyti dar kartą“ -->
 <script src="../shared/busena.js"></script>
+<script src="../shared/viesos-sutartys.js"></script>
 <script src="../shared/vedlys.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
 <script src="../shared/di-zymejimas.js"></script>
@@ -223,6 +224,17 @@ table.data tr:nth-child(even) td{background:var(--color-graphite-5);}
 
 /* calculator output */
 .calc-out{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-2);margin-top:var(--space-2);}
+/* Rinkos pajėgumas pagal viešus duomenis (2026-11-19) */
+.rp{margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--color-graphite-15);}
+.rp h3{font-size:18px;margin:0 0 6px;}
+.rp-laukai{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);margin-top:var(--space-2);}
+.rp-laukai .field{margin-bottom:0;}
+.rp-laukai input{width:100%;max-width:100%;min-width:0;}
+.rp .hint{font-size:13px;color:var(--color-graphite-50-strong);margin-top:6px;}
+.rp #rp-gauti{margin-top:var(--space-2);}
+.rp-sv{margin:var(--space-2) 0 0;font-size:14px;}
+.rp-klaida{color:var(--color-error-strong);font-size:13px;}
+@media(max-width:660px){.rp-laukai{grid-template-columns:minmax(0,1fr);}}
 @media(max-width:660px){.calc-out{grid-template-columns:1fr;}}
 .calc-card{background:var(--color-green-5);border:1px solid var(--color-green-15);border-radius:var(--radius-sm);padding:var(--space-2);}
 .calc-card .lbl{font-size:13px;color:var(--color-graphite-50-strong);font-weight:600;}
@@ -444,6 +456,20 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
       </div>
       <div class="hint" id="calc-kat-info"></div>
       <div id="calc-results"></div>
+      <div class="rp" id="rinkosPajegumas">
+        <h3>Rinkos pajėgumas pagal viešus duomenis</h3>
+        <p class="muted">Kiek juridinių asmenų, per 3 metus laimėjusių panašias sutartis, atitiktų jūsų apyvartos ir patirties ribas. Tai pagalba vertinant, ar reikalavimas neriboja konkurencijos (<span id="rp-teise"></span>), ne tiekėjų kvalifikacijos vertinimas: skaičiuojama tik pagal viešus duomenis, įmonių pavadinimai nerodomi.</p>
+        <div class="rp-laukai">
+          <div class="field"><label for="rp-bvpz">BVPŽ kodas</label><input type="text" id="rp-bvpz" autocomplete="off" placeholder="pvz., 45231000-5" data-darbas-ne></div>
+          <div class="field"><label for="rp-apyvarta">Metinių pajamų riba (EUR)</label><input type="text" id="rp-apyvarta" inputmode="decimal" autocomplete="off" placeholder="pvz., 1500000" data-darbas-ne></div>
+          <div class="field"><label for="rp-patirtis">Panašios sutarties vertė (EUR)</label><input type="text" id="rp-patirtis" inputmode="decimal" autocomplete="off" placeholder="pvz., 300000" data-darbas-ne></div>
+        </div>
+        <div class="hint">Ribos siūlomos iš skaičiuoklės (galite pakeisti); BVPŽ kodas - iš pirkimo kortelės.</div>
+        <button type="button" class="btn btn-secondary" id="rp-gauti" onclick="rpGauti()">Įvertinti rinkos pajėgumą</button>
+        <p class="hint" id="rp-siunciama"></p>
+        <div id="rp-busena"></div>
+        <div id="rp-rez"></div>
+      </div>
     </div>
   </section>
 
@@ -621,7 +647,7 @@ function switchView(v){
     }
     b.dataset.init='1';
   }
-  if(v==='calc') runCalc();
+  if(v==='calc'){ runCalc(); rpInit(); }
 }
 
 /* ---------------- Settings ---------------- */
@@ -1925,8 +1951,83 @@ function runCalc(){
       </div>`).join('')}
     </div>
     <div class="info-block" style="margin-top:var(--space-2)">Šios reikšmės yra rekomendacinės viršutinės ribos. Aukštesni reikalavimai galimi tik su patikimu pagrindimu (LAT 3K-3-126/2010).</div>`;
+  rpPrefill();
 }
 
+/* ============================================================
+   RINKOS PAJĖGUMAS (2026-11-19, G-Procure ateities perspektyvų 3 žingsnis)
+   Kiek juridinių asmenų, per 3 metus laimėjusių panašias sutartis (Lietuvos viešos CVP IS sutartys ir TED Lietuvoje), atitiktų
+   apyvartos ir patirties ribą - TIK skaičiai (atitiktų, neatitiktų, nežinoma), be įmonių pavadinimų. Duomenys per G-Procure
+   serverį (shared/viesos-sutartys.js), tik paspaudus mygtuką; finansinės ataskaitos naudojamos tik suskaičiuoti. Tai pagalba
+   vertinant, ar reikalavimas neriboja konkurencijos (Metodikos 7.4 p.), ne tiekėjų kvalifikacijos vertinimas.
+   ============================================================ */
+const RP={ paliesta:{}, rez:null };
+function rpInit(){
+  const s=$('rp-siunciama');
+  if(s && !s.textContent && window.GP_VIESOS_SUTARTYS) s.textContent=GP_VIESOS_SUTARTYS.siunciama('pajegumas','lt');
+  ['rp-bvpz','rp-apyvarta','rp-patirtis'].forEach(id=>{ const el=$(id); if(el && !el.dataset.klauso){ el.dataset.klauso='1'; el.addEventListener('input',()=>{ RP.paliesta[id]=true; }); } });
+  const t=$('rp-teise'); if(t) t.textContent=GP_TEISE.cit('met_tikslas', rezimas());
+  rpPrefill();
+}
+// Siūlomos reikšmės: BVPŽ - iš pirkimo kortelės, ribos - iš skaičiuoklės (Metodikos pajamų riba ir G-Procure patirties rekomendacija); žmogaus įrašytos neperrašomos
+function rpPrefill(){
+  const k=typeof KORTELE!=='undefined' && KORTELE && KORTELE.pasirinkta ? KORTELE.pasirinkta() : null;
+  if(!RP.paliesta['rp-bvpz'] && $('rp-bvpz') && !$('rp-bvpz').value && k && k.bvpz) $('rp-bvpz').value=k.bvpz;
+  const val=parseFloat(($('calc-value')||{}).value)||0;
+  if(!(val>0) || !$('rp-apyvarta')) return;
+  const c=proporcingumas(formosPirkimas('calc'));
+  if(!RP.paliesta['rp-apyvarta']) $('rp-apyvarta').value=c.pajamos.nenustatomos ? '' : String(Math.round(c.pajamos.metodikosRiba));
+  if(!RP.paliesta['rp-patirtis']) $('rp-patirtis').value=String(Math.round(c.patirtis.rekomenduojama));
+}
+// Suma lauke: tik skaičius (su EUR ar be) - minusas, žodžiai, intervalas ar dvi sumos atmetami (GP_MONEY.sumaLauke), ne tyliai pataisomi
+function rpSuma(id){ const v=String(($(id)||{}).value||'').trim(); if(!v) return null; const n=GP_MONEY.sumaLauke(v); return typeof n==='number' && isFinite(n) && n>0 && n<1e11 ? n : NaN; }
+async function rpGauti(){
+  rpInit();
+  const V=window.GP_VIESOS_SUTARTYS, B=window.GP_BUSENA;
+  if(!V||!B) return;
+  $('rp-rez').innerHTML=''; RP.rez=null;
+  const k=V.cpvPradzia(String($('rp-bvpz').value||'').replace(/\s/g,''));
+  const ap=rpSuma('rp-apyvarta'), pt=rpSuma('rp-patirtis');
+  if(!k){ B.rodyk('#rp-busena',{ tipas:'klaida', tekstas:'Įrašykite BVPŽ kodą (bent 3 pirmus skaitmenis, pvz., 45231000-5).' }); $('rp-bvpz').focus(); return; }
+  if(Number.isNaN(ap)||Number.isNaN(pt)){ B.rodyk('#rp-busena',{ tipas:'klaida', tekstas:'Ribos - sumos eurais, didesnės už nulį (pvz., 300000).' }); (Number.isNaN(ap)?$('rp-apyvarta'):$('rp-patirtis')).focus(); return; }
+  if(!ap && !pt){ B.rodyk('#rp-busena',{ tipas:'klaida', tekstas:'Įrašykite apyvartos arba patirties ribą (eurais).' }); $('rp-apyvarta').focus(); return; }
+  const r=await B.vykdyk('#rp-busena',{ tipas:'eiga', tekstas:'Skaičiuojamas rinkos pajėgumas pagal viešus duomenis...', klaidosPriesdelis:'Nepavyko įvertinti rinkos pajėgumo',
+    kartoti:()=>rpGauti(),
+    veiksmas:async()=>{
+      const x=await V.pajegumas(k,{ apyvarta:ap||undefined, patirtis:pt||undefined, eiga:()=>B.rodyk('#rp-busena',{ tipas:'eiga', tekstas:V.klaida('ruosiamaEiga','lt') }) });
+      if(!x.ok) throw new Error(V.klaida(x.rusis,'lt'));
+      return x;
+    } });
+  if(!r.ok) return;
+  RP.rez={ p:r.reiksme.pajegumas, meta:r.reiksme.meta, prefiksas:r.reiksme.prefiksas, ap:ap, pt:pt };
+  B.slepk('#rp-busena');
+  rpPiesk();
+}
+function rpPiesk(){
+  const x=RP.rez, host=$('rp-rez'); if(!x||!host) return;
+  const p=x.p, V=window.GP_VIESOS_SUTARTYS, h=[], sk=n=>(+n||0);
+  const atn=x.meta && x.meta.atnaujinta ? V.atnaujinta(x.meta.atnaujinta,'lt') : '';
+  if(!p.saltiniai || (!p.saltiniai.lt && !p.saltiniai.ted)){
+    host.innerHTML='<div class="rp-klaida">Viešų sutarčių duomenų gauti nepavyko - pajėgumo įvertinti negalima.</div>'; return;
+  }
+  if(!p.visi){
+    host.innerHTML='<div class="info-block">BVPŽ grupėje '+esc(x.prefiksas)+' per 3 metus panašių sutarčių (nuo 10 000 Eur) viešuose duomenyse nerasta - rinkos pajėgumo pagal šiuos duomenis įvertinti negalima. Pabandykite trumpesnę BVPŽ kodo pradžią.</div>'; return;
+  }
+  h.push('<p class="rp-sv">Per 3 metus panašias sutartis (BVPŽ '+esc(x.prefiksas)+', nuo 10 000 Eur) laimėjo <strong>'+sk(p.visi)+'</strong> juridinių asmenų'+(p.sutarciu!=null?' (Lietuvos CVP IS sutarčių: '+sk(p.sutarciu)+(p.apribota?', įvertintos naujausios':'')+')':'')+'.'
+    +(!p.saltiniai.lt?' Lietuvos CVP IS sutarčių duomenų gauti nepavyko - įvertinta tik pagal TED.':'')+(!p.saltiniai.ted?' TED duomenų gauti nepavyko - įvertinta tik pagal Lietuvos CVP IS sutartis.':'')+'</p>');
+  const eil=(pav,a)=>'<div class="calc-card"><div class="lbl">'+esc(pav)+'</div><div class="val">atitiktų '+sk(a.atitiktu)+' iš '+sk(p.visi)+'</div><div class="sub">neatitiktų - '+sk(a.neatitiktu)+(a.nezinoma!=null?', nežinoma - '+sk(a.nezinoma):'')+'</div></div>';
+  h.push('<div class="calc-out">');
+  if(x.ap){
+    if(p.apyvarta && p.saltiniai.finansai){
+      h.push(eil('Metinės pajamos ne mažesnės kaip '+fmtEur(x.ap), p.apyvarta).replace('</div></div>', (p.finansiniaiMetai?' (finansiniai metai '+p.finansiniaiMetai.nuo+(p.finansiniaiMetai.iki!==p.finansiniaiMetai.nuo?'-'+p.finansiniaiMetai.iki:'')+')':'')+'</div></div>'));
+    } else h.push('<div class="calc-card"><div class="lbl">'+esc('Metinės pajamos ne mažesnės kaip '+fmtEur(x.ap))+'</div><div class="sub rp-klaida">Finansinių ataskaitų duomenų gauti nepavyko - apyvartos atitikties įvertinti negalima.</div></div>');
+  }
+  if(x.pt && p.patirtis) h.push(eil('Panaši sutartis ne mažesnė kaip '+fmtEur(x.pt), p.patirtis));
+  h.push('</div>');
+  h.push('<p class="hint rp-pastaba">„Atitiktų“ - pagal viešus duomenis: naujausių paskelbtų finansinių metų pardavimo pajamas ir didžiausią panašią sutartį per 3 metus. „Nežinoma“ - finansinių ataskaitų viešuose duomenyse nėra arba įmonė pavadinta asmens vardu (jos duomenys neieškomi). Jei reikalavimą atitiktų tik vienas ar keli rinkos dalyviai, apsvarstykite, ar jis neriboja konkurencijos ('+esc(GP_TEISE.cit('met_tikslas', rezimas()))+'). Tai ne tiekėjų kvalifikacijos vertinimas.</p>');
+  h.push('<p class="hint">'+esc(V.saltiniuTekstas(['vda','ted','jar'],'lt'))+(atn?' Duomenys gauti '+esc(atn)+(x.meta.pasenusi?' (šaltinis neatsako - rodomi ankstesni duomenys)':'')+'.':'')+'</p>');
+  host.innerHTML=h.join('');
+}
 /* proporcingumo indikatorius reikalavimui */
 function proportionalityVerdict(actual, recommended){
   if(!actual||!recommended) return null;
