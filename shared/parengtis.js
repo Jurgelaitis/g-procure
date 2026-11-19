@@ -1134,7 +1134,7 @@
        [{ id, saltinis: "nzia" | "kiber", kur: "sps" | "sutartis" | "ts", pav, cit, zodziai }] iš GP_NZIA.vertink ir GP_KIBER.parink); čia
        tik ieškoma raktinių žodžių atitinkamuose dokumentuose. Rasta - informacija „patikrinkite“, nerasta - „Patikrinkite“; niekada
        „atitinka“: žodžiai nepasako, ar nuostata tinkama. Be sąrašo grupės nėra (tikrinimo skirtuke klausimų nėra). */
-    if (o.privalomos && o.privalomos.length) {
+    if (o.privalomos) {
       var NKDOK = { sps: (P.spsVisi || []).concat(P.bpsVisi || []), sutartis: (P.sutartisVisi || []).concat(P.sutartis_bendrosiosVisi || []), ts: P.tsVisi || [] };
       NKDOK.sps_sutartis = NKDOK.sps.concat(NKDOK.sutartis);   // sutarties įvykdymo sąlygos nurodomos ir pirkimo sąlygose
       ["nzia", "kiber"].forEach(function (sal) {
