@@ -138,7 +138,7 @@ sąrašas ir įrašas; paieškos tekstas ir režimas (PĮ / VPĮ) lieka. Adresas
 | ES teisės registras | `PP-teise/duomenys/registras-es.json` (`meta.lygmuo: "es"`, sava versija, aprėptis ir „neapima“) |
 | Administravimas | `PP-teise/admin.html?lygmuo=es` (atskira darbinė kopija, eksporto failas `registras-es-<data>.json`) |
 | Šaltinių patikros | `saltiniai.json` `patikros` eilutės su `"lygmuo": "es"`; eilutės be šio lauko - nacionalinės (savaitinė užduotis jų nekeičia) |
-| Šaltinių patikros įrankis | `python3 PP-teise/es-saltiniai.py nauji` ir `... tekstas <CELEX>` (registro nekeičia) |
+| Šaltinių patikros įrankis | `python3 PP-teise/es-saltiniai.py nauji` ir `... tekstas <CELEX>` (registro nekeičia), `... eiga [--rasyk]` (pasiūlymų eiga Europos Parlamente) |
 
 **Papildomi įrašo laukai** (nacionaliniuose įrašuose jų nėra, ir jų peržiūros žymos dėl to nepasikeitė):
 
@@ -187,6 +187,20 @@ direktyvomis susieja pavėluotai, todėl naujausių gali trūkti - puslapis tai 
    `aiJuodrastis: true`. Šaltinio nuoroda skaitytojui - `https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:<celex>`.
 5. Eksportas → `PP-teise/duomenys/registras-es.json`; patikros eilutė su `"lygmuo": "es"` → `saltiniai.json`;
    padidinti `PP-teise/sw.js` `VERSIJA`; paleisti `PP-teise/testai.html`.
+
+**Pasiūlymų svarstymo eiga Europos Parlamente (nuo 2026-11-19).** `python3 PP-teise/es-saltiniai.py eiga` (be `--rasyk` - tik
+parodo) visiems ES registro pasiūlymams su `identifikatoriai.proceduraNr` (pvz. `2026/0265(COD)`) gauna etapą ir veiksmus iš
+Europos Parlamento atvirų duomenų API, būseną ir preliminarią plenarinio posėdžio datą - iš Teisėkūros observatorijos (OEIL);
+su `--rasyk` įrašo įrašo `projektoEiga` (`busena`, `procedura`, `etapas`, `parlamentas`, `paskutinisVeiksmas`, `veiksmai`,
+`prognoze`, `patikrinta`, `saltinis` - OEIL nuoroda, `pastaba`) ir, kai kas nors pasikeitė, naują `meta.versija`. Galima nurodyti
+ir kelias procedūras (`eiga 2026/0265(COD)`); registre nesančios - klaida. Nepavykus Europos Parlamento duomenims, to pasiūlymo
+eiga registre nekeičiama, o komanda baigiasi klaida (tai nereiškia, kad eiga nepasikeitė); nepavykus tik OEIL - įrašoma EP API
+dalis ir tai pasakoma pastaboje. Nežinomą etapo kodą komanda laiko klaida (papildyti `ETAPAI` pagal ES leidinių biuro sąrašą
+`procedure-phase`), nežinomą veiksmą ar OEIL reikšmę - įrašo kodu ar angliškai ir praneša (papildyti `VEIKLOS`,
+`OEIL_BUSENOS`, `OEIL_PROGNOZES`). Svarstymo Taryboje šie šaltiniai nerodo. Įraše puslapis rodo bloką „Svarstymo eiga Europos
+Parlamente“ (etapas ir būsena, būsima preliminari data, 6 naujausi veiksmai, patikros data - senesnė nei 14 d. pažymima - ir
+nuoroda į OEIL); `admin.html` nepakeistą eigą išsaugo su visais laukais ir ankstesne patikros data, pakeistą ranka - kaip rankinį
+įrašą. Komandos testai be tinklo - `python3 PP-teise/es-saltiniai-testai.py`.
 
 Teisingumo Teismo sprendimai, aiškinantys Direktyvą 2014/24/ES, rodomi ir PĮ režimu su žyma „Įvertinkite su teisės
 specialistu“: ar ir kaip išaiškinimas taikomas perkantiesiems subjektams, įrašas neteigia.
