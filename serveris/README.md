@@ -164,6 +164,69 @@ ribos zona `conf.d/gp-sankcijos-limit.conf`, `location /api/sankcijos/` - į `ap
 - **PP-esg** (nuo 2026-11-08): patikros lange - „Tikrinti sankcijų sąrašuose automatiškai“ (tik bendrovėms; fizinio asmens įmonėms nesiūloma,
   neaiškiai teisinei formai - klausiama). Rezultatas - sąrašų būsenos ir kandidatai; kiekvieną įvertina žmogus, siūlomą rezultatą pasirenka žmogus.
 
+## Viešų pirkimų sutarčių duomenys (nuo 2026-11-19, NEĮDIEGTA)
+
+G-Procure ateities perspektyvų 3 žingsnis: viešos CVP IS sutartys, TED sutarčių sudarymo skelbimai ir (tik suskaičiuoti) juridinių asmenų
+finansinės ataskaitos - pirkimo sprendimams: sutarčių žemėlapis planuojant (PP-plan), rinkos pajėgumas nustatant kvalifikacijos reikalavimus
+(PP-qual) ir galimi rinkos konsultacijos adresatai (PP-ts). Tiekėjų faktų sluoksnio (JAR būsena, mokestinės skolos, Sodra, VPT ir KT sąrašai)
+paslauga neturi - naudotojas jo nepatvirtino.
+
+### Šaltiniai (vieši, be raktų; `viesos-sutartys-logika.js` `SALTINIAI`)
+
+| Šaltinis | Duomenys | Licencija |
+|---|---|---|
+| Valstybės duomenų agentūra, `get.data.gov.lt/datasets/gov/lsd/vpt/cvpp/` (`Sutartis`, `Salis`) | CVP IS sutartys (BVPŽ kodai, vertė, sudarymo ir galiojimo datos, objektas, pirkimo numeris) ir sutarčių šalys (pirkėjas, tiekėjas, asmens rūšis) | CC BY 4.0 |
+| Valstybės duomenų agentūra, `get.data.gov.lt/datasets/gov/rc/jar/` (`iregistruoti/JuridinisAsmuo`, `pelno_ataskaitos/PelnoAtaskaita`) | juridinio asmens identifikatorius ir pardavimo pajamos (tik suskaičiuoti pajėgumui) | CC BY 4.0 |
+| TED API v3, `api.ted.europa.eu/v3/notices/search` | sutarčių sudarymo skelbimai (`can-standard`, `can-social`, `can-desg`): laimėtojai, šalis, vertė, pasiūlymų skaičius | ES leidinių biuras, laisvas pakartotinis naudojimas |
+
+Šaltinių užklausų kalba (Spinta) neatkoduoja `%22`, todėl kabutės ir `>`, `|` siunčiami neužkoduoti per `node:https` (ne `fetch`, kuris
+kabutes užkoduotų); `in()` nepalaikomas - naudojamos `|` grupės. Išmatuota 2026-11-19: LITGRID AB - 6 894 sutartys šalyje „pirkėjas“, žemėlapis
+(46 sutarčių ir 15 šalių užklausų po 2 lygiagrečiai) - ~17 s; rinka pagal BVPŽ pradžią be ribų - 95 s už 3 000 sutarčių, todėl imamos
+naujausios 1 000 sutarčių nuo 10 000 Eur per 3 metus (atsakyme - `apribota`). Todėl ne visa duomenų kopija (6,1 mln. sutarčių ir 12 mln. šalių įrašų), o tikslinės užklausos ir rezultatų atmintis 24 val.
+
+### Adresai (tik GET)
+
+| Adresas | Atsakymas |
+|---|---|
+| `/api/sutartys/pirkejas/<įmonės kodas>` | 200 `{ zemelapis, meta }`: sutartys, kurios baigiasi per 24 mėn., pagal BVPŽ grupę (3 skaitmenys), tiekėjas (asmens vardu pavadintos įmonės ir ne juridiniai asmenys - `paslepta`), koncentracija per 3 metus nuo 10 000 Eur (didžiausio tiekėjo dalis), duomenų kokybės skaičiai |
+| `/api/sutartys/rinka?cpv=<3-8 skaitmenys>&ted=lt\|es` | 200 `{ lt, ted, klaidos, meta }`: juridiniai asmenys, laimėję panašias sutartis (Lietuva) ir TED laimėtojai (Lietuva arba visa ES); asmens vardu pavadintos įmonės - tik skaičius; nepavykęs šaltinis - `null` ir `klaidos` (niekada tuščias sąrašas) |
+| `/api/sutartys/pajegumas?cpv=...&apyvarta=<EUR>&patirtis=<EUR>` | 200 `{ pajegumas, meta }` - tik skaičiai: kiek juridinių asmenų atitiktų / neatitiktų / nežinoma (naujausių finansinių metų pardavimo pajamos, didžiausia panaši sutartis); įmonių pavadinimų ir kodų atsakyme nėra; finansų nepavykus - `saltiniai.finansai: false` |
+| `/api/sutartys/busena` | versija, rezultatų atmintyje, vykdomų ir laukiančių darbų skaičius, paskutinės klaidos laikas ir rūšis |
+
+400 - su `parametras` (netinkamas kodas, BVPŽ, riba, neleidžiamas ar pasikartojantis parametras; įvestis neatkartojama), 404 - kitas adresas,
+429 - per daug užklausų, 503 - šaltinis neatsakė ir ankstesnio rezultato nėra. Darbas ilgiau kaip 40 s - 202 `{ ruosiama: true }` (klientas kartoja
+po 3 s, rezultatas tuo metu ruošiamas toliau). Nepavykus atnaujinti - ankstesnis rezultatas iki 7 d. su `meta.pasenusi` ir `meta.klaida`.
+
+### Saugumas
+
+Kaip CVP IS ir sankcijų paslaugos: atskira systemd paslauga (`DynamicUser`, griežta izoliacija, be raktų ir be rašomo katalogo - į diską nieko
+nerašo), klausosi tik `127.0.0.1:3003`, nginx - tik GET / HEAD / OPTIONS, `limit_req` 20 per min., be prieigos žurnalo (užklausoje - įmonės kodas,
+BVPŽ ir ribos), antroji riba paslaugoje (30 per min. vienam IP), CORS tik `https://g-procure.com`, `https://www.g-procure.com` ir vietiniam
+tikrinimui. Šaltinių adresai - konstantos, kelias tik iš patikrintų reikšmių (ASCII be tarpų), nukreipimai nesekami, 20 MB ir 30 s ribos, iki 3
+bandymų; ne daugiau 2 darbų vienu metu, tas pats darbas - vienas. Žurnale - tik darbo rūšis, trukmė ir klaidos rūšis.
+
+### Failai
+
+| Failas | Paskirtis |
+|---|---|
+| `viesos-sutartys-logika.js` | gryna logika: įvesties tikrinimas, užklausos šaltiniams, įrašų normalizavimas, suvestinės, maršrutai ir atsakymai (veikia ir naršyklėje - testams) |
+| `viesos-sutartys-serveris.js` | Node serveris (be npm): užklausos šaltiniams, rezultatų atmintis, HTTP |
+| `g-procure-sutartys.service` | systemd paslauga |
+| `nginx-sutartys.conf` | nginx `location` ir ribos zona |
+
+Diegimas - kaip sankcijų paslaugos: kodas į `/opt/g-procure-sutartys/`, paslauga `g-procure-sutartys`, ribos zona `conf.d/gp-sutartys-limit.conf`,
+`location /api/sutartys/` - į `api.g-procure.com` server bloką. Žingsniai ir patikra - privačiai (`g-procure-privatu/serveris/viesos-sutartys-diegimas-2026-11.md`).
+Kol neįdiegta, moduliai rodo „paslauga dar neįdiegta“ (404).
+
+### Kas naudoja (`shared/viesos-sutartys.js`, tik paspaudus mygtuką)
+
+- **PP-plan** „Ribos ir grupės“ - „Sutarčių žemėlapis“: kurios įmonės sutartys baigiasi per 12 ar 24 mėn., ar plane tos grupės pirkimas jau yra,
+  „Įtraukti į planą“ (naujo pirkimo langas su sutarties duomenimis, įrašo žmogus), didžiausio tiekėjo dalis - informacija.
+- **PP-qual** skaičiuoklė - „Rinkos pajėgumas“: „atitiktų N iš M, nežinoma K“ pagal apyvartos ir patirties ribas (Metodikos 7.4 p. - pagalba, ne vertinimas).
+- **PP-ts** rinkos konsultacija - „Galimi adresatai“: kas laimėjo panašius pirkimus (Lietuva ir TED), žmogus pažymi ir nukopijuoja.
+
+Testai - `testai.html` grupė „Viešų pirkimų sutarčių duomenys (2026-11-19)“; klientas ir moduliai - `shared/testai.html` ir modulių testai.
+
 ## DI užduotys (nuo 2026-11-08, įdiegta 2026-11-08)
 
 Naudotojo sprendimas 2026-11-08 („Neutralūs žingsniai“ - kodo apsauga): DI instrukcijos (sistemos tekstai ir užklausų šablonai)
