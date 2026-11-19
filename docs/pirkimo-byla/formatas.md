@@ -30,6 +30,7 @@ vertė - todėl juo dalytis taip, kaip ir kitais pirkimo dokumentais. Tai ne ofi
 | `kilme` | Kiekvieno užpildyto lauko šaltinis: `saltinis`, `laikas` ir, kai yra, `citata` (pvz. skelbimo eilutė), `failas`, `nr` (CVP IS numeris), `modulis`. |
 | `poveikis` | `perziureta` - kada žmogus pažymėjo, kad pakeitimų poveikį rezultatui peržiūrėjo; `paveikti` - rezultatai (grafikas, vertinimo metodika, rinkos apžvalgos veiksmai, pirkimo sąlygų juodraščiai), sudaryti pagal ankstesnius kortelės duomenis, su priežastimis tekstu. |
 | `juodrasciai` | Su kortele susietų pirkimo sąlygų juodraščių aprašai (id, kada keista, pavadinimas, etapas). Patys juodraščiai į failą neįtraukiami. |
+| `eforms` | Nuo 2026-11-19: kortelės laukų susiejimas su ES pirkimų duomenų modeliu (eForms SDK) - `sdk` (versija), `saltinis` ir `laukai`: kiekvienam susietam laukui `bt` (verslo terminas), `eforms` (SDK lauko id), `laukas` (kortelės laukas), `reiksme` (reikšmė kortelėje), `kodas` (reikšmė eForms lauke), kai reikia - `sarasas` (kodų sąrašas), `dalis` (LOT-0001), `kriterijus`, `kalba`. Tik informacija; ankstesni failai šio lauko neturi. Aprašas - [eforms.md](eforms.md). |
 
 ### `pirkimas`
 
@@ -49,6 +50,7 @@ Lietuvos laiku.
 | `vertinimas` | Pasiūlymų vertinimo metodika iš Ekonominio naudingumo skaičiuoklės (kriterijai, svoriai, priedo turinys; dalims - atskiri rinkiniai). |
 | `iniciatorius`, `organizatorius`, `organizatoriausKontaktai` | Atsakingi asmenys. |
 | `kriterijus`, `zaliasis`, `nacsaugumas`, `kvalifikacija`, `cpo`, `esLesos` | Pirkimo sprendimai (žodynai - schemoje). |
+| `kilmesReikalavimas`, `pedsakoReikalavimas`, `pasoReikalavimas`, `nziaTaikymas` | Nuo 2026-11-19: prekių duomenų reikalavimai - ar iš tiekėjų reikalaujama nurodyti prekių kilmės šalį, anglies pėdsako deklaracijos (EPD ar GWP), skaitmeninio gaminio paso nuorodos ar identifikatoriaus (`taip`, `ne`, `netaikoma`) ir ar pirkimui taikomi Reglamento (ES) 2024/1735 (nulinio balanso technologijos) pirkimų reikalavimai (`taikoma`, `netaikoma`, `neivertinta`). Tai sprendimai rengiant pirkimą, ne pasiūlymuose gauti duomenys. |
 | `veiksmai` | Įrankių rekomenduoti veiksmai su būsena. |
 | `busena`, `archyvuota` | Pirkimo būsena ir ar kortelė archyvuota. |
 
@@ -59,7 +61,8 @@ laukai (kiti - neperkeliami ir pasakoma, kiek), tekstų ilgis ir sąrašų dydis
 patikrinami taip pat, kaip kortelėje. Prieš įrašant žmogus mato, kas faile; jei šioje naršyklėje jau yra ta pati kortelė (tas pats
 `id`), jis renkasi „Pakeisti failo duomenimis“ arba „Įkelti kaip naują kortelę“ (jei kortelė šioje naršyklėje pakeista vėliau -
 įspėjama). Įkelta kortelė išlaiko savo istoriją ir šaltinius, o istorijoje pridedamas įrašas „Įkelta iš pirkimo bylos“ su failo
-vardu. `reiksmes`, `poveikis.paveikti` ir `juodrasciai` įkeliant neskaitomi: poveikis apskaičiuojamas iš istorijos iš naujo.
+vardu. `reiksmes`, `poveikis.paveikti`, `juodrasciai` ir `eforms` įkeliant neskaitomi: poveikis ir susiejimas apskaičiuojami iš
+kortelės iš naujo.
 
 ## Suderinamumas
 
@@ -71,6 +74,8 @@ vardu. `reiksmes`, `poveikis.paveikti` ir `juodrasciai` įkeliant neskaitomi: po
 ## Ko šiame formate nėra
 
 - Pirkimo sąlygų juodraščių, sugeneruotų dokumentų ir įkeltų failų - jie lieka įrankiuose, kuriuose parengti.
+- eForms skelbimo (XML): byloje - tik laukų susiejimas su eForms terminais ([eforms.md](eforms.md)), ne skelbimas, kurį būtų
+  galima siųsti į TED ar CVP IS.
 - OCDS (Open Contracting Data Standard) formos: jai reikia registruoto `ocid` priešdėlio ir oficialaus leidėjo - tai
   organizacijos, ne prototipo sprendimas. Laukų atitikmenys (pavadinimas, numatoma vertė, BVPŽ, būdas, dalys, datos) būtų
   nesudėtingi, jei tokio poreikio atsirastų.

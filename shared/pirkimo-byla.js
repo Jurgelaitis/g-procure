@@ -19,6 +19,9 @@
  *    ir suskaičiuojami), tekstų ilgio ir sąrašų ribos; tipus ir žodynus sutvarko GP_KORTELE.normalizuok
  *    (importuojant - GP_KORTELE.importuok).
  *
+ * Nuo 2026-11-19 (jei prijungtas shared/eforms-susiejimas.js) byloje - ir `eforms`: kortelės laukų susiejimas su ES pirkimų duomenų
+ * modeliu (eForms SDK; tik informacija, įkeliant neskaitoma - senesnis puslapis šį bylos lauką tiesiog praleidžia).
+ *
  * Bylos formato versija (VERSIJA) keičiama tik nesuderinamai pakeitus sandarą; nauji kortelės laukai -
  * be versijos keitimo (senas puslapis juos praleidžia ir pasako). Poveikis ir juodraščiai faile - tik
  * informacija apie eksportavimo momentą: įkeliant jie neįrašomi (poveikis apskaičiuojamas iš istorijos
@@ -38,10 +41,11 @@
   var PIRKIMO_LAUKAI = ["id", "sukurta", "atnaujinta", "pavadinimas", "numeris", "cvpisNr", "vykdytojas", "rezimas", "objektas", "bvpz",
     "verte", "budas", "dalys", "trukmeMen", "pradzia", "paskelbimas", "sutartiesData", "pasiulymuTerminas", "grafikas", "vertinimas",
     "iniciatorius", "organizatorius", "organizatoriausKontaktai", "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo",
-    "esLesos", "veiksmai", "busena", "archyvuota"];
+    "esLesos", "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas", "veiksmai", "busena", "archyvuota"];
   /* Laukai, kurių reikšmė - kodas ar sudėtinė: byloje dar ir tekstas žmogui (`reiksmes`). */
   var SKAITOMI = ["vykdytojas", "rezimas", "objektas", "verte", "budas", "dalys", "trukmeMen", "pasiulymuTerminas", "grafikas", "vertinimas",
-    "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo", "esLesos", "busena"];
+    "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo", "esLesos", "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas",
+    "nziaTaikymas", "busena"];
 
   function K() { return global.GP_KORTELE; }
   function tekstasV(v) { return v == null ? "" : String(v); }
@@ -75,7 +79,7 @@
     }) : [];
     var jd = o.juodrasciai && o.juodrasciai.busena === "yra" ? o.juodrasciai.sarasas.filter(function (j) { return j.kortele === n.id; })
       .map(function (j) { return { id: j.id, keista: j.keista, pavadinimas: j.pavadinimas, etapas: j.etapoPav }; }) : [];
-    return {
+    var byla = {
       $schema: SCHEMOS_ADRESAS,
       formatas: FORMATAS,
       versija: VERSIJA,
@@ -90,6 +94,9 @@
       poveikis: { perziureta: kopija(n.poveikisPerziureta), paveikti: paveikti },
       juodrasciai: jd
     };
+    // Susiejimas su ES pirkimų duomenų modeliu (eForms, 2026-11-19; shared/eforms-susiejimas.js) - tik informacija: įkeliant neskaitoma
+    if (global.GP_EFORMS) byla.eforms = global.GP_EFORMS.bylai(n);
+    return byla;
   }
 
   function tekstas(byla) { return JSON.stringify(byla, null, 2) + "\n"; }

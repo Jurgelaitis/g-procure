@@ -11,6 +11,7 @@
 | Programų bibliotekos | `shared/vendor/` | Kiekviena - pagal savo licenciją (licencijos failas bibliotekos kataloge; sąrašas - `shared/vendor/bibliotekos.json`) |
 | Šriftas Nunito Sans | `shared/sriftai/` | SIL Open Font License 1.1 (`shared/sriftai/OFL.txt`) |
 | BVPŽ (CPV) kodų žodynas | `shared/cpv-data.js` | Reglamentas (EB) Nr. 2195/2002 |
+| eForms SDK 1.16.0 ištraukos: laukų id ir pavadinimai (`fields/fields.json`), kodų sąrašų kodai (`codelists/`); ne visas SDK | `shared/eforms-susiejimas.js` | Europos Sąjungos leidinių biuras, Creative Commons Attribution 4.0 International (CC BY 4.0), šaltinis - https://github.com/OP-TED/eForms-SDK/tree/1.16.0 |
 | Teisės aktų ištraukos ir nuorodos | moduliai, `shared/teises-nuorodos.js` | e-tar, EUR-Lex |
 
 Tekstų ir duomenų gavyba: autorių teisių subjektai pasilieka teisę naudoti svetainės turinį tekstų ir duomenų gavybos tikslais, tarp jų DI
@@ -19,5 +20,5 @@ Kompiuterio skaitoma forma - `robots.txt` ir `/.well-known/tdmrep.json`.
 
 This repository and the g-procure.com website contain content of other rightholders (templates of LITGRID AB and AB "Amber Grid", company
 logos, software libraries under their own licences, the Nunito Sans font under the SIL Open Font License 1.1, the CPV vocabulary established
-by Regulation (EC) No 2195/2002). The rightholders reserve the use of the website content for text and data mining, including AI training
+by Regulation (EC) No 2195/2002, extracts of the eForms SDK 1.16.0 of the Publications Office of the European Union under CC BY 4.0). The rightholders reserve the use of the website content for text and data mining, including AI training
 (Article 4(3) of Directive (EU) 2019/790); see `robots.txt` and `/.well-known/tdmrep.json`.
