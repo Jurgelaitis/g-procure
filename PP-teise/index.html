@@ -263,6 +263,14 @@
   /* Keturi žingsniai (ES aktas su atskira taikymo pradžia) siaurame bloke netelpa vienoje eilėje - dvi eilės po du, be jungiamosios linijos. */
   .zingsniai--4{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));row-gap:var(--space-3);column-gap:var(--space-2)}
   .zingsniai--4::before{display:none}
+  /* Pasiūlymo svarstymo eiga Europos Parlamente (2026-11-19). */
+  .eiga{margin:var(--space-1) 0 var(--space-2);padding:var(--space-1) var(--space-2);border:1px solid var(--color-graphite-15);border-left:4px solid var(--color-warning);border-radius:var(--radius-sm);background:var(--color-white)}
+  .eiga h4{margin-top:var(--space-1) !important}
+  .eiga__veiksmai{list-style:none;margin:var(--space-1) 0 !important;padding:0 !important}
+  .eiga__veiksmai li{display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr);gap:var(--space-1);padding:3px 0;border-top:1px solid var(--color-graphite-15);font-size:13px}
+  .eiga__veiksmai li:first-child{border-top:0}
+  .eiga__veiksmai span{color:var(--color-graphite-50-strong);font-variant-numeric:tabular-nums}
+  @media (max-width:640px){.eiga__veiksmai li{grid-template-columns:minmax(0,1fr);gap:0}}
   .det__saltinis{display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-2);align-items:center;margin-top:var(--space-3)}
   .det__saltinis .btn--saltinis{background:var(--color-graphite);border-color:var(--color-graphite);color:var(--color-white);border-radius:999px}
   .det__saltinis .btn--saltinis:hover{background:var(--color-emerald-strong-hover);border-color:var(--color-emerald-strong-hover)}
@@ -921,6 +929,24 @@
       return '<li' + (x[1] && x[1] <= DABAR ? ' class="ivyko"' : '') + '><i aria-hidden="true"></i><b>' + esc(x[0]) + '</b><span>' + esc(x[1] || "nenurodyta") + '</span></li>';
     }).join("") + '</ol>';
   }
+  /* Komisijos pasiūlymo svarstymo eiga Europos Parlamente (2026-11-19; įrašo PP-teise/es-saltiniai.py eiga --rasyk): etapas ir
+     būsena, preliminari data, veiksmai (naujausi pirmi), patikros data ir šaltinis. Rankinis įrašas be etapo - tik būsenos sakinys. */
+  var EIGA_RODOMA = 6, EIGA_SENA_D = 14;
+  function eigosBlokas(r) {
+    var e = r.projektoEiga || {};
+    if (!e.etapas || !e.etapas.pavadinimas) return "";
+    var h = '<div class="eiga" data-eiga><h4>Svarstymo eiga Europos Parlamente</h4>';
+    h += '<p><b>Etapas:</b> ' + esc(e.etapas.pavadinimas) + (e.parlamentas ? ' - ' + esc(e.parlamentas) : '') + (e.procedura ? ' <span class="muted">(procedūra ' + esc(e.procedura) + ')</span>' : '') + '</p>';
+    if (e.prognoze && S.yraData(e.prognoze.data) && e.prognoze.data >= DABAR) h += '<p><b>' + esc(e.prognoze.data) + '</b> - ' + esc(e.prognoze.tekstas || "") + '</p>';
+    var v = (Array.isArray(e.veiksmai) ? e.veiksmai : []).filter(function (x) { return x && S.yraData(x.nuo) && S.yraData(x.iki) && x.tekstas; })
+      .sort(function (a, b) { return a.iki < b.iki ? 1 : a.iki > b.iki ? -1 : (a.nuo < b.nuo ? 1 : a.nuo > b.nuo ? -1 : 0); });
+    if (v.length) h += '<ol class="eiga__veiksmai">' + v.slice(0, EIGA_RODOMA).map(function (x) {
+      return '<li><span>' + esc(x.nuo === x.iki ? x.iki : x.nuo + ' - ' + x.iki) + '</span> ' + esc(x.tekstas) + '</li>';
+    }).join("") + '</ol>' + (v.length > EIGA_RODOMA ? '<p class="muted">Rodomi ' + EIGA_RODOMA + ' naujausi veiksmai iš ' + v.length + ' - visi Teisėkūros observatorijoje.</p>' : '');
+    var sena = S.yraData(e.patikrinta) ? S.dienuSkirtumas(e.patikrinta, DABAR) : null;
+    h += '<p class="muted">' + (sena === null ? 'Patikros data nenurodyta - eiga galėjo pasikeisti. ' : 'Patikrinta ' + esc(e.patikrinta) + (sena > EIGA_SENA_D ? ' (prieš ' + sena + ' d.) - eiga galėjo pasikeisti. ' : '. ')) + esc(e.pastaba || "") + '</p>';
+    return h + '<div class="veiksmai">' + nuoroda(e.saltinis, "Procedūra Teisėkūros observatorijoje (anglų k.)") + '</div></div>';
+  }
   function datosBlokas(r, sd) {
     var h = '<p><b>' + esc(sd.zyma) + (sd.data ? ' ' + esc(sd.data) : ': nenurodyta') + '</b>' + (sd.reiksme ? ' - ' + esc(sd.reiksme) : '') + (sd.ateitis ? ' <span class="muted">(po ' + S.dienuSkirtumas(DABAR, sd.data) + ' d.)</span>' : '') + '</p>';
     var es = r.lygmuo === "es";
@@ -928,7 +954,10 @@
     else if (r.rusis === "teismu_praktika") h += es ? '<p>Teisingumo Teismo sprendimas neturi įsigaliojimo datos - jis aiškina galiojančią normą; sprendimo data ' + esc(r.datos.priimta || "nenurodyta") + '.</p>'
       : '<p>Teismo išaiškinimas neturi įsigaliojimo datos - jis aiškina galiojančią normą; nutarties data ' + esc(r.datos.priimta || "nenurodyta") + '.</p>';
     else if (r.saltinioTipas === "es_gaires" && !S.veikimoData(r)) h += '<p>Europos Komisijos gairės teisiškai neprivalomos ir įsigaliojimo datos neturi; paskelbtos ' + esc(r.datos.paskelbta || r.datos.priimta || "nenurodyta") + '.</p>';
-    else if (r.rusis === "projektas") h += '<p>Projektas nepriimtas - įsigaliojimo datos nėra' + (r.datos.paskelbta ? (es ? ' (pasiūlymo data ' : ' (registre - šaltinio paskelbimo TAR data ') + esc(r.datos.paskelbta) + ')' : '') + '; eiga: ' + esc(r.projektoEiga && r.projektoEiga.busena ? r.projektoEiga.busena : "nežinoma") + (r.projektoEiga && r.projektoEiga.pastaba ? ' (' + esc(r.projektoEiga.pastaba) + ')' : '') + '.</p>';
+    else if (r.rusis === "projektas") {
+      var eb = eigosBlokas(r);
+      h += '<p>Projektas nepriimtas - įsigaliojimo datos nėra' + (r.datos.paskelbta ? (es ? ' (pasiūlymo data ' : ' (registre - šaltinio paskelbimo TAR data ') + esc(r.datos.paskelbta) + ')' : '') + '; eiga: ' + esc(r.projektoEiga && r.projektoEiga.busena ? r.projektoEiga.busena : "nežinoma") + (!eb && r.projektoEiga && r.projektoEiga.pastaba ? ' (' + esc(r.projektoEiga.pastaba) + ')' : '') + '.</p>' + eb;
+    }
     else h += zingsniai(r) + (r.datos.taikoma ? '<p>Taikoma: ' + esc(r.datos.taikoma) + '</p>' : '');
     h += '<h4>Pereinamosios nuostatos ir išimtys</h4><p>' + (r.pereinamosios ? esc(r.pereinamosios) : '<span class="muted">Šaltinyje pereinamųjų nuostatų nenurodyta arba registre neįrašyta.</span>') + '</p>';
     return h;

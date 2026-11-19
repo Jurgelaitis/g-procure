@@ -1689,11 +1689,119 @@ async function testaiKortele1115(){
   });
 }
 
+/* Pasiūlymų svarstymo eiga Europos Parlamente (2026-11-19; es-saltiniai.py eiga --rasyk). Tikro registro testai tikrina tik įrašus
+   su etapu (savaitinės užduoties faktų įrašai jo neturi) ir tris žinomus pasiūlymus - įrašų nesuskaičiuoja ir patikros eilutės pagal vietą neima. */
+async function testaiEiga1119(){
+  dabartine = grupe("Pasiūlymų svarstymo eiga Europos Parlamente (2026-11-19)");
+  const ETAPAI = { PROP: "Pasiūlymas", RDG1: "Pirmasis svarstymas", RDG2: "Antrasis svarstymas", RDG3: "Trečiasis svarstymas", CONCILIA: "Taikinimas",
+    CONCILIA_RDG3: "Taikinimas ir trečiasis svarstymas", NGT: "Derybos", PROC_END: "Procedūros pabaiga", INI_LEGIS: "Teisėkūros iniciatyva", OP_DATPRO: "Laikinieji duomenys" };
+  const PASIULYMAI = { "es-pasiulymas-com-2026-590-viesuju-pirkimu-aktas": "2026/0265(COD)", "es-pasiulymas-com-2026-100-pramones-spartinimo-aktas": "2026/0068(COD)",
+    "es-pasiulymas-com-2026-11-kibernetinio-saugumo-aktas": "2026/0011(COD)" };
+
+  await testas("Tikras ES registras: trijų pasiūlymų eiga patikrinta (procedūra, etapas iš ES etapų sąrašo, veiksmai su datomis, paskutinis veiksmas, šaltinis - Teisėkūros observatorija, pastaba apie Tarybą); aprėptis nebesako, kad eiga Parlamente netikrinama; šaltinių registre - Europos Parlamento atviri duomenys", async () => {
+    const reg = (await S.ikelk("duomenys/registras-es.json?cb=" + Date.now())).tikrinta;
+    const suEtapu = reg.irasai.filter(r => r.rusis === "projektas" && r.projektoEiga && r.projektoEiga.etapas);
+    Object.keys(PASIULYMAI).forEach(id => tiesa(suEtapu.some(r => r.id === id), id + ": eiga su etapu"));
+    suEtapu.forEach(r => {
+      const e = r.projektoEiga, proc = e.procedura, n = r.id + ": ";
+      tiesa(/^\d{4}\/\d{4}\([A-Z]{3}\)$/.test(proc) && (!r.identifikatoriai.proceduraNr || r.identifikatoriai.proceduraNr === proc), n + "procedūra " + proc);
+      if (PASIULYMAI[r.id]) lygu(proc, PASIULYMAI[r.id], n + "procedūros numeris");
+      lygu(e.etapas.pavadinimas, ETAPAI[e.etapas.kodas], n + "etapas iš sąrašo");
+      tiesa(e.busena.startsWith("Europos Parlamento duomenimis - " + e.etapas.pavadinimas.toLowerCase()), n + "būsena: " + e.busena);
+      tiesa(S.yraData(e.patikrinta) && e.patikrinta >= "2026-11-19", n + "patikros data");
+      lygu(e.saltinis, "https://oeil.europarl.europa.eu/oeil/en/procedure-file?reference=" + proc, n + "šaltinis");
+      tiesa(/Taryboje/.test(e.pastaba) && !/netikrinta/.test(e.pastaba), n + "pastaba: " + e.pastaba);
+      tiesa(Array.isArray(e.veiksmai) && e.veiksmai.length > 0, n + "veiksmai");
+      e.veiksmai.forEach(v => tiesa(S.yraData(v.nuo) && S.yraData(v.iki) && v.nuo <= v.iki && v.iki <= e.patikrinta && v.kiek >= 1 && /^[A-Z_]+$/.test(v.kodas) && v.tekstas && !/EP kodas/.test(v.tekstas), n + "veiksmas " + JSON.stringify(v)));
+      const max = e.veiksmai.reduce((m, v) => v.iki > m ? v.iki : m, "");
+      tiesa(e.paskutinisVeiksmas && e.paskutinisVeiksmas.data === max && e.veiksmai.some(v => v.kodas === e.paskutinisVeiksmas.kodas && v.iki === max && v.tekstas === e.paskutinisVeiksmas.tekstas), n + "paskutinis veiksmas");
+      tiesa(e.prognoze === null || (S.yraData(e.prognoze.data) && e.prognoze.tekstas), n + "prognozė");
+    });
+    tiesa(/svarstymo eigos Taryboje/.test(reg.meta.neapima) && !/eigos Europos Parlamente ir Taryboje/.test(reg.meta.neapima), "aprėptis: " + reg.meta.neapima);
+    const sal = await (await fetch("duomenys/saltiniai.json?cb=" + Date.now())).json();
+    const ep = sal.saltiniai.find(s => s.id === "ep-atviri-duomenys");
+    tiesa(ep && ep.lygmuo === "es" && /^https:\/\//.test(ep.url) && ep.paskutinePatikra && S.yraData(ep.paskutinePatikra.data) && /Taryboje/.test(ep.kamNaudojamas), "šaltinių registras");
+    tiesa(sal.patikros.some(p => p.lygmuo === "es" && (p.saltiniai || []).includes("ep-atviri-duomenys") && /^(ok|nepavyko)$/.test(p.rezultatas)), "patikros eilutė");
+  });
+
+  await testas("Įrašo detalės: blokas „Svarstymo eiga Europos Parlamente“ - etapas ir būsena, būsima preliminari data, 6 naujausi veiksmai (naujausias pirmas, laikotarpis), patikros data ir pastaba, nuoroda į Teisėkūros observatoriją; sena patikra ir praėjusi data; rankinis įrašas - kaip iki tol; tekstai ne HTML, nesaugi nuoroda nerodoma", async () => {
+    const P = await stebesena("&registras=testai-registras.json&registrasEs=testai-registras-es.json&lygmuo=es"), w = P.w, d = P.d;
+    try {
+      const r = w.PPTEISE.registras().irasai.find(x => x.id === "es-test-pasiulymas"), rankinis = r.projektoEiga;
+      const v = (nuo, iki, kodas, tekstas, kiek = 1) => ({ nuo, iki, kodas, kiek, tekstas });
+      r.projektoEiga = { busena: "Europos Parlamento duomenimis - pirmasis svarstymas, laukiama atsakingo komiteto sprendimo", procedura: "9999/0001(COD)",
+        etapas: { kodas: "RDG1", pavadinimas: "Pirmasis svarstymas" }, parlamentas: "laukiama atsakingo komiteto sprendimo",
+        paskutinisVeiksmas: { data: "2026-10-19", kodas: "COMMITTEE_TABLING_AMENDMENT", tekstas: "Atsakingame komitete pateikti pakeitimų dokumentai (21)" },
+        veiksmai: [v("2026-04-30", "2026-04-30", "REFERRAL", "Plenariniame posėdyje paskelbta"), v("2026-05-02", "2026-05-02", "X1", "Pirmas"), v("2026-05-03", "2026-05-03", "X2", '<img src=x onerror="window.__e=1">'),
+          v("2026-09-11", "2026-09-11", "COMMITTEE_TABLING_REPORT", "Pranešimo projektas"), v("2026-10-05", "2026-10-05", "COMMITTEE_ADOPTING_OPINION", "Nuomonė"),
+          v("2026-06-01", "2026-06-01", "X3", "Trečias"), v("2026-10-13", "2026-10-19", "COMMITTEE_TABLING_AMENDMENT", "Atsakingame komitete pateikti pakeitimų dokumentai (21)", 21), v("2026-07-01", "2026-07-01", "X4", "Ketvirtas")],
+        prognoze: { data: "2026-12-14", tekstas: "preliminari plenarinio posėdžio data (pirmasis svarstymas)" }, patikrinta: "2026-11-19",
+        saltinis: "https://oeil.europarl.europa.eu/oeil/en/procedure-file?reference=9999/0001(COD)", pastaba: "Svarstymo Taryboje šie šaltiniai nerodo." };
+      w.PPTEISE.nustatykDabar("2026-11-19"); w.PPTEISE.pasirink("es-test-pasiulymas"); await laukk(40);
+      let b = d.querySelector("#irasas [data-eiga]");
+      tiesa(b, "blokas");
+      lygu(tekstas(b.querySelector("h4")), "Svarstymo eiga Europos Parlamente");
+      lygu([...b.querySelectorAll("p")].map(tekstas).slice(0, 2), ["Etapas: Pirmasis svarstymas - laukiama atsakingo komiteto sprendimo (procedūra 9999/0001(COD))", "2026-12-14 - preliminari plenarinio posėdžio data (pirmasis svarstymas)"], "etapas ir data");
+      lygu([...b.querySelectorAll(".eiga__veiksmai li")].map(tekstas), ["2026-10-13 - 2026-10-19 Atsakingame komitete pateikti pakeitimų dokumentai (21)", "2026-10-05 Nuomonė", "2026-09-11 Pranešimo projektas",
+        "2026-07-01 Ketvirtas", "2026-06-01 Trečias", '2026-05-03 <img src=x onerror="window.__e=1">'], "6 naujausi");
+      tiesa(!b.querySelector("img") && !w.__e, "ne HTML");
+      tiesa(/Rodomi 6 naujausi veiksmai iš 8/.test(tekstas(b)) && /Patikrinta 2026-11-19\. Svarstymo Taryboje šie šaltiniai nerodo\./.test(tekstas(b)) && !/galėjo pasikeisti/.test(tekstas(b)), "patikra: " + tekstas(b));
+      const a = b.querySelector("a");
+      lygu([a && a.getAttribute("href"), a && a.getAttribute("target"), a && tekstas(a)], ["https://oeil.europarl.europa.eu/oeil/en/procedure-file?reference=9999/0001(COD)", "_blank", "Procedūra Teisėkūros observatorijoje (anglų k.) ↗"], "nuoroda");
+      const ivadas = tekstas(b.previousElementSibling);
+      tiesa(/eiga: Europos Parlamento duomenimis - pirmasis svarstymas, laukiama atsakingo komiteto sprendimo\.$/.test(ivadas), "sakinys be pastabos: " + ivadas);
+      // po mėnesio: data praėjo, patikra sena
+      w.PPTEISE.nustatykDabar("2026-12-20"); w.PPTEISE.pasirink("es-test-pasiulymas"); await laukk(40);
+      b = d.querySelector("#irasas [data-eiga]");
+      tiesa(!/2026-12-14/.test(tekstas(b)) && /Patikrinta 2026-11-19 \(prieš 31 d\.\) - eiga galėjo pasikeisti\./.test(tekstas(b)), "sena: " + tekstas(b));
+      // nesaugi nuoroda ir be patikros datos
+      r.projektoEiga = Object.assign({}, r.projektoEiga, { saltinis: "javascript:alert(1)", patikrinta: null, veiksmai: [], prognoze: null });
+      w.PPTEISE.pasirink("es-test-pasiulymas"); await laukk(40);
+      b = d.querySelector("#irasas [data-eiga]");
+      tiesa(!b.querySelector("a") && !b.querySelector(".eiga__veiksmai") && /Patikros data nenurodyta - eiga galėjo pasikeisti\./.test(tekstas(b)), "be nuorodos ir datos: " + tekstas(b));
+      // rankinis įrašas be etapo - kaip iki tol
+      r.projektoEiga = rankinis; w.PPTEISE.pasirink("es-test-pasiulymas"); await laukk(40);
+      tiesa(!d.querySelector("#irasas [data-eiga]") && /eiga: pateiktas Europos Parlamentui ir Tarybai \(testas\)\./.test(tekstas(d.getElementById("irasas"))), "rankinis");
+    } finally { P.f.remove(); }
+  });
+
+  await testas("Administravimas: nepakeista eiga išsaugoma su visais laukais ir ankstesne patikros data; pakeista ranka - rankinis įrašas su šiandienos data be automatinių laukų; išvalyta - nėra", async () => {
+    const P = await puslapis("admin.html?saugykla=testine&lygmuo=es&registras=testai-registras-es.json"), d = P.d, A = P.w.PPTEISE_ADMIN; await A.paruosta;
+    try {
+      A.nustatykDabar("2030-01-02");
+      const r = A.irasai().find(x => x.id === "es-test-pasiulymas");
+      const eiga = { busena: "Europos Parlamento duomenimis - pirmasis svarstymas", procedura: "9999/0001(COD)", etapas: { kodas: "RDG1", pavadinimas: "Pirmasis svarstymas" },
+        veiksmai: [{ nuo: "2026-04-30", iki: "2026-04-30", kodas: "REFERRAL", kiek: 1, tekstas: "T" }], paskutinisVeiksmas: { data: "2026-04-30", kodas: "REFERRAL", tekstas: "T" },
+        prognoze: null, patikrinta: "2026-11-19", saltinis: "https://oeil.europarl.europa.eu/x", pastaba: "Svarstymo Taryboje šie šaltiniai nerodo." };
+      r.projektoEiga = JSON.parse(JSON.stringify(eiga));
+      A.iForma(r);
+      lygu(A.isFormos().projektoEiga, eiga, "nepakeista");
+      d.getElementById("f_santrauka").value = "Kita santrauka"; lygu(A.isFormos().projektoEiga, eiga, "pakeitus kitą lauką");
+      d.getElementById("f_projBusena").value = "Parlamentas priėmė poziciją";
+      lygu(A.isFormos().projektoEiga, { busena: "Parlamentas priėmė poziciją", patikrinta: "2030-01-02", pastaba: "Svarstymo Taryboje šie šaltiniai nerodo." }, "pakeista ranka");
+      d.getElementById("f_projBusena").value = ""; d.getElementById("f_projPastaba").value = "";
+      lygu(A.isFormos().projektoEiga, null, "išvalyta");
+    } finally { P.f.remove(); }
+  });
+
+  await testas("Šaltiniai: es-saltiniai.py turi komandą eiga (tik standartinė biblioteka, --rasyk, etapų sąrašas kaip puslapio, nepavykus - klaida, ne „pokyčių nėra“); sw.js versija pakelta", async () => {
+    const py = await (await fetch("es-saltiniai.py?cb=" + Date.now())).text();
+    tiesa(/e = k\.add_parser\("eiga"/.test(py) && /--rasyk/.test(py) && /data\.europarl\.europa\.eu\/api\/v2\/procedures\//.test(py) && /application\/ld\+json/.test(py), "komanda ir šaltinis");
+    const imp = (py.match(/^import (\S+)/gm) || []).map(x => x.slice(7));
+    tiesa(imp.every(m => ["argparse", "datetime", "html", "json", "os", "re", "sys", "time", "urllib.error", "urllib.parse", "urllib.request"].includes(m)) && !/^from /m.test(py), "tik standartinė biblioteka: " + imp);
+    const kodai = {}; (py.match(/ETAPAI = \{([\s\S]*?)\n\}/) || ["", ""])[1].replace(/"([A-Z0-9_]+)": "([^"]+)"/g, (m, k, v) => { kodai[k] = v; });
+    lygu(kodai, ETAPAI, "etapų sąrašas toks pat");
+    tiesa(/PATIKRA NEPAVYKO/.test(py) && /tai nereiškia, kad ji nepasikeitė/.test(py), "nepavykus - klaida");
+    const sw = await (await fetch("sw.js?cb=" + Date.now())).text();
+    tiesa((sw.match(/VERSIJA = "ppteise-(\d{4}-\d{2}-\d{2})/) || [])[1] >= "2026-11-19", "sw.js versija");
+  });
+}
+
 (async () => {
   try {
     /* ?grupe=<grupė>[,<grupė>] - tik nurodytos grupės (taisant vieną grupę nereikia laukti viso rinkinio); nežinoma grupė - klaida. */
     const GRUPES = { testaiSchema, testaiSkiltys, testaiAktualumas, testaiPaieska, testaiZurnalas, testaiIkelimas, testaiRegistras, testaiPuslapis, testaiTestinisRegistras,
-      testaiAdmin, testaiIntegracijos, testaiPrieinamumas, testaiPatikra1104, testaiVaizdas1107, testaiLygmuo1113, testaiPortalas1113, testaiKortele1115 };
+      testaiAdmin, testaiIntegracijos, testaiPrieinamumas, testaiPatikra1104, testaiVaizdas1107, testaiLygmuo1113, testaiPortalas1113, testaiKortele1115, testaiEiga1119 };
     const tik = new URLSearchParams(location.search).get("grupe");
     for (const g of (tik ? tik.split(",") : Object.keys(GRUPES))) { if (!GRUPES[g]) throw new Error("Nėra testų grupės „" + g + "“"); await GRUPES[g](); }
   } catch (e) { dabartine = dabartine || grupe("Nepavyko paleisti"); await testas("Rinkinys nutrūko", () => { throw e; }); }

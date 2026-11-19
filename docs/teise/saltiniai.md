@@ -71,4 +71,16 @@ Naršyklei (CORS) šie šaltiniai netikrinti - ES registras, kaip ir nacionalini
 `PP-teise/es-saltiniai.py` (tik Python standartinė biblioteka, registro nekeičia) parodo naujus dokumentus ir
 atiduoda dokumento tekstą ištraukoms. Nuo 2026-11-13 jį kas pirmadienį paleidžia savaitinė užduotis
 (`pp-teise-savaitine-patikra`): aiškiai pirkimų dokumentų faktus į ES registrą ji įrašo pati, kitus surašo ataskaitoje
-(`docs/teise/administravimas.md`, 5 skyrius). Pasiūlymų svarstymo eiga Europos Parlamente ir Taryboje netikrinama.
+(`docs/teise/administravimas.md`, 5 skyrius).
+
+**Pasiūlymų svarstymo eiga (2026-11-19).**
+
+| Šaltinis | Kas patikrinta 2026-11-19 | Rezultatas |
+|---|---|---|
+| Europos Parlamento atvirų duomenų API (`data.europarl.europa.eu/api/v2/procedures/<metai>-<numeris>`) | Užklausa su `Accept: application/ld+json` | Procedūra: dabartinis etapas (`current_stage`, ES leidinių biuro sąrašo `procedure-phase` kodas) ir veiksmai su datomis (`consists_of`: veiksmo rūšis pagal EP žodyną `ep-activities`). Be rakto; CORS antraštės nėra - iš naršyklės neskaitoma; kartais HTTP 500 (perkrauta) - kartojama |
+| ES leidinių biuro sąrašas `procedure-phase` | SPARQL užklausa (`skos:prefLabel`, lt) | Lietuviški etapų pavadinimai: Pasiūlymas, Pirmasis / Antrasis / Trečiasis svarstymas, Taikinimas, Derybos, Procedūros pabaiga ir kt. |
+| EP žodynas `ep-activities` (`data.europarl.europa.eu/api/v2/controlled-vocabularies/ep-activities`) | Užklausa JSON-LD | Veiksmų rūšys; lietuviški pavadinimai dalyviniai („Parlamento komitetas, priimantis nuomonę“), todėl `es-saltiniai.py` turi savo sakinius, prasmė sutikrinta su Teisėkūros observatorijos įvykių pavadinimais |
+| Teisėkūros observatorija (OEIL, `oeil.europarl.europa.eu/oeil/en/procedure-file?reference=<procedūra>`) | Puslapis (HTML, anglų k.) | Laukas „Stage reached in procedure“ (pvz. „Awaiting committee decision“) ir lentelė „Forecasts“ (pvz. preliminari plenarinio posėdžio data); API nėra - skaitomas puslapis, nepavykus įrašoma tik EP API dalis |
+
+Svarstymo Taryboje šie šaltiniai nerodo; Tarybos eiga netikrinama. Eigą į registrą įrašo `python3 PP-teise/es-saltiniai.py eiga --rasyk`
+(`docs/teise/administravimas.md`, 5 skyrius).
