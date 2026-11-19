@@ -2625,6 +2625,73 @@ async function testaiDiUzduotys1108() {
    R-6 - taisyklių ir DI pastabos nesujungiamos, antraštė „Bendras vertinimas“, R-4 - žaliasis pirkimas savaime ir „'green'“ DI santraukoje,
    R-5 - PP-ts pats nekartoja DI užklausos po ilgo laukimo 502 / 504.
    ========================================================================== */
+/* Kibernetinio saugumo reikalavimai TS (2026-11-19, ilgalaikės krypties 1 etapas): klausimai be numatytųjų, TS skyrius be DI (GP_KIBER.tsEilutes),
+   pirkimo sąlygų, sutarties ir organizacijos reikalavimai - tik sąrašas „perkelkite“ */
+async function testaiKiber1119() {
+  grupe('Kibernetinio saugumo reikalavimai TS (2026-11-19): klausimai be numatytųjų, skyrius be DI, „perkelkite“ sąrašai');
+  const nust = (id, v) => { const d = D(); d.getElementById(id).value = v; d.getElementById(id).dispatchEvent(new (W().Event)('change')); };
+
+  await testas('Klausimai: be numatytųjų, tie patys kaip GP_KIBER; ypatingos svarbos turtas - tik kai bent vienas „Taip“; sąrašai „Perkelkite į pirkimo sąlygas“, „Perkelkite į sutartį“ ir organizacijos pareigos; kopijuojama su nuorodomis; į DI nieko nesiunčiama', async () => {
+    const w = W(), d = D(), K = w.GP_KIBER;
+    M('App.goToStep(1)');
+    lygu(['genKiberIrt', 'genKiberSk', 'genKiberKrit'].map(id => d.getElementById(id).value), ['', '', ''], 'be numatytųjų');
+    lygu([...d.querySelectorAll('#genKiber label.form-label')].map(l => l.textContent.trim()), K.KLAUSIMAI.map(q => q.tekstas), 'klausimai - kaip GP_KIBER');
+    tiesa(d.getElementById('genKiberKritVieta').classList.contains('hidden') && !d.getElementById('genKiberSarasas').textContent.trim(), 'pradžioje - be sąrašo');
+    let kv = 0; const origP = w.GP_AI_PROXY.uzduotis, origK = w.GP_KOPIJA.kopijuok, kop = [];
+    w.GP_AI_PROXY.uzduotis = async () => { kv++; throw new Error('netikėta DI užklausa'); };
+    w.GP_KOPIJA.kopijuok = t => { kop.push(t); return Promise.resolve(true); };
+    try {
+      nust('genKiberIrt', 'taip');
+      tiesa(!d.getElementById('genKiberKritVieta').classList.contains('hidden'), 'kritinis rodomas');
+      const p = K.parink({ irt: 'taip' });
+      lygu([...d.querySelectorAll('#genKiberSarasas [data-kiber-grupe]')].map(x => x.querySelector('summary').textContent),
+        ['Perkelkite į pirkimo sąlygas (tiekėjų atranka) (' + p.grupes.sps.length + ')', 'Perkelkite į sutartį (' + p.grupes.sutartis.length + ')',
+         'Organizacijos pareigos (ne pirkimo dokumentų turinys) (' + p.grupes.organizacija.length + ')'], 'sąrašai');
+      tiesa(!d.getElementById('genKiberTs'), 'be skaitmeninių elementų - TS skyriaus nebus');
+      nust('genKiberSk', 'taip'); nust('genKiberKrit', 'ne');
+      turi(d.getElementById('genKiberTs').textContent, 'Į TS bus įtrauktas skyrius „Kibernetinio saugumo reikalavimai“ (' + K.tsEilutes({ skaitmeniniai: 'taip', kritinis: 'ne' }).length + ')', 'TS skyrius');
+      d.querySelector('#genKiberSarasas [data-kiber-grupe="sutartis"] [data-kiber-kop]').click();
+      tiesa(kop.length === 1 && kop[0].split('\n').length === p.grupes.sutartis.length && /Kibernetinio saugumo reikalavimų aprašo 34\.3 p\./.test(kop[0]), 'kopijuojamas sutarties sąrašas');
+      tiesa(!d.querySelector('#genKiberSarasas [data-kiber-grupe="organizacija"] [data-kiber-kop]'), 'organizacijos pareigos nekopijuojamos (ne dokumentų turinys)');
+      lygu(kv, 0, 'į DI nesiunčiama');
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.GP_KOPIJA.kopijuok = origK; }
+  });
+
+  await testas('TS skyrius: pridedamas po DI skyrių (numeris ir punktai), be data-di, būsena „Pagal teisės aktus“; TS apimties tvarkymas jo nekeičia; pergeneravus nedubliuojamas; „Ne“ - nepridedamas; „Naujas pirkimas“ išvalo atsakymus', async () => {
+    const w = W(), d = D(), G = w.TSGenerator, P = w.PriceEstimator;
+    const orig = { full: G.generateFullTs, market: G.analyzeMarket, price: P.estimate, confirm: w.confirm };
+    await pirkimasIkiKlausimu('Relinės apsaugos įrenginiai K');
+    nust('genKiberIrt', 'ne'); nust('genKiberSk', 'taip'); nust('genKiberKrit', 'taip');
+    G.generateFullTs = async () => ({ title: 'TS', sections: [
+        { number: '1', title: 'Bendrosios nuostatos', content: '1.1. Tekstas.' },
+        { number: '2', title: 'Reikalavimai', content: '2.1. Įrenginiai atitinka IEC 61850 arba lygiavertį standartą.' }],
+      complianceTable: [], evaluationCriteria: [], keyElements: {}, recommendations: [] });
+    P.estimate = async () => { throw new Error('Serverio klaida (503)'); };
+    G.analyzeMarket = async () => { throw new Error('Serverio klaida (503)'); };
+    try {
+      await M('App.runFullGeneration()');
+      const ts = M('App.genBusena()').ts, s = ts.sections[2];
+      const eil = w.GP_KIBER.tsEilutes({ skaitmeniniai: 'taip', kritinis: 'taip' });
+      lygu([ts.sections.length, s && s.number, s && s.title, s && s._saltinis], [3, '3', 'Kibernetinio saugumo reikalavimai', 'taisykles'], 'skyrius');
+      lygu(s.content.split('\n'), eil.map((t, i) => '3.' + (i + 1) + '. ' + t), 'punktai - teisės aktų žodžiai su nuorodomis');
+      const wrap = d.querySelector('#genTsPreview .ts-section-wrap[data-section-num="3"]');
+      tiesa(wrap && !wrap.hasAttribute('data-di') && wrap.dataset.saltinis === 'taisykles' && /Pagal teisės aktus/.test(wrap.querySelector('.ts-status-badge').textContent), 'be DI žymos, būsena');
+      lygu(d.querySelectorAll('#genTsPreview .ts-section-wrap[data-di]').length, 2, 'DI skyriai - su žyma');
+      turi(d.getElementById('genTsPreview').textContent, 'pagal teisės aktus (be DI)', 'audito suvestinė');
+      tiesa(!((M('App.genBusena()').tsApimtis || {}).pasalinta || []).some(x => /Kibernetinio|^3\./.test(String(x.kur || ''))), 'TS apimties tvarkymas skyriaus nekeičia');
+      await M('App.runFullGeneration()');
+      lygu(M('App.genBusena()').ts.sections.filter(x => x._saltinis === 'taisykles').length, 1, 'pergeneravus - nedubliuojamas');
+      M("App.toggleSectionStatus('3')"); lygu(M('App.genBusena()').ts.sections[2]._status, 'human-approved', 'patvirtinta');
+      M("App.toggleSectionStatus('3')"); lygu(M('App.genBusena()').ts.sections[2]._status, 'rules', 'atšaukus - vėl „Pagal teisės aktus“');
+      nust('genKiberSk', 'ne');
+      await M('App.runFullGeneration()');
+      lygu(M('App.genBusena()').ts.sections.length, 2, '„Ne“ - nepridedamas');
+      w.confirm = () => true; M('App.startNewGeneration()');
+      lygu(['genKiberIrt', 'genKiberSk', 'genKiberKrit'].map(id => d.getElementById(id).value), ['', '', ''], 'naujas pirkimas - išvalyta');
+    } finally { G.generateFullTs = orig.full; G.analyzeMarket = orig.market; P.estimate = orig.price; w.confirm = orig.confirm; }
+  });
+}
+
 async function testaiPilotas1110() {
   grupe('Pilotas su tikru pirkimu (2026-11-10): taisyklės, sujungimas, žaliasis savaime, kartojimas');
   const zen = (t, m) => taisykles(t, m).issues.filter(i => i.category === 'brand_restriction').map(i => i.title.replace(/^Prekės ženklas „|" be.*$/g, ''));
@@ -2873,6 +2940,7 @@ async function viskas() {
     await testaiLaukai1105();
     await testaiDiUzduotys1108();
     await testaiPilotas1110();
+    await testaiKiber1119();
 
     document.getElementById('busena').textContent =
       R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';
