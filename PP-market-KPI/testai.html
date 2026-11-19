@@ -2703,7 +2703,9 @@ testas(P1103, "Automatinis atnaujinimas: tik viršutiniame lange, senesnė nei 1
   lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "nebuvo tikrinta");
   M("DATA.meta.tikrinta = new Date(Date.now() - 3600000).toISOString()");
   lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "prieš valandą, bet liko iliustracinių su šaltiniu");
-  M("DATA.metrics.forEach(m => { m.demo = false; })");
+  M("DATA.metrics.forEach(m => { m.demo = false; }); delete DATA.valiuta");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "prieš valandą, visi tikri, bet ECB kurso dar nėra (2026-11-19)");
+  M("DATA.valiuta = { menesio: [{ laikotarpis: '2026-09-01', reiksme: 1.15 }], dienos: [], tikrinta: null }");
   lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), false, "prieš valandą, visi tikri");
   M("DATA.meta.tikrinta = new Date(Date.now() - 13 * 3600000).toISOString()");
   lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "prieš 13 val.");
@@ -3377,6 +3379,7 @@ testas(E1104, "Išsaugoti duomenys: be naujų rodiklių - iliustraciniai ir šal
     const c = sen.metrics.find(m => m.id === "container"); c.series = c.series.map(() => 7); c.demo = false; c.laikotarpis = "2026-09-01";
     sen.metrics.forEach(m => { if(m.id !== "container") m.demo = false; });
     sen.meta = { tikrinta: new Date().toISOString(), updated: "2026-11-03" };
+    sen.valiuta = { menesio: [{ laikotarpis: "2026-09-01", reiksme: 1.15 }], dienos: [] };   // ECB kursas jau gautas (nuo 2026-11-19 be jo klausiama iš karto)
     const n = normalizuokDuomenis(sen).duomenys;
     const v = n.metrics.find(m => m.id === "transp_vanduo");
     const senas = DATA; DATA = n;
@@ -3439,6 +3442,290 @@ testas("Terminai 2026-11-06", "GSCPI - „Pasaulinio tiekimo sutrikimų indeksas
   const ekranas = M(`(function(){ const c = document.body.cloneNode(true); c.querySelectorAll("script,style").forEach(x => x.remove()); return c.textContent; })()`);
   tiesa(!/spaudim/i.test(ekranas), "ekrane: " + (ekranas.match(/.{0,40}spaudim.{0,20}/i) || [""])[0]);
   tiesa(ekranas.indexOf("Pasaulinio tiekimo sutrikimų indeksas (GSCPI)") >= 0, "pavadinimas ekrane");
+});
+
+/* =========================================================================
+   KURSAS IR IMPORTO KILMĖ (2026-11-19): ECB euro kursas (dolerių kainos eurais) ir Eurostat Comext ES importo kilmė.
+   Tinklas - netikras (fetch pakeičiamas), todėl testai nepriklauso nuo šaltinių pasiekiamumo ir šiandienos datos.
+   ========================================================================= */
+const V1119 = "Kursas ir importo kilmė 2026-11-19";
+function ecbJson(taskai){
+  const laikai = Object.keys(taskai), obs = {};
+  laikai.forEach((p, i) => { if(taskai[p] !== null) obs[i] = [taskai[p]]; });
+  return { dataSets: [{ series: { "0:0:0:0:0": { observations: obs } } }], structure: { dimensions: { observation: [{ id: "TIME_PERIOD", values: laikai.map(p => ({ id: p })) }] } } };
+}
+const CX_PARTNERIAI = ["CN", "TR", "CH", "DE", "QU", "QA", "EXT_EU27_2020", "WORLD"];
+function cxMenesiai(nuo, kiek){ const r = []; let [y, m] = nuo.split("-").map(Number); for(let i = 0; i < kiek; i++){ r.push(y + "-" + String(m).padStart(2, "0")); m++; if(m > 12){ m = 1; y++; } } return r; }
+function comextJson(prekes, men, duom){
+  const idx = a => { const o = {}; a.forEach((x, i) => { o[x] = i; }); return o; };
+  const value = {};
+  prekes.forEach((pr, ip) => CX_PARTNERIAI.forEach((pa, ipa) => men.forEach((t, it) => {
+    const v = ((duom[pr] || {})[pa] || {})[t];
+    if(v !== undefined) value[(ipa * prekes.length + ip) * men.length + it] = v;
+  })));
+  return { id: ["freq", "reporter", "partner", "product", "flow", "indicators", "time"], size: [1, 1, CX_PARTNERIAI.length, prekes.length, 1, 1, men.length], value,
+           dimension: { partner: { category: { index: idx(CX_PARTNERIAI), label: { CN: "China", TR: "Türkiye", CH: "Switzerland", DE: "Germany", QU: "Not specified", QA: "Qatar", EXT_EU27_2020: "Extra-EU27", WORLD: "World" } } },
+                        product: { category: { index: idx(prekes), label: {} } }, time: { category: { index: idx(men) } } } };
+}
+/* 2024-07 .. 2026-10 (28 mėn.; 2026-10 be duomenų). 850423: ne ES 100 kas mėnesį, Kinija 50 (prieš metus 40), Turkija 30, Vokietija ir „nenurodyta“ - ne šalys
+   ne ES sumai; 8535: tik paskutiniai 15 mėn. - ankstesnio lango nėra; 7614 - be duomenų. */
+const CX_MEN = cxMenesiai("2024-07", 28);
+function cxDuomenys(){
+  const d = { "850423": { EXT_EU27_2020: {}, CN: {}, TR: {}, DE: {}, QU: {} }, "8535": { EXT_EU27_2020: {}, CH: {}, CN: {}, QA: {} } };
+  CX_MEN.forEach(t => {
+    if(t === "2026-10") return;
+    d["850423"].EXT_EU27_2020[t] = 100; d["850423"].CN[t] = t >= "2025-10" ? 50 : 40; d["850423"].TR[t] = 30; d["850423"].DE[t] = 1000; d["850423"].QU[t] = 10;
+    if(t >= "2025-07"){ d["8535"].EXT_EU27_2020[t] = 200; d["8535"].CH[t] = 120; d["8535"].CN[t] = 40; d["8535"].QA[t] = 20; }
+  });
+  return d;
+}
+function kpiValiuta(){
+  return { menesio: [{ laikotarpis: "2026-06-01", reiksme: 1.10 }, { laikotarpis: "2026-09-01", reiksme: 1.20 }],
+           dienos: [{ laikotarpis: "2026-04-16", reiksme: 1.10 }, { laikotarpis: "2026-05-15", reiksme: 1.20 }], tikrinta: new Date().toISOString() };
+}
+function kpiImportas(){
+  const s = M(`GP_RINKA.skaitykComext(${JSON.stringify(comextJson(["850423", "8535", "7614"], CX_MEN, cxDuomenys()))})`);
+  return { kodai: s, tikrinta: new Date().toISOString() };
+}
+
+testas(V1119, "ECB atsakymas: mėnesio ir dienos laikotarpiai, tik teigiami skaičiai; kelios serijos, kita sandara ar tuščias - klaida su „ECB“", ()=>{
+  paruosk();
+  const sk = d => M(`GP_RINKA.skaitykEcb(${JSON.stringify(d)})`);
+  lygu(sk(ecbJson({ "2026-09": 1.15, "2026-08": 1.16, "2026-07": null })), [{ laikotarpis: "2026-08-01", reiksme: 1.16 }, { laikotarpis: "2026-09-01", reiksme: 1.15 }]);
+  lygu(sk(ecbJson({ "2026-11-18": 1.09, "2026-11-17": -1, "2026-11-16": "1.1" })), [{ laikotarpis: "2026-11-18", reiksme: 1.09 }]);
+  const dvi = ecbJson({ "2026-09": 1.1 }); dvi.dataSets[0].series["0:0:0:0:1"] = { observations: {} };
+  [dvi, {}, ecbJson({ "2026-09": null }), { dataSets: [{ series: { a: { observations: { 0: [1.1] } } } }] }, ecbJson({ "2026": 1.1 })].forEach((d, i) => {
+    let k = ""; try { sk(d); } catch(e){ k = e.message; }
+    tiesa(/^ECB/.test(k), "blogas " + i + ": " + k);
+  });
+});
+
+testas(V1119, "atnaujink: ECB ir Comext klausiama tik su parinktimis; adresai, credentials omit; vieno šaltinio ar grupės klaida - savo id, kiti rezultatai lieka", async ()=>{
+  const w = paruosk(), orig = w.fetch, kviest = [];
+  let ecbKlaida = false, grupesKlaida = null;
+  w.fetch = (u, o) => {
+    u = String(u); kviest.push({ u, o });
+    if(/data-api\.ecb\.europa\.eu/.test(u)) return ecbKlaida ? Promise.resolve({ ok: false, status: 503 })
+      : Promise.resolve({ ok: true, status: 200, json: async () => /\/EXR\/M\./.test(u) ? ecbJson({ "2026-09": 1.15 }) : ecbJson({ "2026-11-18": 1.09 }) });
+    if(/comext/.test(u)){
+      const prekes = [...u.matchAll(/[?&]product=(\d+)/g)].map(x => x[1]);
+      if(grupesKlaida && prekes.indexOf(grupesKlaida) >= 0) return Promise.resolve({ ok: false, status: 500 });
+      return Promise.resolve({ ok: true, status: 200, json: async () => comextJson(prekes, CX_MEN, cxDuomenys()) });
+    }
+    if(/eurostat/.test(u)) return Promise.resolve({ ok: true, status: 200, json: async () => eurostatJson({ "2026-07": 114.5, "2026-08": 113.5 }) });
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ rodikliai: [], klaidos: [] }) });
+  };
+  try {
+    let r = await w.GP_RINKA.atnaujink(["polymers"]);
+    lygu(kviest.filter(k => /ecb|comext/.test(k.u)).length, 0, "be parinkčių - nei ECB, nei Comext");
+    tiesa(!r.valiuta && !r.importas, "be parinkčių - be rezultatų");
+    kviest.length = 0;
+    r = await w.GP_RINKA.atnaujink(["polymers"], { valiuta: true, importas: true });
+    const ecb = kviest.filter(k => /ecb/.test(k.u)), cx = kviest.filter(k => /comext/.test(k.u));
+    lygu(ecb.length, 2, "ECB - mėnesio ir dienos");
+    tiesa(ecb.some(k => /^https:\/\/data-api\.ecb\.europa\.eu\/service\/data\/EXR\/M\.USD\.EUR\.SP00\.A\?format=jsondata&detail=dataonly&startPeriod=\d{4}-\d{2}$/.test(k.u)), ecb.map(k => k.u).join(" "));
+    tiesa(ecb.some(k => /^https:\/\/data-api\.ecb\.europa\.eu\/service\/data\/EXR\/D\.USD\.EUR\.SP00\.A\?format=jsondata&detail=dataonly&startPeriod=\d{4}-\d{2}-\d{2}$/.test(k.u)), ecb.map(k => k.u).join(" "));
+    lygu(cx.length, 3, "Comext - trys grupės");
+    cx.forEach(k => tiesa(/^https:\/\/ec\.europa\.eu\/eurostat\/api\/comext\/dissemination\/statistics\/1\.0\/data\/DS-045409\?freq=M&reporter=EU27_2020&flow=1&indicators=VALUE_IN_EUROS&sinceTimePeriod=\d{4}-\d{2}&product=/.test(k.u), k.u));
+    lygu(cx.map(k => [...k.u.matchAll(/[?&]product=(\d+)/g)].map(x => x[1])), M("GP_RINKA.COMEXT.grupes"), "prekių kodai - grupėmis");
+    tiesa(kviest.every(k => k.o && k.o.credentials === "omit"), "slapukai nesiunčiami");
+    lygu(r.valiuta.menesio, [{ laikotarpis: "2026-09-01", reiksme: 1.15 }]); lygu(r.valiuta.dienos, [{ laikotarpis: "2026-11-18", reiksme: 1.09 }]);
+    lygu(Object.keys(r.importas).sort(), ["850423", "8535"], "kodai su duomenimis");
+    lygu(r.klaidos.filter(k => k.id === "importas").length, 9, "kodai be duomenų - po klaidą (7614 ir dar 8 kodai)");
+    tiesa(r.klaidos.some(k => k.id === "importas" && /7614/.test(k.priezastis)), JSON.stringify(r.klaidos));
+    // ECB nepasiekiamas, viena Comext grupė krenta - savo id, kitų grupių rezultatai lieka
+    ecbKlaida = true; grupesKlaida = "854460";
+    r = await w.GP_RINKA.atnaujink(["polymers"], { valiuta: true, importas: true });
+    tiesa(!r.valiuta && r.klaidos.some(k => k.id === "eur_usd" && /503/.test(k.priezastis)), "ECB klaida: " + JSON.stringify(r.klaidos));
+    tiesa(r.klaidos.some(k => k.id === "importas" && /HTTP 500/.test(k.priezastis)), "grupės klaida");
+    lygu(Object.keys(r.importas).sort(), ["850423", "8535"], "kitos grupės rezultatai lieka");
+    lygu(r.ok.map(x => x.id), ["polymers"], "rodikliai - nepaliesti");
+  } finally { w.fetch = orig; }
+});
+
+testas(V1119, "Comext santrauka: paskutiniai 12 mėn. su duomenimis ir 12 prieš juos, ES šalys ir specialūs kodai - ne kilmės šalys (Kataras - šalis), nežinomas ankstesnis langas - null, kita sandara - klaida", ()=>{
+  paruosk();
+  const s = M(`GP_RINKA.skaitykComext(${JSON.stringify(comextJson(["850423", "8535", "7614"], CX_MEN, cxDuomenys()))})`);
+  lygu(Object.keys(s).sort(), ["850423", "8535"], "7614 be duomenų - nėra");
+  const a = s["850423"];
+  lygu([a.nuo, a.iki, a.neEs, a.top.salis, a.top.dalis, a.topAnkst, a.kinija, a.kinijaAnkst], ["2025-10", "2026-09", 1200, "CN", 0.5, 0.4, 0.5, 0.4]);
+  lygu(a.salys.map(x => x.salis + ":" + x.dalis), ["CN:0.5", "TR:0.3"], "Vokietija (ES) ir „nenurodyta“ - ne kilmės šalys");
+  const b = s["8535"];
+  lygu([b.top.salis, b.top.dalis, b.topAnkst, b.kinija, b.kinijaAnkst], ["CH", 0.6, null, 0.2, null], "ankstesnio lango duomenų nėra - null, ne 0");
+  lygu(b.salys.map(x => x.salis), ["CH", "CN", "QA"], "Kataras (QA) - šalis");
+  // Atsakyme mažiau nei 24 mėn. - ankstesnis langas nežinomas
+  const trumpas = M(`GP_RINKA.skaitykComext(${JSON.stringify(comextJson(["850423"], cxMenesiai("2025-08", 14), cxDuomenys()))})`);
+  lygu([trumpas["850423"].nuo, trumpas["850423"].topAnkst, trumpas["850423"].kinijaAnkst], ["2025-10", null, null]);
+  const blogi = [{}, Object.assign(comextJson(["850423"], CX_MEN, {}), { size: [2, 1, 8, 1, 1, 1, 28] })];
+  const bePartnerio = comextJson(["850423"], CX_MEN, {}); delete bePartnerio.dimension.partner; blogi.push(bePartnerio);
+  const beSumos = comextJson(["850423"], CX_MEN, {}); delete beSumos.dimension.partner.category.index.EXT_EU27_2020; blogi.push(beSumos);
+  blogi.forEach((d, i) => { let k = ""; try { M(`GP_RINKA.skaitykComext(${JSON.stringify(d)})`); } catch(e){ k = e.message; } tiesa(/^Comext/.test(k), "blogas " + i + ": " + k); });
+});
+
+testas(V1119, "Kaina eurais: mėnesio rodiklis - mėnesio vidurkiu, savaitinis - dienos kursu (ne senesniu kaip 7 d.); be kurso - pasakoma, ne 0; būsena - pagal dolerius", ()=>{
+  paruosk();
+  M(`(function(){
+    const cu = metricById("lme_cu"); cu.laikotarpis = "2026-09-01"; cu.series = [9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9500,9800,10000]; cu.demo = false;
+    const br = metricById("brent"); br.laikotarpis = "2026-05-15"; br.series = [80,80,80,80,80,80,80,80,82,83,84,85]; br.demo = false;
+    DATA.valiuta = null; renderAll();
+  })()`);
+  const sevBe = M(`severity(metricById("lme_cu"))`);
+  const korta = id => M(`(function(){ const k = document.querySelector('.kpi[data-id="${id}"] .kpi-eur'); return k ? k.textContent.replace(/\\s+/g, " ").trim() : null; })()`);
+  lygu(korta("lme_cu"), "Kaina eurais - kai bus gautas ECB kursas.", "kurso dar nėra");
+  lygu(korta("plienas"), null, "JAV kainų indeksas - eurais neperskaičiuojamas");
+  M(`DATA.valiuta = ${JSON.stringify(kpiValiuta())}; renderAll();`);
+  // 10 000 / 1,20 = 8 333; 9 000 / 1,10 = 8 182; pokytis +1,9 % (doleriais +11,1 %)
+  tiesa(/^≈ 8\s333 €\/t · eurais \+1,9 % per 3 mėn\.$/.test(korta("lme_cu")), korta("lme_cu"));
+  lygu(M(`severity(metricById("lme_cu"))`), sevBe, "būsena - ta pati, pagal dolerius");
+  tiesa(/^≈ 70,8 €\/bbl · eurais [-−]2,6 % per 4 sav\.$/.test(korta("brent")), korta("brent"));
+  M(`DATA.valiuta.dienos = [{ laikotarpis: "2026-04-09", reiksme: 1.10 }, { laikotarpis: "2026-05-15", reiksme: 1.20 }]; renderAll();`);
+  tiesa(/· pokytis eurais nežinomas$/.test(korta("brent")), "bazės kursas senesnis nei 7 d.: " + korta("brent"));
+  M(`DATA.valiuta.menesio = [{ laikotarpis: "2026-06-01", reiksme: 1.10 }]; renderAll();`);
+  lygu(korta("lme_cu"), "Kaina eurais: ECB kursas šiam laikotarpiui dar nepaskelbtas.", "naujausio mėnesio kurso nėra");
+  paruosk();
+});
+
+testas(V1119, "Kurso kortelė: kursas, prieš 3 mėn., kryptis ir pastaba, kad būsenos ir ribos - pagal dolerius; be kurso - pasakoma; ECB nuoroda", ()=>{
+  paruosk();
+  const el = () => M(`(function(){ const e = document.getElementById("valiutaKortele"); return { hidden: e.hidden, t: e.textContent.replace(/\\s+/g, " ").trim(), a: (e.querySelector("a") || {}).href }; })()`);
+  let k = el();
+  tiesa(!k.hidden && /Kursas dar negautas/.test(k.t), k.t);
+  M(`DATA.valiuta = ${JSON.stringify(kpiValiuta())}; renderAll();`);
+  k = el();
+  tiesa(/1 EUR = 1,2000 USD \(2026 m\. rugsėjo mėn\. vidurkis\)\. Prieš 3 mėn\. - 1,1000 USD \(2026 m\. birželio mėn\.\)\. Euras brango 9,1 %/.test(k.t), k.t);
+  tiesa(/neįskaičiuojamas - ribos apskaičiuotos pagal šaltinių kainas JAV doleriais/.test(k.t), k.t);
+  lygu(k.a, "https://data.ecb.europa.eu/data/datasets/EXR/EXR.M.USD.EUR.SP00.A");
+  M(`DATA.valiuta.menesio = [{ laikotarpis: "2026-06-01", reiksme: 1.20 }, { laikotarpis: "2026-09-01", reiksme: 1.10 }]; renderAll();`);
+  tiesa(/Euras pigo 8,3 % - doleriais skelbiamų žaliavų kainos eurais kito nepalankiau/.test(el().t), el().t);
+  M(`DATA.valiuta.menesio = [{ laikotarpis: "2026-09-01", reiksme: 1.10 }]; renderAll();`);
+  tiesa(/Pokytis per 3 mėn\. nežinomas/.test(el().t), el().t);
+  paruosk();
+});
+
+testas(V1119, "Apžvalga ir kopija: pokytis eurais prie doleriais skelbiamo rodiklio; sutarties sąlygos 4 žingsnyje - valiutos pastaba tik su doleriais skelbiamomis žaliavomis", ()=>{
+  paruosk();
+  // 11 000 (+22 % doleriais, raudona) - kad varis būtų tarp pagrindinių veiksnių; eurais: 11 000 / 1,20 prieš 9 000 / 1,10 = +12,0 %
+  M(`(function(){ const cu = metricById("lme_cu"); cu.laikotarpis = "2026-09-01"; cu.series = [9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9500,9800,11000]; cu.demo = false;
+    DATA.valiuta = ${JSON.stringify(kpiValiuta())}; renderAll(); })()`);
+  M(`document.getElementById("focusName").value = "Aukštos įtampos kabelių pirkimas"; runFocus(); changeFocusCat("kabeliai_ol"); changeFocusRusi("prekes");`);
+  const fk = M(`(function(){ const e = document.querySelector('#focusResult [data-fk="lme_cu"] .fk-sub'); return e ? e.textContent : ""; })()`);
+  tiesa(/eurais \+12,0 %/.test(fk), "apžvalgoje: " + fk);
+  tiesa(/\(nuo 2026 m\. birželio mėn\.; eurais \+12,0 %\)( \[[^\]]+\])?$/.test(M(`focusChg(metricById("lme_cu"))`)), M(`focusChg(metricById("lme_cu"))`));
+  tiesa(!/eurais/.test(M(`focusChg(metricById("vki"))`)), "eurų rodikliui - be perskaičiavimo");
+  const po4 = M(`(function(){ const z = salyguZingsniai(DATA.categories.find(c => c.id === "kabeliai_ol"), "prekes", indeksavimoModelis("kabeliai_ol", "prekes"), vdaIndeksai("kabeliai_ol", "prekes")); return z[3].po; })()`);
+  tiesa(/skelbiamos JAV doleriais: sutartyje nurodykite, kuria valiuta skaičiuojamas kainos pokytis/.test(po4), po4);
+  const po4b = M(`(function(){ const z = salyguZingsniai(DATA.categories.find(c => c.id === "statyba"), "darbai", indeksavimoModelis("statyba", "darbai"), vdaIndeksai("statyba", "darbai")); return z[3].po; })()`);
+  tiesa(!/JAV doleriais/.test(po4b), "be doleriais skelbiamų žaliavų - be pastabos: " + po4b);
+  paruosk();
+});
+
+testas(V1119, "Importo kilmė: profilio kortelėje - didžiausia dalis; apžvalgoje - lentelė, pastaba, kad tai ne Komisijos nustatyta priklausomybė, ir nuoroda į teisės stebėseną; kopijoje - tas pats; be duomenų - pasakoma", ()=>{
+  paruosk();
+  const cat = id => M(`(function(){ const e = [...document.querySelectorAll("#gridCat .cat")].find(c => c.querySelector(".cat-name").textContent === dt(DATA.categories.find(c => c.id === "${id}"), "name", "categories")); const i = e && e.querySelector(".cat-imp"); return i ? i.textContent.replace(/\\s+/g, " ") : null; })()`);
+  tiesa(/Importo kilmė dar negauta/.test(cat("pastociu_iranga")), "be duomenų: " + cat("pastociu_iranga"));
+  lygu(cat("programine"), null, "programinė įranga - be importo kilmės");
+  lygu(cat("projektavimas"), null, "projektavimas - be importo kilmės");
+  M(`DATA.importas = normImportas(${JSON.stringify(kpiImportas())}); renderAll();`);
+  lygu(cat("pastociu_iranga"), "Importo kilmė: Šveicarija - 60,0 % ES importo iš ne ES šalių per 12 mėn. (Komutavimo ir apsaugos aparatai, > 1 000 V).", "didžiausia dalis tarp profilio prekių");
+  M(`document.getElementById("focusName").value = "Galios transformatorių pirkimas"; runFocus(); changeFocusCat("pastociu_iranga"); changeFocusRusi("prekes");`);
+  const b = M(`(function(){ const e = document.querySelector("#focusResult .fk-imp"); return e ? { t: e.textContent.replace(/\\s+/g, " "),
+    eil: [...e.querySelectorAll("tbody tr")].map(tr => [...tr.children].map(c => c.textContent.replace(/\\s+/g, " ").trim())),
+    a: e.querySelector("a").getAttribute("href"), th: [...e.querySelectorAll("thead th")].map(x => x.getAttribute("scope")) } : null; })()`);
+  tiesa(b, "apžvalgoje bloko nėra");
+  lygu(b.eil, [["Transformatoriai su skystuoju dielektriku, > 10 000 kVA KN 850423", "Kinija - 50,0 %", "40,0 %", "50,0 % (40,0 %)", "0 mln. EUR"],
+               ["Komutavimo ir apsaugos aparatai, > 1 000 V KN 8535", "Šveicarija - 60,0 %", "–", "20,0 % (–)", "0 mln. EUR"]], "eilutės - tik prekės su duomenimis; ankstesnio lango nėra - brūkšnys");
+  tiesa(/2025 m\. spalio mėn\. - 2026 m\. rugsėjo mėn\./.test(b.t) && /ne Europos Komisijos nustatyta priklausomybė pagal Reglamento \(ES\) 2024\/1735 25 str\. 7 d\./.test(b.t), b.t);
+  lygu(b.a, "../PP-teise/index.html?lygmuo=es#irasas=es-gaires-c-2026-4623-nzia-25");
+  lygu(b.th, ["col", "col", "col", "col", "col"]);
+  const txt = M(`(function(){ let x = ""; const k = GP_KOPIJA.kopijuok; GP_KOPIJA.kopijuok = t => { x = t; return Promise.resolve(true); }; try { copyFocus(); } finally { GP_KOPIJA.kopijuok = k; } return x; })()`);
+  tiesa(/Tiekimo kilmė \(Eurostat Comext, ES importas iš ne ES šalių, 2025 m\. spalio mėn\. - 2026 m\. rugsėjo mėn\.\): Transformatoriai su skystuoju dielektriku, > 10\s000 kVA \(KN 850423\): Kinija 50,0 % \(prieš metus 40,0 %\), Kinijos dalis 50,0 %/.test(txt), txt.slice(0, 600));
+  // Ištrynus pirkimo pavadinimą HTML neįterpiamas iš duomenų: šalies pavadinimas iš atsakymo rodomas tekstu
+  M(`DATA.importas.kodai["850423"].top = { salis: "XS", pav: "<img src=x onerror=window.__xss=1>", dalis: 0.9 }; renderAll(); runFocus(); changeFocusCat("pastociu_iranga");`);
+  tiesa(!M("window.__xss") && !M(`document.querySelector("#focusResult .fk-imp img")`), "pavadinimas - tekstu");
+  paruosk();
+});
+
+testas(V1119, "Išsaugoti duomenys: kursas ir importo kilmė išlieka perkrovus; netinkami (nežinomas kodas, dalis > 1, blogas mėnuo, šalies kodas, kursas už ribų, __proto__) - neimami, klaidos nėra", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const imp = ${JSON.stringify(kpiImportas())};
+    DATA.valiuta = normValiuta(${JSON.stringify(kpiValiuta())}); DATA.importas = normImportas(imp); saveData();
+    const perkrauta = loadData();
+    const blogas = JSON.parse(JSON.stringify(DATA));
+    blogas.valiuta = { menesio: [{ laikotarpis: "2026-09-01", reiksme: 99 }, { laikotarpis: "2026-09-15", reiksme: 1.1 }, { laikotarpis: "2026-02-30", reiksme: 1.1 }], dienos: "x" };
+    blogas.importas = { kodai: JSON.parse('{"999999":' + JSON.stringify(imp.kodai["850423"]) + ',"850423":' + JSON.stringify(Object.assign({}, imp.kodai["850423"], { top: { salis: "CN", dalis: 1.5 } })) + ',"8535":' + JSON.stringify(Object.assign({}, imp.kodai["8535"], { iki: "2026-13" })) + ',"__proto__":{"x":1}}') };
+    const n = normalizuokDuomenis(blogas);
+    const geras = JSON.parse(JSON.stringify(DATA)); geras.importas.kodai["8535"].salys = [{ salis: "c n", dalis: 0.1 }, { salis: "CH", pav: "Switzerland", dalis: 0.6 }];
+    const g = normalizuokDuomenis(geras).duomenys;
+    return { val: perkrauta.valiuta.menesio.length + "/" + perkrauta.valiuta.dienos.length, kodai: Object.keys(perkrauta.importas.kodai).sort(), klaida: n.klaida || null,
+             bv: n.duomenys.valiuta || null, bi: n.duomenys.importas || null, salys: g.importas.kodai["8535"].salys.map(s => s.salis) };
+  })()`);
+  lygu([r.val, r.kodai, r.klaida, r.bv, r.bi, r.salys], ["2/2", ["850423", "8535"], null, null, null, ["CH"]]);
+  paruosk();
+});
+
+testas(V1119, "Atnaujinimas iš šaltinių: kursas ir importas įrašomi ir išsaugomi; importas - tik kai senesnis nei para (mygtukas) arba 7 d. (atvėrus); grupės klaida - ankstesni kodai lieka, patikros laikas nekeičiamas; klaidų juostoje - pavadinimai", async ()=>{
+  paruosk();
+  M(`window.__T5 = { osp: GP_OSP.atnaujink, rin: GP_RINKA.atnaujink, opt: [] };
+     GP_OSP.atnaujink = () => Promise.resolve({ ok: [], klaidos: [] });
+     GP_RINKA.atnaujink = (ids, opt) => { __T5.opt.push(opt); return Promise.resolve({ ok: [], klaidos: [], valiuta: ${JSON.stringify(kpiValiuta())}, importas: ${JSON.stringify(kpiImportas().kodai)} }); };`);
+  try {
+    tiesa(M("reikiaImporto(true)") && M("reikiaImporto(false)"), "importo dar nėra - klausiama");
+    M("atnaujinkIsOSP()");
+    await new Promise(r => setTimeout(r, 60));
+    lygu(M("__T5.opt[0]"), { valiuta: true, importas: true });
+    lygu([M("DATA.valiuta.menesio.length"), Object.keys(M("DATA.importas.kodai")).sort(), !!M("DATA.importas.tikrinta")], [2, ["850423", "8535"], true]);
+    const sav = JSON.parse(M("localStorage.getItem(STORE_KEY)"));
+    tiesa(sav.valiuta && sav.importas && sav.importas.kodai["850423"], "išsaugota");
+    lygu([M("reikiaImporto(false)"), M("reikiaImporto(true)")], [false, false], "ką tik gauta");
+    lygu([M("reikiaImporto(false, Date.now() + 25 * 3600000)"), M("reikiaImporto(true, Date.now() + 25 * 3600000)"), M("reikiaImporto(true, Date.now() + 7 * 86400000 + 60000)")], [true, false, true], "para ir 7 d.");
+    M("atnaujinkIsOSP({ auto: true })");
+    await new Promise(r => setTimeout(r, 60));
+    lygu(M("__T5.opt[1]"), { valiuta: true, importas: false }, "atvėrus po valandos - be importo");
+    // Viena grupė nepavyko: naujas 8535 įrašomas, ankstesnis 850423 lieka, patikros laikas - ankstesnis
+    const buvo = M("DATA.importas.tikrinta");
+    M(`DATA.importas.kodai["850423"].top.dalis = 0.77; GP_RINKA.atnaujink = () => Promise.resolve({ ok: [], klaidos: [{ id: "importas", priezastis: "HTTP 500" }, { id: "eur_usd", priezastis: "HTTP 503" }],
+       importas: { "8535": ${JSON.stringify(kpiImportas().kodai["8535"])} } }); atnaujinkIsOSP();`);
+    await new Promise(r => setTimeout(r, 60));
+    lygu([M(`DATA.importas.kodai["850423"].top.dalis`), M("DATA.importas.tikrinta"), M("DATA.valiuta.menesio.length")], [0.77, buvo, 2], "ankstesni lieka");
+    lygu(JSON.parse(M("localStorage.getItem(STORE_KEY)")).importas.kodai["850423"].top.dalis, 0.77, "dalinis rezultatas išsaugotas, nors buvo klaidų");
+    const juosta = M(`document.body.textContent`);
+    tiesa(/ES importo kilmė \(Eurostat\) - /.test(juosta) && /ECB euro kursas - /.test(juosta), "klaidų juostoje - pavadinimai");
+  } finally {
+    M("GP_OSP.atnaujink = __T5.osp; GP_RINKA.atnaujink = __T5.rin; delete window.__T5; GP_BUSENA.juostaSlepk('osp');");
+    paruosk();
+  }
+});
+
+testas(V1119, "Sąrašai sutampa: prekių pavadinimai = Comext grupių kodai, profilių kodai - iš jų, profiliai - LITGRID; doleriais - tik pasaulinės kainos; CSP, poraštė ir šaltinių sąrašas", async ()=>{
+  paruosk();
+  const prekes = Object.keys(M("IMPORTO_PREKES")).sort(), grupes = [].concat(...M("GP_RINKA.COMEXT.grupes")).sort();
+  lygu(prekes, grupes, "IMPORTO_PREKES = COMEXT.grupes");
+  const prof = M("IMPORTO_PROFILIAI");
+  Object.keys(prof).forEach(p => { tiesa(M("PROFILIU_RINKINIAI.litgrid").indexOf(p) >= 0, "ne LITGRID profilis " + p); prof[p].forEach(k => tiesa(prekes.indexOf(k) >= 0, p + ": " + k)); });
+  lygu(M("DATA.metrics.filter(m => m.usd).map(m => m.id)"), ["brent", "wti", "lme_al", "lme_cu", "dujos_eu", "gelezies_ruda", "nikelis", "cinkas"]);
+  tiesa(M(`DATA.metrics.filter(m => m.usd).every(m => /^\\$\\//.test(m.unit))`), "doleriais - tik $ vienetai");
+  const src = await (await fetch("EPSO-G_Rinkos_KPI_skydelis.html?b=" + Date.now())).text();
+  tiesa(/connect-src [^"]*https:\/\/data-api\.ecb\.europa\.eu/.test(src), "CSP - ECB");
+  M(`DATA.valiuta = ${JSON.stringify(kpiValiuta())}; renderAll();`);
+  tiesa(/Exchange rates - source: ECB statistics\./.test(M(`document.getElementById("footAbout").textContent`)), "poraštė");
+  tiesa(/euro kursas - tiesiai iš Europos centrinio banko, ES importo kilmė - tiesiai iš Eurostat \(Comext\)/.test(M(`document.getElementById("footAbout").textContent`)), "duomenų kelias poraštėje");
+  const nuor = M(`[...document.querySelectorAll("#srcList a")].map(a => a.href)`);
+  tiesa(nuor.indexOf("https://data.ecb.europa.eu/data/datasets/EXR/EXR.M.USD.EUR.SP00.A") >= 0 && nuor.indexOf("https://ec.europa.eu/eurostat/web/international-trade-in-goods/database") >= 0, nuor.join(" "));
+  paruosk();
+});
+
+testas(V1119, "Anglų kalba: kurso kortelė, kaina eurais, importo eilutė ir lentelė - angliškai", ()=>{
+  paruosk();
+  M(`(function(){ const cu = metricById("lme_cu"); cu.laikotarpis = "2026-09-01"; cu.series = [9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9500,9800,10000]; cu.demo = false;
+     DATA.valiuta = ${JSON.stringify(kpiValiuta())}; DATA.importas = normImportas(${JSON.stringify(kpiImportas())}); LANG = "en"; applyI18n(); renderAll(); })()`);
+  tiesa(/1 EUR = 1\.2000 USD \(September 2026 average\)/.test(M(`document.getElementById("valiutaKortele").textContent`)), M(`document.getElementById("valiutaKortele").textContent`));
+  tiesa(/in euro \+1\.9 % over 3 months/.test(M(`document.querySelector('.kpi[data-id="lme_cu"] .kpi-eur').textContent`)), "kortelė");
+  tiesa(/^Import origin: Switzerland - 60\.0 % of EU imports from non-EU countries/.test(M(`document.querySelector("#gridCat .cat-imp").textContent`)), M(`document.querySelector("#gridCat .cat-imp").textContent`));
+  M(`document.getElementById("focusName").value = "Power transformers"; runFocus(); changeFocusCat("pastociu_iranga"); changeFocusRusi("prekes");`);
+  const t = M(`document.querySelector("#focusResult .fk-imp").textContent`);
+  tiesa(/Supply origin - market statistics/.test(t) && /Liquid dielectric transformers, > 10\s000 kVA CN 850423/.test(t) && !/Kinija|Prekės|dalis/.test(t), t.slice(0, 300));
+  paruosk();
 });
 
 async function paleisk(){
