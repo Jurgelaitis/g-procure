@@ -556,8 +556,20 @@
     var rv = function (x) { return x && x.reiksme != null ? x.reiksme : null; };
     return { budas: (kk && kk.budas) || rv(L.budas) || "", objektas: NK_OBJ[(kk && kk.objektas) || rv(L.objektas) || ""] || null, org: (kk && kk.vykdytojas) || rv(L.vykdytojas) || null };
   }
+  /* Kibernetinio saugumo atsakymai (2026-11-20): šiame puslapyje pažymėtas - pirmesnis, kitaip - pirkimo kortelės (kiberIrt, kiberSkaitmeniniai,
+     kiberKritinis). `is` - kurie atsakymai paimti iš kortelės (rodoma prie klausimo). */
+  function nkAts() {
+    var kk = cfg.kortele ? cfg.kortele() : null, a = {}, is = {};
+    [["irt", "kiberIrt"], ["skaitmeniniai", "kiberSkaitmeniniai"], ["kritinis", "kiberKritinis"]].forEach(function (x) {
+      var v = B.nk[x[0]], kv = kk && (kk[x[1]] === "taip" || kk[x[1]] === "ne") ? kk[x[1]] : null;
+      a[x[0]] = v || kv || null; if (!v && kv) is[x[0]] = true;
+    });
+    ["nzia", "kat", "s3", "bat"].forEach(function (x) { a[x] = B.nk[x]; });
+    a.is = is;
+    return a;
+  }
   function nkPrivalomos() {
-    var a = B.nk, c = nkKontekstas(), out = [];
+    var a = nkAts(), c = nkKontekstas(), out = [];
     if (!a.irt && !a.skaitmeniniai && !a.nzia) return null;
     if (global.GP_NZIA && a.nzia && GP_NZIA.tarptautinis(c.budas)) {
       var r = GP_NZIA.vertink({ budas: c.budas, objektas: c.objektas, technologija: a.nzia, kategorijos: a.kat, salygos3: a.s3, baterijos: a.bat });
@@ -571,7 +583,7 @@
   }
   function nkHtml() {
     if (!global.GP_KIBER && !global.GP_NZIA) return "";
-    var a = B.nk, c = nkKontekstas(), radijas = function (vardas, reiksme, ets) {
+    var a = nkAts(), c = nkKontekstas(), radijas = function (vardas, reiksme, ets) {
       return '<span class="opts" role="radiogroup" aria-labelledby="' + vardas + '-k">' + ets.map(function (e) {
         return '<label class="opt"><input type="radio" name="' + vardas + '" value="' + e[0] + '" data-tk-nk="' + vardas + '"' + (reiksme === e[0] ? " checked" : "") + "> " + esc(e[1]) + "</label>";
       }).join("") + "</span>";
@@ -579,9 +591,10 @@
     var TN = [["taip", "Taip"], ["ne", "Ne"]], h = "";
     var kb = global.GP_KIBER ? GP_KIBER.parink({ irt: a.irt, skaitmeniniai: a.skaitmeniniai, kritinis: a.kritinis, org: c.org }) : null;
     if (global.GP_KIBER) {
-      h += '<div class="tk-nk-q"><div class="t" id="tknk-irt-k">' + esc(GP_KIBER.KLAUSIMAI[0].tekstas) + "</div>" + radijas("tknk-irt", a.irt, TN) + "</div>";
-      h += '<div class="tk-nk-q"><div class="t" id="tknk-sk-k">' + esc(GP_KIBER.KLAUSIMAI[1].tekstas) + "</div>" + radijas("tknk-sk", a.skaitmeniniai, TN) + "</div>";
-      if (kb && kb.kritinisKlausiamas) h += '<div class="tk-nk-q"><div class="t" id="tknk-krit-k">' + esc(GP_KIBER.KLAUSIMAI[2].tekstas) + "</div>" + radijas("tknk-krit", a.kritinis, TN) + "</div>";
+      var isK = function (x) { return a.is[x] ? ' <span class="cite">- atsakyta pirkimo kortelėje</span>' : ""; };
+      h += '<div class="tk-nk-q"><div class="t" id="tknk-irt-k">' + esc(GP_KIBER.KLAUSIMAI[0].tekstas) + isK("irt") + "</div>" + radijas("tknk-irt", a.irt, TN) + "</div>";
+      h += '<div class="tk-nk-q"><div class="t" id="tknk-sk-k">' + esc(GP_KIBER.KLAUSIMAI[1].tekstas) + isK("skaitmeniniai") + "</div>" + radijas("tknk-sk", a.skaitmeniniai, TN) + "</div>";
+      if (kb && kb.kritinisKlausiamas) h += '<div class="tk-nk-q"><div class="t" id="tknk-krit-k">' + esc(GP_KIBER.KLAUSIMAI[2].tekstas) + isK("kritinis") + "</div>" + radijas("tknk-krit", a.kritinis, TN) + "</div>";
     }
     if (global.GP_NZIA) {
       if (!GP_NZIA.tarptautinis(c.budas)) h += '<p class="cite">Poveikio klimatui neutralizavimo pramonės akto 25 straipsnio sąlygos tikrinamos tik tarptautiniam pirkimui' +

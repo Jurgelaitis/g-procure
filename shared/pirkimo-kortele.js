@@ -114,8 +114,14 @@
     { id: "neivertinta", lt: "Dar neįvertinta - reikia teisės specialisto vertinimo", en: "Not yet assessed - a legal assessment is needed" }
   ];
   var PREKIU_LAUKAI = ["kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas"];
+  /* Kibernetinis saugumas (2026-11-20, po trečio piloto - naudotojo „pradėkime nuo kibernetinio saugumo laukų pirkimo kortelėje“): tie patys
+     trys klausimai kaip GP_KIBER.KLAUSIMAI (pirkimo sąlygų generatoriaus 1 žingsnis, TS asistentas, tikrinimo skirtukas) - atsakius kortelėje
+     įrankiai nebeklausia iš naujo. "taip" / "ne" / "" (nenurodyta; numatytųjų nėra). kiberKritinis - tik elektros sektoriaus įmonei (GP_ORG
+     `sektorius`), kitai įrankiai jo nenaudoja. */
+  var KIBER_LAUKAI = ["kiberIrt", "kiberSkaitmeniniai", "kiberKritinis"];
   var SPRENDIMAI = { kriterijus: KRITERIJAI, zaliasis: TAIP_NE, nacsaugumas: TAIP_NE, kvalifikacija: KVALIFIKACIJA, cpo: CPO, esLesos: TAIP_NE,
-    kilmesReikalavimas: REIKALAVIMAS, pedsakoReikalavimas: REIKALAVIMAS, pasoReikalavimas: REIKALAVIMAS, nziaTaikymas: NZIA };
+    kilmesReikalavimas: REIKALAVIMAS, pedsakoReikalavimas: REIKALAVIMAS, pasoReikalavimas: REIKALAVIMAS, nziaTaikymas: NZIA,
+    kiberIrt: TAIP_NE, kiberSkaitmeniniai: TAIP_NE, kiberKritinis: TAIP_NE };
 
   /* Laukų pavadinimai žmogui (pranešimams ir kortelės formai). */
   var LAUKAI = {
@@ -149,6 +155,9 @@
     pedsakoReikalavimas: { lt: "Anglies pėdsako deklaracija (EPD ar GWP)", en: "Carbon footprint declaration (EPD or GWP)" },
     pasoReikalavimas: { lt: "Skaitmeninio gaminio paso nuoroda ar identifikatorius", en: "Digital product passport link or identifier" },
     nziaTaikymas: { lt: "Nulinio balanso technologijų reikalavimai (Reglamentas (ES) 2024/1735)", en: "Net-zero technology requirements (Regulation (EU) 2024/1735)" },
+    kiberIrt: { lt: "Susijęs su tinklų ir informacinėmis sistemomis", en: "Related to network and information systems" },
+    kiberSkaitmeniniai: { lt: "Produktai su skaitmeniniais elementais", en: "Products with digital elements" },
+    kiberKritinis: { lt: "Ypatingos svarbos poveikio turtas (elektros sektoriaus tinklo kodeksas)", en: "Critical-impact asset (electricity network code)" },
     busena: { lt: "Būsena", en: "Status" }
   };
 
@@ -182,7 +191,7 @@
   var TEKSTAI = ["pavadinimas", "numeris", "cvpisNr", "vykdytojas", "rezimas", "objektas", "bvpz", "budas",
                  "pradzia", "paskelbimas", "sutartiesData", "pasiulymuTerminas", "iniciatorius", "organizatorius", "busena",
                  "organizatoriausKontaktai", "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo",
-                 "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas"];
+                 "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas", "kiberIrt", "kiberSkaitmeniniai", "kiberKritinis"];
 
   function tuscia(laukai) {
     var dabar = new Date().toISOString();
@@ -201,6 +210,7 @@
       kriterijus: "", zaliasis: "", nacsaugumas: "", kvalifikacija: "", cpo: "",   // 2026-11-09 - žr. SPRENDIMAI
       esLesos: null,                       // 2026-11-12: "taip" / "ne" / null - žr. SPRENDIMAI
       kilmesReikalavimas: "", pedsakoReikalavimas: "", pasoReikalavimas: "", nziaTaikymas: "",   // 2026-11-19 - žr. PREKIU_LAUKAI
+      kiberIrt: "", kiberSkaitmeniniai: "", kiberKritinis: "",   // 2026-11-20 - žr. KIBER_LAUKAI
       veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
       busena: "", archyvuota: false,      // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
       istorija: [], kilme: {}, istorijaPraleista: 0,  // pakeitimų istorija ir laukų kilmė (2026-11-14; rašo tik issaugok) - žr. ISTORIJOS_RIBA
@@ -1650,7 +1660,7 @@
 
   global.GP_KORTELE = {
     SCHEMA: SCHEMA, RAKTAS: RAKTAS,
-    OBJEKTAI: OBJEKTAI, BUSENOS: BUSENOS, REZIMAI: REZIMAI, LAUKAI: LAUKAI, SPRENDIMAI: SPRENDIMAI, PREKIU_LAUKAI: PREKIU_LAUKAI,
+    OBJEKTAI: OBJEKTAI, BUSENOS: BUSENOS, REZIMAI: REZIMAI, LAUKAI: LAUKAI, SPRENDIMAI: SPRENDIMAI, PREKIU_LAUKAI: PREKIU_LAUKAI, KIBER_LAUKAI: KIBER_LAUKAI,
     vykdytojai: vykdytojai, vykdytojas: vykdytojas,
     tuscia: tuscia, normalizuok: normalizuok, sandara: sandara,
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,

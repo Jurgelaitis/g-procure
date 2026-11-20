@@ -41,11 +41,12 @@
   var PIRKIMO_LAUKAI = ["id", "sukurta", "atnaujinta", "pavadinimas", "numeris", "cvpisNr", "vykdytojas", "rezimas", "objektas", "bvpz",
     "verte", "budas", "dalys", "trukmeMen", "pradzia", "paskelbimas", "sutartiesData", "pasiulymuTerminas", "grafikas", "vertinimas",
     "iniciatorius", "organizatorius", "organizatoriausKontaktai", "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo",
-    "esLesos", "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas", "veiksmai", "busena", "archyvuota"];
+    "esLesos", "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas", "nziaTaikymas", "kiberIrt", "kiberSkaitmeniniai", "kiberKritinis",
+    "veiksmai", "busena", "archyvuota"];
   /* Laukai, kurių reikšmė - kodas ar sudėtinė: byloje dar ir tekstas žmogui (`reiksmes`). */
   var SKAITOMI = ["vykdytojas", "rezimas", "objektas", "verte", "budas", "dalys", "trukmeMen", "pasiulymuTerminas", "grafikas", "vertinimas",
     "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo", "esLesos", "kilmesReikalavimas", "pedsakoReikalavimas", "pasoReikalavimas",
-    "nziaTaikymas", "busena"];
+    "nziaTaikymas", "kiberIrt", "kiberSkaitmeniniai", "kiberKritinis", "busena"];
 
   function K() { return global.GP_KORTELE; }
   function tekstasV(v) { return v == null ? "" : String(v); }

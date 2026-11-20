@@ -60,5 +60,6 @@ Kortelės laukai, kurie susiejami tik tam tikru atveju (pasiūlymų terminas - t
 | `busena`, `archyvuota` | Būsena eForms nurodoma skelbimo rūšimi. |
 | `kilmesReikalavimas`, `pedsakoReikalavimas`, `pasoReikalavimas` | eForms SDK 1.16.0 neturi terminų šiems reikalavimams; kilmės šalies laukas (BT-191) - tik pasiūlymui sutarties skyrimo skelbime. |
 | `nziaTaikymas` | eForms SDK 1.16.0 neturi atskiro termino Reglamento (ES) 2024/1735 pirkimų reikalavimams. |
+| `kiberIrt`, `kiberSkaitmeniniai`, `kiberKritinis` | Vidaus sprendimas, kuriuos kibernetinio saugumo reikalavimus įrašyti į pirkimo dokumentus - į skelbimą neperkeliamas (nuo 2026-11-20). |
 
 Naujas kortelės laukas turi būti įrašytas arba į susiejimą, arba į `NESUSIETI` su priežastimi (sargas `shared/testai.html`).

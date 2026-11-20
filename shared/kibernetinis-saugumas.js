@@ -138,7 +138,7 @@
   // TS skyriaus eilutės (produkto reikalavimai) su nuorodomis; susiję CRA punktai - viena eilute
   function tsEilutes(o) {
     // irt (2026-11-20) - ir tinklų ir informacinės sistemos funkcijos (kelių veiksnių tapatumo nustatymas); neperduotas - tik produkto reikalavimai
-    var p = parink({ irt: (o && o.irt) || "ne", skaitmeniniai: o && o.skaitmeniniai, kritinis: o && o.kritinis, org: o && o.org });
+    var p = parink({ irt: (o && o.irt) || "ne", skaitmeniniai: o && o.skaitmeniniai, kritinis: o && o.kritinis, org: o && o.org, rezimas: o && o.rezimas });
     var praleisti = {}, out = [];
     p.grupes.ts.forEach(function (x) {
       if (praleisti[x.id]) return;

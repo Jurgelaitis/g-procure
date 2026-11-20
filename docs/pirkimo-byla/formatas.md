@@ -51,6 +51,7 @@ Lietuvos laiku.
 | `iniciatorius`, `organizatorius`, `organizatoriausKontaktai` | Atsakingi asmenys. |
 | `kriterijus`, `zaliasis`, `nacsaugumas`, `kvalifikacija`, `cpo`, `esLesos` | Pirkimo sprendimai (žodynai - schemoje). |
 | `kilmesReikalavimas`, `pedsakoReikalavimas`, `pasoReikalavimas`, `nziaTaikymas` | Nuo 2026-11-19: prekių duomenų reikalavimai - ar iš tiekėjų reikalaujama nurodyti prekių kilmės šalį, anglies pėdsako deklaracijos (EPD ar GWP), skaitmeninio gaminio paso nuorodos ar identifikatoriaus (`taip`, `ne`, `netaikoma`) ir ar pirkimui taikomi Reglamento (ES) 2024/1735 (nulinio balanso technologijos) pirkimų reikalavimai (`taikoma`, `netaikoma`, `neivertinta`). Tai sprendimai rengiant pirkimą, ne pasiūlymuose gauti duomenys. |
+| `kiberIrt`, `kiberSkaitmeniniai`, `kiberKritinis` | Nuo 2026-11-20: kibernetinio saugumo klausimai (`taip`, `ne`) - ar pirkimas susijęs su tinklų ir informacinėmis sistemomis, ar perkami produktai su skaitmeniniais elementais ir ar įsigyjama bus ypatingos svarbos poveikio turtas (tik elektros sektoriaus įmonei). Pagal juos įrankiai parodo, kokius kibernetinio saugumo reikalavimus įrašyti į pirkimo dokumentus. |
 | `veiksmai` | Įrankių rekomenduoti veiksmai su būsena. |
 | `busena`, `archyvuota` | Pirkimo būsena ir ar kortelė archyvuota. |
 

@@ -122,7 +122,11 @@
     kilmesReikalavimas: { lt: "eForms SDK 1.16.0 neturi termino reikalavimui nurodyti kilmės šalį; kilmės šalies laukas (BT-191) - tik pasiūlymui sutarties skyrimo skelbime", en: "eForms SDK 1.16.0 has no term for requiring the country of origin; the country of origin field (BT-191) is only for a tender in the award notice" },
     pedsakoReikalavimas: { lt: "eForms SDK 1.16.0 neturi termino anglies pėdsako deklaracijos reikalavimui", en: "eForms SDK 1.16.0 has no term for requiring a carbon footprint declaration" },
     pasoReikalavimas: { lt: "eForms SDK 1.16.0 neturi termino skaitmeninio gaminio paso reikalavimui", en: "eForms SDK 1.16.0 has no term for requiring a digital product passport" },
-    nziaTaikymas: { lt: "eForms SDK 1.16.0 neturi atskiro termino Reglamento (ES) 2024/1735 pirkimų reikalavimams", en: "eForms SDK 1.16.0 has no separate term for the procurement requirements of Regulation (EU) 2024/1735" }
+    nziaTaikymas: { lt: "eForms SDK 1.16.0 neturi atskiro termino Reglamento (ES) 2024/1735 pirkimų reikalavimams", en: "eForms SDK 1.16.0 has no separate term for the procurement requirements of Regulation (EU) 2024/1735" },
+    // 2026-11-20: kibernetinio saugumo klausimai - pirkimo vykdytojo sprendimas, kuriuos reikalavimus įrašyti į pirkimo dokumentus, ne skelbimo duomenys
+    kiberIrt: { lt: "vidaus sprendimas, kuriuos kibernetinio saugumo reikalavimus įrašyti į pirkimo dokumentus - į skelbimą neperkeliamas", en: "an internal decision on which cybersecurity requirements to include in the procurement documents - not transferred to the notice" },
+    kiberSkaitmeniniai: { lt: "vidaus sprendimas, kuriuos kibernetinio saugumo reikalavimus įrašyti į pirkimo dokumentus - į skelbimą neperkeliamas", en: "an internal decision on which cybersecurity requirements to include in the procurement documents - not transferred to the notice" },
+    kiberKritinis: { lt: "vidaus sprendimas, kuriuos kibernetinio saugumo reikalavimus įrašyti į pirkimo dokumentus - į skelbimą neperkeliamas", en: "an internal decision on which cybersecurity requirements to include in the procurement documents - not transferred to the notice" }
   };
 
   function tekstas(v) { return v == null ? "" : String(v).trim(); }

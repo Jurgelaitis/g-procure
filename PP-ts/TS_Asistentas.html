@@ -3328,6 +3328,7 @@ const App = (() => {
 
     // Pirkimo vykdytojas ir įstatymas (T1): sąvokos, nuorodos, žinių bazė ir dokumentų tekstai perskaičiuojami jį pakeitus
     Vykdytojas.klausyk(vykdytojoAtnaujink);
+    Vykdytojas.klausyk(kiberAtnaujink);   // kibernetinio saugumo sąrašas - pagal pirkimo vykdytoją (2026-11-20)
     vykdytojoAtnaujink();
 
     updateApiStatus();
@@ -4708,15 +4709,16 @@ const App = (() => {
      pirkimo sąlygų, sutarties ir organizacijos reikalavimai - sąrašas su „perkelkite“ (į TS nerašomi). Be DI, niekur nesiunčiama. */
   function kiberAts() {
     const v = id => { const x = ($('#' + id) || {}).value; return x === 'taip' || x === 'ne' ? x : null; };
-    return { irt: v('genKiberIrt'), skaitmeniniai: v('genKiberSk'), kritinis: v('genKiberKrit') };
+    // pirkimo vykdytojas ir įstatymas (2026-11-20): tinklo kodeksas - tik elektros sektoriaus įmonei (AB „Amber Grid“ - ne), nuorodos - pagal įstatymą
+    return { irt: v('genKiberIrt'), skaitmeniniai: v('genKiberSk'), kritinis: v('genKiberKrit'), org: Vykdytojas.id(), rezimas: Vykdytojas.rez() };
   }
   const KIBER_PERKELKITE = { sps: 'Perkelkite į pirkimo sąlygas (tiekėjų atranka)', sutartis: 'Perkelkite į sutartį', organizacija: 'Organizacijos pareigos (ne pirkimo dokumentų turinys)' };
   let KIBER_KOPIJOS = [];
   function kiberAtnaujink() {
     if (!window.GP_KIBER) return;
     const a = kiberAts(), kv = $('#genKiberKritVieta');
-    if (kv) kv.classList.toggle('hidden', !(a.irt === 'taip' || a.skaitmeniniai === 'taip'));
     const k = GP_KIBER.parink(a), el = $('#genKiberSarasas');
+    if (kv) kv.classList.toggle('hidden', !k.kritinisKlausiamas);   // tik elektros sektoriaus įmonei, kai bent vienas „Taip“ (2026-11-20)
     if (!el) return;
     KIBER_KOPIJOS = [];
     const ts = GP_KIBER.tsEilutes(a);
@@ -4724,7 +4726,8 @@ const App = (() => {
     ['sps', 'sutartis', 'organizacija'].forEach(g => {
       const sar = k.grupes[g];
       if (!sar.length) return;
-      if (g !== 'organizacija') KIBER_KOPIJOS.push(sar.map(x => x.tekstas + ' (' + x.cit + ')').join('\n'));
+      // kopijuojama su įžanga, kiekvienas punktas - atskira eilute (GP_KIBER.kopijai, kaip pirkimo sąlygų generatoriuje; 2026-11-20)
+      if (g !== 'organizacija') KIBER_KOPIJOS.push(GP_KIBER.kopijai ? GP_KIBER.kopijai(g, sar) : sar.map(x => x.tekstas + ' (' + x.cit + ')').join('\n'));
       h += `<details class="kiber-perkelkite" data-kiber-grupe="${g}"><summary>${escapeHtml(KIBER_PERKELKITE[g])} (${sar.length})</summary>
         <ul>${sar.map(x => `<li>${escapeHtml(x.tekstas)} <span class="form-help">${escapeHtml(x.cit)} · ${escapeHtml(x.galiojaT)}</span></li>`).join('')}</ul>
         ${g !== 'organizacija' ? `<button type="button" class="btn btn-secondary btn-sm" data-kiber-kop="${KIBER_KOPIJOS.length - 1}">Kopijuoti sąrašą</button>` : ''}</details>`;
@@ -10117,6 +10120,12 @@ window.CVPISClient = CVPISClient;
       { kortele: 'zaliasis', gauk: function () { return zymiklis(['genFlagGreen', 'metaGreen']); },
         i: function (v) { return v === 'taip' || v === 'ne' ? v : null; },
         dek: function (v) { ['genFlagGreen', 'metaGreen'].forEach(function (id) { var e = $i(id); if (e) { e.checked = v === 'taip'; e.dispatchEvent(new Event('change', { bubbles: true })); } }); } },
+      // Kibernetinis saugumas (2026-11-20): kortelės atsakymai -> 1 žingsnio klausimai; žmogaus pasirinktas kitoks - juostoje skirtumas
+      ...[['kiberIrt', 'genKiberIrt'], ['kiberSkaitmeniniai', 'genKiberSk'], ['kiberKritinis', 'genKiberKrit']].map(function (x) {
+        return { kortele: x[0], gauk: function () { var e = $i(x[1]); return e && (e.value === 'taip' || e.value === 'ne') ? e.value : ''; },
+          i: function (v) { return v === 'taip' || v === 'ne' ? v : null; }, is: function (s) { return s === 'taip' || s === 'ne' ? s : undefined; },
+          dek: function (v) { var e = $i(x[1]); if (e) { e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); } } };
+      }),
       // vykdytojas pirmas: jį pakeitus nustatomas jo įprastas įstatymas, o kortelės įstatymas - po jo
       { kortele: 'vykdytojas', gauk: function () { return Vykdytojas.id(); }, i: function (v) { return window.GP_ORG && GP_ORG.pagalId(v) ? v : null; },
         numatyta: function () { return !Vykdytojas.arZmogus('org'); }, dek: function (v) { Vykdytojas.nustatyk(v); },

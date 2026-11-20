@@ -676,6 +676,42 @@ function modulisSuKortele() {
 async function testaiKortele() {
   grupe('Bendra pirkimo kortelė (A1)');
 
+  // 2026-11-20: kibernetinio saugumo atsakymai kortelėje -> 1 žingsnio klausimai; AB „Amber Grid“ - be tinklo kodekso klausimo
+  await testas('Kortelės kibernetinio saugumo atsakymai užpildo klausimus; žmogaus pasirinktas kitoks - skirtumas juostoje; AB „Amber Grid“ - be ypatingos svarbos turto klausimo ir tinklo kodekso punktų', async () => {
+    const { f, KW, KD } = await modulisSuKortele();
+    try {
+      const K = KW.GP_KORTELE, v = id => KD.getElementById(id).value;
+      const k = K.issaugok(K.tuscia({ pavadinimas: 'Duomenų aplinkos programinės įrangos pirkimas', vykdytojas: 'litgrid', rezimas: 'PI', kiberIrt: 'taip', kiberSkaitmeniniai: 'taip', kiberKritinis: 'ne' })).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta');
+      lygu([v('genKiberIrt'), v('genKiberSk'), v('genKiberKrit'), KD.getElementById('genKiberKritVieta').classList.contains('hidden')], ['taip', 'taip', 'ne', false], 'užpildyta');
+      tiesa(KD.getElementById('genKiberTs') && KD.querySelector('#genKiberSarasas [data-kiber-grupe="sps"]'), 'sąrašas pagal kortelę');
+    } finally { f.remove(); }
+    // AB „Amber Grid“ (atskiras rėmelis - kitas pirkimas): kortelėje „Taip“ ypatingos svarbos turtui - klausimas nerodomas, tinklo kodekso punktų nėra
+    const r2 = await modulisSuKortele();
+    try {
+      const K = r2.KW.GP_KORTELE, KD = r2.KD;
+      const a = K.issaugok(K.tuscia({ pavadinimas: 'Dujų apskaitos programinė įranga', vykdytojas: 'amber-grid', rezimas: 'PI', kiberIrt: 'taip', kiberKritinis: 'taip' })).kortele;
+      r2.KW.KORTELE.atnaujink();
+      tiesa(await r2.KW.KORTELE.pasirink(a.id), 'Amber Grid pasirinkta');
+      lygu(KD.getElementById('genKiberIrt').value, 'taip', 'Amber Grid - užpildyta');
+      tiesa(KD.getElementById('genKiberKritVieta').classList.contains('hidden') && !/2024\/1366/.test(KD.getElementById('genKiberSarasas').textContent), 'Amber Grid - be tinklo kodekso: ' + KD.getElementById('genKiberSarasas').textContent.slice(0, 200));
+      lygu(r2.KW.GP_KIBER.tsEilutes({ irt: 'taip', kritinis: 'taip', org: 'amber-grid' }).some(t => /2024\/1366/.test(t)), false, 'TS eilutės be tinklo kodekso');
+    } finally { r2.f.remove(); }
+  });
+  await testas('Žmogaus kibernetinio saugumo atsakymas neperrašomas - juostoje skirtumas', async () => {
+    const { f, KW, KD } = await modulisSuKortele();
+    try {
+      const K = KW.GP_KORTELE, e = KD.getElementById('genKiberIrt');
+      e.value = 'ne'; e.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      const k = K.issaugok(K.tuscia({ pavadinimas: 'Duomenų aplinkos programinės įrangos pirkimas', vykdytojas: 'litgrid', rezimas: 'PI', kiberIrt: 'taip' })).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta');
+      lygu(e.value, 'ne', 'neperrašyta');
+      tiesa(/Susijęs su tinklų ir informacinėmis sistemomis: įrankyje „Ne“, kortelėje „Taip“/.test(KD.getElementById('gpk-zin').textContent.replace(/\s+/g, ' ')), KD.getElementById('gpk-zin').textContent);
+    } finally { f.remove(); }
+  });
+
   await testas('Pasirinkus kortelę: pavadinimas, objektas, BVPŽ, vertė, trukmė, būdas ir dalys - ir TS kūrimo vediklyje, ir pirkimo kontekste', async () => {
     const { f, KW, KD } = await modulisSuKortele();
     try {
@@ -2652,7 +2688,9 @@ async function testaiKiber1119() {
       nust('genKiberSk', 'taip'); nust('genKiberKrit', 'ne');
       turi(d.getElementById('genKiberTs').textContent, 'Į TS bus įtrauktas skyrius „Kibernetinio saugumo reikalavimai“ (' + K.tsEilutes({ irt: 'taip', skaitmeniniai: 'taip', kritinis: 'ne' }).length + ')', 'TS skyrius');
       d.querySelector('#genKiberSarasas [data-kiber-grupe="sutartis"] [data-kiber-kop]').click();
-      tiesa(kop.length === 1 && kop[0].split('\n').length === p.grupes.sutartis.length && /Kibernetinio saugumo reikalavimų aprašo 34\.3 p\./.test(kop[0]), 'kopijuojamas sutarties sąrašas');
+      // 2026-11-20: kopijuojama su įžanga, kiekvienas punktas - atskira eilute (GP_KIBER.kopijai)
+      const ke = kop[0] ? kop[0].split('\n') : [];
+      tiesa(kop.length === 1 && ke[0] === 'Sutartyje su tiekėju numatyti:' && ke.filter(x => /^- /.test(x)).length === p.grupes.sutartis.length && /Kibernetinio saugumo reikalavimų aprašo 34\.3 p\./.test(kop[0]), 'kopijuojamas sutarties sąrašas: ' + kop[0]);
       tiesa(!d.querySelector('#genKiberSarasas [data-kiber-grupe="organizacija"] [data-kiber-kop]'), 'organizacijos pareigos nekopijuojamos (ne dokumentų turinys)');
       lygu(kv, 0, 'į DI nesiunčiama');
     } finally { w.GP_AI_PROXY.uzduotis = origP; w.GP_KOPIJA.kopijuok = origK; }

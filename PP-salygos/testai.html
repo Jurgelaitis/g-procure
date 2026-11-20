@@ -19086,6 +19086,26 @@ async function testaiPilotas1120(){
     tiesa(![...Object.values(W.__K.tuscios), ...Object.values(W.__K.formuluotes)].some(q => /Tiekėjas turi teisę|PATEIKIAMOS|Pateikiami dokumentai/.test(q.tekstas || "")), "2 lentelės laukai neklausiami");
   });
 
+  await testas("Pirkimo kortelės kibernetinio saugumo atsakymai (2026-11-20): pildo 1 žingsnio klausimus (Taip / Ne), ypatingos svarbos turto klausimas - tik elektros sektoriaus įmonei; žmogaus atsakymas neperrašomas (skirtumas juostoje)", async () => {
+    const at = q => (D.querySelector("input[name=kiber-" + q + "]:checked") || {}).value || "";
+    const zin = () => D.getElementById("gpk-zin").textContent.replace(/\s+/g, " ");
+    await korteleSp({ kiberIrt: "taip", kiberSkaitmeniniai: "ne", kiberKritinis: "ne" }, { tusti: true });
+    lygu([at("irt"), at("sk"), at("krit"), D.getElementById("kiberKritQ").hidden], ["taip", "ne", "ne", false], "kortelės atsakymai");
+    tiesa(/Sąraše: pirkimo sąlygose - \d+, sutartyje - \d+/.test(tx("kiberInfo")), "sąrašas pagal kortelės atsakymus: " + tx("kiberInfo"));
+    await korteleSp({}, { tusti: true });
+    lygu([at("irt"), at("sk"), at("krit")], ["", "", ""], "be kortelės atsakymų - neatsakyta");
+    // AB „Amber Grid“ - tinklo kodekso klausimo nėra, nors kortelėje atsakyta
+    await korteleSp({ vykdytojas: "amber-grid", kiberIrt: "taip", kiberKritinis: "taip" }, { tusti: true });
+    tiesa(D.getElementById("kiberKritQ").hidden && !W.GP_KIBER.parink(Object.assign(W.kiberAts(), { org: "amber-grid" })).grupes.sps.some(x => /^nccs_/.test(x.id)), "Amber Grid - be tinklo kodekso");
+    // žmogus jau atsakė - kortelė nekeičia, skirtumas parodomas
+    await modulisAdresu("saugykla=testine", null, { tusti: true });
+    nzBudas("T-AK"); D.getElementById("kiber-irt-ne").click();
+    const k2 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORTELE_SP, { kiberIrt: "taip" }))).kortele, api2 = W.eval("KORTELE"); api2.atnaujink();
+    tiesa(await api2.pasirink(k2.id), "pasirinkta");
+    lygu(at("irt"), "ne", "žmogaus atsakymas neperrašytas");
+    tiesa(/Susijęs su tinklų ir informacinėmis sistemomis: įrankyje „Ne“, kortelėje „Taip“/.test(zin()), "skirtumas juostoje: " + zin());
+  });
+
   await testas("Tikrinti parengtus dokumentus: kibernetinio saugumo ir NZIA klausimai (neprivaloma) - atsakius ieškoma SPS, sutartyje, TS ir prieduose; rasta - informacija su vieta, nerasta - „Patikrinkite“; neatsakius - grupės nėra", async () => {
     await modulis();
     const B = await tikrink([
@@ -19105,6 +19125,20 @@ async function testaiPilotas1120(){
     tiesa(rad.some(x => x.lygis === "tikrinti") && rad.every(x => !/atitinka\b/.test(x.tekstas.replace(/ar ji atitinka/g, ""))), "nerasti - Patikrinkite, niekada „atitinka“");
     const fok = D.getElementById("tkNk");
     tiesa(fok && fok.open, "atsakius - skiltis lieka atverta");
+  });
+  await testas("Tikrinti parengtus dokumentus su pirkimo kortele: kortelės kibernetinio saugumo atsakymai naudojami (pažymėti, „atsakyta pirkimo kortelėje“), grupė atsiranda be atsakymų šiame puslapyje; čia pažymėtas atsakymas - pirmesnis", async () => {
+    await korteleSp({ kiberIrt: "taip" }, { tusti: true });
+    const B = await tikrink([
+      await docx("Specialiosios pirkimo sąlygos.docx", ["SPECIALIOSIOS PIRKIMO SĄLYGOS", "1.1. Pirkimas atliekamas atviro konkurso būdu."]),
+      await docx("Techninė specifikacija.docx", ["TECHNINĖ SPECIFIKACIJA", "1. Sistemoje turi būti įdiegtas kelių veiksnių tapatumo nustatymas visiems naudotojams."])
+    ]);
+    const nk = D.getElementById("tkNk");
+    lygu([(nk.querySelector('input[name="tknk-irt"]:checked') || {}).value, /atsakyta pirkimo kortelėje/.test(nk.querySelector("#tknk-irt-k").textContent)], ["taip", true], "kortelės atsakymas");
+    tiesa(B.rez.patikros.some(x => x.id === "kiber_reikalavimai") && B.rez.radiniai.some(x => x.grupe === "nzia_kiber" && /7 lentelės 61 eil\./.test(x.tekstas) && x.lygis === "info"), "grupė pagal kortelę");
+    const ne = nk.querySelector('input[name="tknk-irt"][value="ne"]'); ne.checked = true; ne.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await sl(100);
+    const R = W.GP_TIKRINIMAS.busena.rez, nk2 = D.getElementById("tkNk");
+    tiesa(!R.patikros.some(x => x.id === "kiber_reikalavimai") && !/atsakyta pirkimo kortelėje/.test(nk2.querySelector("#tknk-irt-k").textContent), "čia pažymėtas „Ne“ - pirmesnis");
   });
 }
 async function testaiGrafikas1109(){
