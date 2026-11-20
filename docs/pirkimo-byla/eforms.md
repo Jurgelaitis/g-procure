@@ -26,7 +26,7 @@ nežino, laukas nesusiejamas (ne spėjama).
 
 | Kortelės laukas | eForms laukas | Verslo terminas | Kada ir kaip |
 |---|---|---|---|
-| `pavadinimas` | `BT-21-Procedure` | Title | Visada; kalba LIT. |
+| `pavadinimas` | `BT-21-Procedure` | Title | Visada; kalba LIT. Dvikalbis CVP IS pavadinimas („LT dalis/EN dalis“, `GP_VPT.dvikalbis`, kai įkeltas `shared/vpt-duomenys.js`) - du įrašai, LIT ir ENG (nuo 2026-11-20). |
 | `numeris` | `BT-22-Procedure` | Internal Identifier | Pirkimo vykdytojo pirkimo numeris. |
 | `vykdytojas` | `BT-500-Organization-Company`, `BT-501-Organization-Company` | Organisation Name, Organisation Identifier | Pavadinimas ir juridinio asmens kodas iš `shared/organizacijos.js`. |
 | `rezimas` (su `budas`) | `BT-01-notice` | Procedure Legal Basis | Tik tarptautiniam pirkimui (`GP_METHODS` režimas „tarptautinis“): PĮ - `32014L0025`, VPĮ - `32014L0024`. Supaprastintam ir mažos vertės pirkimui - nesusiejama (nacionalinio skelbimo teisinis pagrindas kitas). |
@@ -44,11 +44,13 @@ nežino, laukas nesusiejamas (ne spėjama).
 
 ## Nesusieti laukai ir kodėl
 
+Kortelės laukai, kurie susiejami tik tam tikru atveju (pasiūlymų terminas - tik atviram konkursui, dalies lygio laukai - tik neskaidomam pirkimui, teisinis pagrindas - tik tarptautiniam pirkimui ir kt.), kortelių puslapyje rodomi sąraše „Užpildyti, bet šiai kortelei nesusieti laukai“ su priežastimi (`GP_EFORMS.praleisti(k)`, nuo 2026-11-20).
+
 | Kortelės laukas | Kodėl |
 |---|---|
 | `cvpisNr` | Nacionalinės sistemos numeris; eForms procedūros ir pranešimo identifikatorius suteikia skelbimą siunčianti sistema. |
 | `pradzia` | Vidaus planavimo data. |
-| `paskelbimas` | Kortelėje - data, nuo kurios skaičiuojami terminai; eForms siuntimo ir pageidaujamos paskelbimo datos (BT-05, BT-738) - kitos sąvokos. |
+| `paskelbimas` | Kortelėje - diena, nuo kurios skaičiuojami terminai: tarptautiniam pirkimui - skelbimo išsiuntimo diena (eForms BT-05), supaprastintam - paskelbimo CVP IS diena (eForms atitikmens nėra). Nesusiejama, nes kortelėje data gali būti planuojama, o BT-05 įrašoma siunčiant skelbimą (patikslinta 2026-11-20). |
 | `sutartiesData` | Planuojama data; eForms sutarties sudarymo data (BT-145) - tik sutarties skyrimo skelbime. |
 | `grafikas`, `veiksmai` | eForms jų neturi. |
 | `iniciatorius`, `organizatorius`, `organizatoriausKontaktai` | Asmens duomenys - sąmoningai neperkeliami. |

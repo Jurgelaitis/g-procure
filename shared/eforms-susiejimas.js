@@ -13,7 +13,10 @@
  *      reiksme - reikšmė kortelėje (kaip ją įrašė G-Procure), kodas - reikšmė eForms lauke (kodas iš kodų sąrašo
  *      `sarasas` arba eForms formato reikšmė: CPV be kontrolinio skaitmens, data su laiko juosta), dalis - dalies id
  *      (LOT-0001), kriterijus - vertinimo kriterijaus eilės numeris, kalba - teksto kalba (LIT);
- *  - santrauka(k) -> { laukai: [susieti kortelės laukai], irasai } ; NESUSIETI - kortelės laukai, kurie nesusiejami, ir kodėl.
+ *  - santrauka(k) -> { laukai: [susieti kortelės laukai], irasai } ; NESUSIETI - kortelės laukai, kurie nesusiejami, ir kodėl;
+ *  - praleisti(k) -> [{ laukas, lt, en }] - užpildyti laukai, šiai kortelei nesusieti pagal taisyklę (terminas ne atviram konkursui,
+ *    dalies lygio laukai be „neskaidomas“, teisinis pagrindas ne tarptautiniam pirkimui ir kt.; 2026-11-20).
+ *  - BT-21: pavadinimas dviem kalbomis („LT dalis/EN dalis“, GP_VPT.dvikalbis, jei įkeltas) - LIT ir ENG atskirai (2026-11-20).
  *
  * Taisyklė - be prielaidų: reikšmė susiejama tik tada, kai jos eForms atitikmuo vienareikšmis. Dalies lygio laukai iš viso
  * pirkimo sprendimų (trukmė, terminas, vertinimo kriterijus, ES lėšos, strateginis pirkimas) - tik kai kortelėje nurodyta,
@@ -103,7 +106,8 @@
     atnaujinta: { lt: "kortelės įrašo data", en: "date of the card record" },
     cvpisNr: { lt: "CVP IS pirkimo numeris - nacionalinės sistemos numeris; eForms procedūros ir pranešimo identifikatorius suteikia skelbimą siunčianti sistema", en: "CVP IS number - a national system number; eForms procedure and notice identifiers are assigned by the sending system" },
     pradzia: { lt: "vidaus planavimo data - eForms atitikmens nėra", en: "internal planning date - no eForms equivalent" },
-    paskelbimas: { lt: "kortelėje - planuojama ar faktinė data, nuo kurios skaičiuojami terminai; eForms siuntimo ir pageidaujamos paskelbimo datos (BT-05, BT-738) - kitos sąvokos", en: "in the card - the planned or actual date from which time limits run; eForms dispatch and preferred publication dates (BT-05, BT-738) are different concepts" },
+    // 2026-11-20 (trečias pilotas): tarptautiniam pirkimui kortelės data - būtent skelbimo išsiuntimo diena (eForms BT-05), todėl ne „kita sąvoka“
+    paskelbimas: { lt: "kortelėje - diena, nuo kurios skaičiuojami terminai: tarptautiniam pirkimui - skelbimo išsiuntimo diena (eForms skelbimo išsiuntimo data BT-05), supaprastintam - paskelbimo CVP IS diena (eForms atitikmens nėra). Nesusiejama, nes kortelėje data gali būti planuojama, o BT-05 įrašoma siunčiant skelbimą", en: "in the card - the day from which time limits run: for international procurement the day the notice is dispatched (eForms notice dispatch date BT-05), for simplified procurement the day of publication in CVP IS (no eForms equivalent). Not mapped because the card date may be planned, while BT-05 is set when the notice is dispatched" },
     sutartiesData: { lt: "planuojama data; eForms sutarties sudarymo data (BT-145) - tik sutarties skyrimo skelbime", en: "planned date; the eForms contract conclusion date (BT-145) is only in the award notice" },
     grafikas: { lt: "pirkimo grafiko eForms nėra", en: "eForms has no procurement schedule" },
     iniciatorius: { lt: "asmens duomenys - į ES duomenų modelio dalį sąmoningai neperkeliami", en: "personal data - deliberately not mapped" },
@@ -156,7 +160,12 @@
       out.push(e);
     }
     // ---- procedūros lygis
-    if (tekstas(n.pavadinimas)) prid("BT-21", "BT-21-Procedure", "pavadinimas", n.pavadinimas, tekstas(n.pavadinimas), { kalba: "LIT" });
+    // Pavadinimas dviem kalbomis („LT dalis/EN dalis“, GP_VPT.dvikalbis; 2026-11-20) - BT-21 kiekviena kalba atskirai (LIT ir ENG), ne viskas kaip LIT
+    var dk = tekstas(n.pavadinimas) && global.GP_VPT && global.GP_VPT.dvikalbis ? global.GP_VPT.dvikalbis(tekstas(n.pavadinimas)) : null;
+    if (dk) {
+      prid("BT-21", "BT-21-Procedure", "pavadinimas", n.pavadinimas, dk.lt, { kalba: "LIT" });
+      prid("BT-21", "BT-21-Procedure", "pavadinimas", n.pavadinimas, dk.en, { kalba: "ENG" });
+    } else if (tekstas(n.pavadinimas)) prid("BT-21", "BT-21-Procedure", "pavadinimas", n.pavadinimas, tekstas(n.pavadinimas), { kalba: "LIT" });
     if (tekstas(n.numeris)) prid("BT-22", "BT-22-Procedure", "numeris", n.numeris, tekstas(n.numeris));
     var org = global.GP_ORG && n.vykdytojas ? (global.GP_ORG.ORGANIZACIJOS || []).filter(function (o) { return o.id === n.vykdytojas; })[0] : null;
     if (org) {
@@ -218,6 +227,45 @@
     return out;
   }
 
+  /* Laukai, kurie kortelėje užpildyti, bet šiai kortelei nesusieti pagal taisyklę „be prielaidų“ (2026-11-20, trečias pilotas: T-SD
+     pirkimo pasiūlymų terminas nebuvo nei tarp susietų, nei tarp nesusietų). -> [{ laukas, lt, en }] kortelės tvarka. */
+  var DALIES_LAUKAI = ["trukmeMen", "pasiulymuTerminas", "kriterijus", "vertinimas", "zaliasis", "esLesos"];
+  function praleisti(k) {
+    var K = global.GP_KORTELE;
+    if (!k || typeof k !== "object") return [];
+    var n = K ? K.normalizuok(k) : k, ir = susiek(n), out = [];
+    var yra = function (l) { return ir.some(function (e) { return e.laukas === l; }); };
+    var uzpildyta = function (l) {
+      var v = n[l];
+      if (l === "vertinimas") return !!(v && Array.isArray(v.kriterijai) && v.kriterijai.length);
+      return v !== null && v !== undefined && v !== "" && !(typeof v === "number" && !(v > 0));
+    };
+    var bud = global.GP_METHODS && n.budas ? global.GP_METHODS.byId(n.budas) : null;
+    var dalys = Array.isArray(n.dalys) ? (n.dalys.length ? "skaidomas" : "neskaidomas") : "nenurodyta";
+    var p = function (laukas, lt, en) { out.push({ laukas: laukas, lt: lt, en: en }); };
+    SUSIETI.forEach(function (s) {
+      var l = s.laukas;
+      if (l === "dalys" || yra(l) || !uzpildyta(l)) return;
+      if (l === "rezimas") {
+        if (!bud) p(l, "teisinis pagrindas (BT-01) susiejamas tik tarptautiniam pirkimui, o kortelėje pirkimo būdas nenurodytas", "the legal basis (BT-01) is mapped only for international procurement, and the card has no procedure");
+        else p(l, "teisinis pagrindas (BT-01) susiejamas tik tarptautiniam pirkimui - šis pirkimo būdas ne tarptautinis", "the legal basis (BT-01) is mapped only for international procurement - this procedure is not international");
+      } else if (l === "objektas") p(l, "mišriam objektui viena pagrindinė rūšis (BT-23) neparenkama", "no single main nature (BT-23) is chosen for a mixed subject");
+      else if (l === "budas") p(l, "šio būdo procedūros rūšies (BT-105) atitikmuo eForms nevienareikšmis", "this procedure has no unambiguous eForms procedure type (BT-105)");
+      else if (l === "bvpz") p(l, "BVPŽ kodas neatpažintas - reikia 8 skaitmenų kodo", "the CPV code was not recognised - an 8-digit code is needed");
+      else if (DALIES_LAUKAI.indexOf(l) >= 0 && dalys === "nenurodyta")
+        p(l, "dalies lygio laukas - susiejamas, kai kortelėje nurodyta, kad pirkimas neskaidomas (dalys nenurodytos)", "a lot-level field - mapped when the card says the procurement is not divided into lots (lots not stated)");
+      else if (DALIES_LAUKAI.indexOf(l) >= 0 && dalys === "skaidomas")
+        p(l, "pirkimas skaidomas į dalis: eForms šią reikšmę nurodo kiekvienai daliai, o kortelėje ji bendra visam pirkimui", "the procurement is divided into lots: eForms states this value for each lot, while the card has one value for the whole procurement");
+      else if (l === "pasiulymuTerminas" && !bud) p(l, "pasiūlymų terminas (BT-131) susiejamas tik atviram konkursui, o kortelėje pirkimo būdas nenurodytas", "the tender deadline (BT-131) is mapped only for an open procedure, and the card has no procedure");
+      else if (l === "pasiulymuTerminas" && bud.procedura !== "atviras")
+        p(l, "pasiūlymų terminas (BT-131) susiejamas tik atviram konkursui: kitais būdais kortelės terminas gali būti paraiškų (dalyvavimo prašymų) ar kito etapo", "the tender deadline (BT-131) is mapped only for an open procedure: in other procedures the card deadline may be for requests to participate or for another stage");
+      else if (l === "pasiulymuTerminas") p(l, "termino formatas neatpažintas", "the deadline format was not recognised");
+      else if (l === "vertinimas") p(l, "vertinimo metodika nustatyta pirkimo objekto dalims atskirai", "the evaluation method is set separately for each lot");
+      else if (l === "zaliasis") p(l, "„Ne“ nereiškia eForms reikšmės „nėra strateginis pirkimas“ (none) - pirkimas gali būti strateginis kitu pagrindu (socialinis, inovacijų)", "“No” does not mean the eForms value “not strategic procurement” (none) - the procurement may be strategic on other grounds (social, innovation)");
+    });
+    return out;
+  }
+
   /* Susieti kortelės laukai (tvarka - kaip kortelėje) ir įrašai. */
   function santrauka(k) {
     var ir = susiek(k), laukai = [];
@@ -232,6 +280,6 @@
     version: "1.0",
     SDK: SDK, LAUKAI_SDK: LAUKAI_SDK, KODU_SARASAI: KODU_SARASAI, SUSIETI: SUSIETI, NESUSIETI: NESUSIETI,
     PROCEDUROS: PROCEDUROS, OBJEKTAI: OBJEKTAI, KRITERIJAI: KRITERIJAI, TEISINIS_PAGRINDAS: TEISINIS_PAGRINDAS, ES_LESOS: ES_LESOS,
-    susiek: susiek, santrauka: santrauka, bylai: bylai, vilniausPoslinkis: vilniausPoslinkis, bvpzKodai: bvpzKodai
+    susiek: susiek, santrauka: santrauka, praleisti: praleisti, bylai: bylai, vilniausPoslinkis: vilniausPoslinkis, bvpzKodai: bvpzKodai
   };
 })(typeof window !== "undefined" ? window : this);

@@ -1854,6 +1854,7 @@ function atnaujinkSkaitiklius(A, W){
    Iki tol atvėrus ir išsaugojus be pakeitimų būdas būdavo ištrinamas, rūšis tapdavo „Prekės“, o CPO, Valdyba ir CVP IS -
    „Taip“ (ir naujam pirkimui), lyg tai būtų žmogaus pasirinkimai. */
 let MODAL_PRADZIA = null;
+let MODAL_SZ = null;   // sutarčių žemėlapio sutarties id naujam pirkimui
 const MODAL_LAUKAI = ["nr","imone","rusis","objektas","verte","budas","bvpz","iniciatorius","padalinys","inicData","pirkimoData","sutarciesData","trukme","cvpis","cpo","valdyba","capex","kriterijus","nereguliarus","grupe","grupesPagrindimas","objektoGrupe","objektoPagrindas","specialiosios","pastabos"];
 const TAIP_NE = [["Taip","Taip"],["Ne","Ne"]];
 function pasirinkimas(id, reiksme, variantai, tuscias){
@@ -1869,6 +1870,8 @@ function openProcModal(p, pradiniai){
   const isNew = !p;
   // pradiniai - naujo pirkimo laukai iš kito skirtuko (sutarčių žemėlapis); įrašoma tik paspaudus „Išsaugoti“
   if(isNew) p = Object.assign({id:naujasId("new"), imone: numatytojiImone()}, pradiniai && typeof pradiniai === "object" ? pradiniai : {});
+  // Iš sutarčių žemėlapio - kurios sutarties pagrindu (įrašoma tik paspaudus „Išsaugoti“; žemėlapis pagal tai rodo „Įtraukta“)
+  MODAL_SZ = isNew && pradiniai && typeof pradiniai.szSutartis === "string" && /^\d{1,20}$/.test(pradiniai.szSutartis) ? pradiniai.szSutartis : null;
   const m = document.getElementById("modalContent");
   const budoKodas = mapMethodNameToCode(p.budas);
   const neData = v => v && !parseDate(v) ? String(v).slice(0, 40) : "";
@@ -2004,11 +2007,12 @@ function saveProcModal(id, isNew){
     else if(k === "budas") rec.budas = METHODS[v] ? METHODS[v].full : "";
     else rec[k] = v;
   });
-  if(isNew){ rec.id = SAUGUS_ID.test(id) ? id : naujasId("new"); DATA.procurements.push(rec); }
+  if(isNew){ rec.id = SAUGUS_ID.test(id) ? id : naujasId("new"); if(MODAL_SZ){ rec.szSutartis = MODAL_SZ; SZ.fokusas = MODAL_SZ; } DATA.procurements.push(rec); }
   else {
     const i = DATA.procurements.findIndex(p=>p.id===id);
     if(i >= 0){ DATA.procurements[i] = {...DATA.procurements[i], ...rec}; trinti.forEach(k => delete DATA.procurements[i][k]); }
   }
+  MODAL_SZ = null;
   save(); closeModal(); perpieskViska();
 }
 
@@ -2329,6 +2333,9 @@ function szInit(){
   }
   // Įmonė: žmogaus pasirinkta lieka; kol nepasirinko - pagal juostą „Įmonės planas“ (visa grupė - LITGRID, prioritetas)
   if(!sel.dataset.zmogus){ const cf = pasirinktaImone(); sel.value = COMPANIES[cf] ? cf : "LITGRID"; }
+  // Sutarčių žemėlapis (2026-11-20, trečias pilotas): po „Įtraukti į planą“ ir „Išsaugoti“ likdavo „Plane nėra“. Išsaugojus
+  // perpieskViska() -> renderRibos() -> čia, ir grįžus į skirtuką - perpiešiama pagal dabartinį planą.
+  if(SZ.z && SZ.imone === sel.value) piesSutarciuZemelapi();
 }
 async function gaukSutarciuZemelapi(){
   const V = window.GP_VIESOS_SUTARTYS, B = window.GP_BUSENA, k = document.getElementById("szImone").value, kodas = szImonesKodas(k);
@@ -2357,10 +2364,24 @@ function szPlaneYra(k, grupe, galioja){
     return p.imone === k && String(p.bvpz || "").replace(/\D/g, "").slice(0, 3) === grupe && metai >= m - 1 && metai <= m;
   });
 }
+/* Kodėl tiekėjas nerodomas - tik tai, ką sako šaltinis (2026-11-20, trečias pilotas: „juridinis asmuo“ buvo rašoma ir tada, kai viešuose
+   duomenyse asmens rūšis „Nežinomas“, o kodas ir pavadinimas užkoduoti). Senesnis serveris priežasties nesiunčia - neutralus tekstas. */
+const SZ_PASLEPTA = {
+  "asmens-vardu": "įmonė, pavadinta asmens vardu (pavadinimas nerodomas)",
+  "fizinis": "fizinis asmuo (duomenys nerodomi)",
+  "nezinomas": "tiekėjas viešuose duomenyse neatskleistas"
+};
 function szTiekejas(c){
   if(!c.tiekejas) return '<span class="muted">tiekėjas dar nepaskelbtas</span>';
-  if(c.tiekejas.paslepta) return "juridinis asmuo (pavadinimas nerodomas)";
+  if(c.tiekejas.paslepta) return '<span class="muted">' + (SZ_PASLEPTA[c.tiekejas.priezastis] || "tiekėjo duomenys nerodomi") + '</span>';
   return escapeHtml(c.tiekejas.pav) + (c.tiekejas.kodas ? ` <span class="muted">${escapeHtml(c.tiekejas.kodas)}</span>` : "");
+}
+// Ar būtent ši sutartis jau įtraukta į planą („Įtraukti į planą“ ją įsimena pirkimo įraše - szSutartis)
+function szItraukta(k, c){ return DATA.procurements.find(p => p.imone === k && p.szSutartis && String(p.szSutartis) === String(c.id)) || null; }
+function szGrupesPlane(k, g){
+  const yra = [];
+  g.sutartys.forEach(c => szPlaneYra(k, g.grupe, c.galioja).forEach(p => { if(!yra.includes(p)) yra.push(p); }));
+  return yra;
 }
 function szIki(siandien, men){ const d = parseDate(siandien); if(!d) return null; d.setMonth(d.getMonth() + men); return fmtDate(d); }
 function piesSutarciuZemelapi(){
@@ -2380,32 +2401,45 @@ function piesSutarciuZemelapi(){
     html += `<div class="empty"><div class="icon">📄</div>Viešuose duomenyse ${escapeHtml(COMPANIES[k].name)} sutarčių, kurios baigiasi per ${men} mėn., nerasta.</div>`;
   } else {
     html += grupes.map(g => {
-      const yra = szPlaneYra(k, g.grupe, g.sutartys[0].galioja), kc = g.koncentracija, gid = escapeHtml(g.grupe);
+      const yra = szGrupesPlane(k, g), kc = g.koncentracija, gid = escapeHtml(g.grupe);
       const konc = kc ? `<p class="sz-konc">Per 3 metus grupėje sudaryta sutarčių nuo 10 000 Eur: ${kc.sutarciu} (${fmtMoney(kc.suma)}), tiekėjų - ${kc.tiekeju}. Didžiausio tiekėjo dalis - <strong>${String(kc.didziausioDalis).replace(".", ",")} %</strong>${kc.didziausias && !kc.didziausias.paslepta ? " (" + escapeHtml(kc.didziausias.pav) + ")" : ""}.`
         + (kc.didziausioDalis > 50 ? ` Daugiau nei pusė grupės vertės - vieno tiekėjo: rengiant pirkimą verta apsvarstyti rinkos konsultaciją (${escapeHtml(GP_TEISE.cit("rinkos_konsultacijos", COMPANIES[k].law))}).` : "") + `</p>` : "";
+      // Grupės aprėptis - informacija; „Įtraukti į planą“ - prie kiekvienos sutarties (2026-11-20: buvo tik pirmajai grupės sutarčiai)
       const planas = yra.length
         ? `<p class="sz-planas"><span class="badge green">Plane yra</span> ${yra.slice(0, 3).map(p => escapeHtml(p.objektas || p.nr || "pirkimas") + (pirkimoMetai(p) ? " (" + pirkimoMetai(p) + " m.)" : "")).join("; ")}${yra.length > 3 ? "; dar " + (yra.length - 3) : ""}</p>`
-        : `<p class="sz-planas"><span class="badge yellow">Plane nėra</span> <button type="button" class="btn sm" data-sz-itraukti="${gid}" aria-label="Įtraukti į planą - BVPŽ grupė ${gid}">Įtraukti į planą</button></p>`;
+        : `<p class="sz-planas"><span class="badge yellow">Plane nėra</span> Šios grupės pirkimo sutarčių pabaigos ar ankstesniais metais plane dar nėra - reikiamas sutartis įtraukite iš lentelės.</p>`;
+      const veiksmas = c => {
+        const p = szItraukta(k, c), cid = escapeHtml(c.id);
+        return p ? `<span class="badge green" tabindex="-1" data-sz-vieta="${cid}">Įtraukta</span>`
+          : `<button type="button" class="btn sm" data-sz-itraukti="${gid}" data-sz-sutartis="${cid}" data-sz-vieta="${cid}" aria-label="Įtraukti į planą - ${escapeHtml(c.pav || "sutartis")}">Įtraukti į planą</button>`;
+      };
       return `<div class="sz-grupe" id="sz-${gid}"><h4>${gid} - ${escapeHtml(BVPZ3(g.grupe) || "BVPŽ grupė")}</h4>
         <div class="table-wrap" style="max-height:none"><table class="sz-lent"><caption class="sr-only">Sutartys, kurios baigiasi: BVPŽ grupė ${gid}</caption>
-        <thead><tr><th scope="col">Sutarties objektas</th><th scope="col">Tiekėjas</th><th scope="col">Vertė be PVM</th><th scope="col">Galioja iki</th></tr></thead><tbody>`
-        + g.sutartys.slice(0, 10).map(c => `<tr><td>${escapeHtml(c.pav || "objektas nenurodytas")}${c.pirkimoNr ? ` <span class="muted">Nr. ${escapeHtml(c.pirkimoNr)}</span>` : ""}</td><td>${szTiekejas(c)}</td><td>${c.verte != null ? fmtMoney(c.verte) : "-"}</td><td>${escapeHtml(c.galioja)} <span class="muted">(po ${+c.menesiu || 0} mėn.)</span></td></tr>`).join("")
+        <thead><tr><th scope="col">Sutarties objektas</th><th scope="col">Tiekėjas</th><th scope="col">Vertė be PVM</th><th scope="col">Galioja iki</th><th scope="col">Planas</th></tr></thead><tbody>`
+        + g.sutartys.slice(0, 10).map(c => `<tr><td>${escapeHtml(c.pav || "objektas nenurodytas")}${c.pirkimoNr ? ` <span class="muted">Nr. ${escapeHtml(c.pirkimoNr)}</span>` : ""}</td><td>${szTiekejas(c)}</td><td>${c.verte != null ? fmtMoney(c.verte) : "-"}</td><td>${escapeHtml(c.galioja)} <span class="muted">(po ${+c.menesiu || 0} mėn.)</span></td><td>${veiksmas(c)}</td></tr>`).join("")
         + `</tbody></table></div>${g.sutartys.length > 10 ? `<p class="muted">Rodoma 10 iš ${g.sutartys.length}.</p>` : ""}${planas}${konc}</div>`;
     }).join("");
   }
   html += `<p class="muted sz-saltinis">${escapeHtml(V.saltiniuTekstas(["vda"], "lt"))} Tai viešų duomenų pagalba planuojant, ne sutarčių apskaita: ar ir kada pirkti, sprendžiate jūs.</p>`;
   host.innerHTML = html;
-  host.querySelectorAll("[data-sz-itraukti]").forEach(b => b.addEventListener("click", () => szItraukti(b.dataset.szItraukti)));
+  host.querySelectorAll("[data-sz-itraukti]").forEach(b => b.addEventListener("click", () => szItraukti(b.dataset.szItraukti, b.dataset.szSutartis)));
+  // Įrašius pirkimą iš žemėlapio fokusas - į tos sutarties eilutę (mygtukas perpieštas, žyma „Įtraukta“)
+  if(SZ.fokusas){
+    const id = SZ.fokusas; SZ.fokusas = null;
+    const el = [...host.querySelectorAll("[data-sz-vieta]")].find(x => x.dataset.szVieta === id);
+    if(el) setTimeout(() => { if(document.contains(el) && !document.getElementById("modal").classList.contains("show")) el.focus(); }, 0);
+  }
 }
-function szItraukti(grupe){
+const SZ_ID = /^\d{1,20}$/;
+function szItraukti(grupe, sutartis){
   const g = SZ.z && SZ.z.grupes.find(x => x.grupe === grupe); if(!g || !g.sutartys.length) return;
-  const c = g.sutartys[0], k = SZ.imone, cpv = (c.cpv && c.cpv[0]) || "";
+  const c = g.sutartys.find(x => String(x.id) === String(sutartis)) || g.sutartys[0], k = SZ.imone, cpv = (c.cpv && c.cpv[0]) || "";
   openProcModal(undefined, {
     imone: k, rusis: SZ_RUSIS(grupe), objektas: c.pav || BVPZ3(grupe) || "", bvpz: cpv,
     sutarciesData: c.galioja,
-    pastabos: `Pagal viešą CVP IS sutartį, kuri baigiasi ${c.galioja}${c.verte != null ? ` (vertė ${fmtMoney(c.verte)} be PVM)` : ""}${c.pirkimoNr ? `, pirkimo Nr. ${c.pirkimoNr}` : ""}. Vertę, būdą ir datas nustatykite patys.`
+    pastabos: `Pagal viešą CVP IS sutartį, kuri baigiasi ${c.galioja}${c.verte != null ? ` (vertė ${fmtMoney(c.verte)} be PVM)` : ""}${c.pirkimoNr ? `, pirkimo Nr. ${c.pirkimoNr}` : ""}. Vertę, būdą ir datas nustatykite patys.`,
+    szSutartis: SZ_ID.test(String(c.id)) ? String(c.id) : undefined
   });
-
 }
 function ribosTikPastabos(v){ RIBOS_TIK_PASTABOS = !!v; renderRibos(); const b = document.querySelector(`#ribosRodyti [data-tik="${v ? 1 : 0}"]`); if(b) b.focus(); }
 function ribosKaip(){

@@ -894,10 +894,18 @@ async function testaiViesosSutartys1119(){
     lygu([nz.juridinis, nz.viesas, nz.pav, nz.kodas], [false, false, null, null], "nežinoma rūšis");
     const nz2 = VS.salis(vsSal({ salies_asmens_rusis: "Nežinomas" }));
     lygu([nz2.juridinis, nz2.viesas, nz2.pav, nz2.kodas], [false, false, null, null], "ne juridinis asmuo su įmonės kodu - irgi tik suskaičiuojamas");
+    // kodėl nerodoma (2026-11-20): kad sąsaja nesakytų „juridinis asmuo“, kai šaltinis rūšies nežino, o kodas ir pavadinimas užkoduoti
+    const uzk = VS.salis(vsSal({ salies_asmens_rusis: "Nežinomas", salies_kodas: "abc123def456aa0", salies_pavadinimas: "f00ba4c0ffee123" }));
+    lygu([s.priezastis, ii.priezastis, uzk.priezastis, VS.salis(vsSal({ salies_asmens_rusis: "Fizinis", salies_kodas: "39001010000" })).priezastis, VS.salis(vsSal({ salies_pavadinimas: "" })).priezastis],
+      [null, "asmens-vardu", "nezinomas", "fizinis", "nezinomas"], "priežastis");
   });
   await testas("Asmens vardu pavadintos įmonės (IĮ, MB, ūkinės bendrijos, ūkininkas) atpažįstamos; bendrovės (UAB, AB, ŽŪB) - ne", () => {
-    const taip = ["Jono Jonaičio individuali įmonė", "IĮ „Petraitis“", "MB Projektų sprendimai", "Petro Petraičio TŪB", "KŪB „Jonas ir partneriai“", "ūkininkas Jonas Jonaitis", "Mažoji bendrija „Darbai“"];
-    const ne = ["UAB \"TETAS\"", "LITGRID AB", "ŽŪB Agrovaldyba", "Siemens Energy AB", "UAB Mbita", "Iėjimas UAB"];
+    const taip = ["Jono Jonaičio individuali įmonė", "IĮ „Petraitis“", "MB Projektų sprendimai", "Petro Petraičio TŪB", "KŪB „Jonas ir partneriai“", "ūkininkas Jonas Jonaitis", "Mažoji bendrija „Darbai“",
+      // 2026-11-20, trečias pilotas: senos individualios įmonės savininko vardu be „IĮ“ (pavadinimai išgalvoti)
+      "V. Pavardienės firma \"Saulė\"", "Jono Jonaičio prekybinė firma", "A. Petraičio įmonė", "P.Pavardžio komercinė firma 'Rasa'", "Onos Pavardienė prekybos firma", "Pavardžio firma Rasa",
+      "Rūtos Pavardienės individuali firma „Ąžuolas“", "Muster Bau e.K.", "Jane Doe sole trader"];
+    const ne = ["UAB \"TETAS\"", "LITGRID AB", "ŽŪB Agrovaldyba", "Siemens Energy AB", "UAB Mbita", "Iėjimas UAB",
+      "UAB \"P. Petraičio firma\"", "Uždaroji akcinė bendrovė „R. Pavardžio firma“", "V. Pavardžio firma „Rasa“, UAB", "Pavyzdžio agrofirma UAB", "UAB firma Pavyzdys", "Žemės ūkio bendrovė Pavyzdžio agrofirma"];
     taip.forEach(x => tiesa(VS.asmensVardoForma(x), "turėjo atpažinti: " + x));
     ne.forEach(x => tiesa(!VS.asmensVardoForma(x), "neturėjo: " + x));
   });
@@ -920,7 +928,7 @@ async function testaiViesosSutartys1119(){
     const g312 = z.grupes[0], g452 = z.grupes[1];
     lygu([g312.koncentracija.sutarciu, g312.koncentracija.suma, g312.koncentracija.tiekeju, g312.koncentracija.didziausioDalis, g312.koncentracija.didziausias], [3, 1000000, 2, 70, { pav: "UAB \"TETAS\"", kodas: "300513148" }], "312 koncentracija");
     lygu([g452.koncentracija.sutarciu, g452.koncentracija.suma], [1, 200000], "koncentracija - tik nuo 10 000 Eur");
-    lygu([g452.koncentracija.didziausioDalis, g452.sutartys[0].tiekejas, g452.sutartys[0].tiekeju, g452.sutartys[0].menesiu, g452.sutartys[0].cpv], [50, { paslepta: true }, 2, 1, ["45231000"]], "dalinimas po lygiai, paslėptas pavadinimas");
+    lygu([g452.koncentracija.didziausioDalis, g452.sutartys[0].tiekejas, g452.sutartys[0].tiekeju, g452.sutartys[0].menesiu, g452.sutartys[0].cpv], [50, { paslepta: true, priezastis: "asmens-vardu" }, 2, 1, ["45231000"]], "dalinimas po lygiai, paslėptas pavadinimas ir kodėl");
     lygu(g312.sutartys[0].tiekejas, { pav: "UAB \"TETAS\"", kodas: "300513148" });
     lygu(z.laikotarpis, { siandien: "2026-11-19", iki: "2028-11-19", nuo: "2023-11-19" });
   });
@@ -930,23 +938,87 @@ async function testaiViesosSutartys1119(){
       vsSal({ dok_id: "4", salies_kodas: "222222222", salies_pavadinimas: "MB Darbai" }), vsSal({ dok_id: "4", salies_asmens_rusis: "Fizinis", salies_kodas: "39001010000" })].map(VS.salis);
     const r = VS.rinkosSuvestine(sut, sal, false);
     lygu(r.tiekejai, [{ pav: "UAB \"TETAS\"", kodas: "300513148", kiekis: 2, suma: 150000, didziausia: 100000, paskutine: "2025-02-01" }, { pav: "UAB Kitas", kodas: "111111111", kiekis: 1, suma: 80000, didziausia: 80000, paskutine: "2025-03-01" }]);
-    lygu([r.sutarciu, r.tiekeju, r.paslepta, r.nezinomuSaliu, r.beTiekejo, r.apribota], [5, 3, 1, 1, 1, false]);
+    lygu([r.sutarciu, r.tiekeju, r.paslepta, r.nezinomuSaliu, r.beTiekejo, r.apribota, r.laikotarpis], [5, 3, 1, 1, 1, false, { nuo: "2025-01-01", iki: "2025-05-01" }]);
     lygu(r.vidus.map(x => [x.kodas, x.viesas, x.didziausia]).sort(), [["111111111", true, 80000], ["222222222", false, 30000], ["300513148", true, 100000]]);
   });
   await testas("TED: laimėtojo pavadinimas iš kelių kalbų, vertė - tik EUR, Lietuvos kodas - tik LTU laimėtojui, pasiūlymų mediana, asmens vardu pavadintos įmonės - tik suskaičiuojamos, apribota - kai skelbimų daugiau", () => {
     const n = [
-      { "publication-number": "137503-2024", "publication-date": "2024-03-06Z", "winner-name": { lit: ["UAB „Elektra“"] }, "winner-country": ["LTU"], "winner-identifier": ["247744890"], "tender-value": ["1700000"], "tender-value-cur": ["EUR"], "received-submissions-type-val": ["3"] },
-      { "publication-number": "200001-2025", "publication-date": "2025-05-01Z", "winner-name": { eng: ["Elektra UAB"] }, "winner-country": ["LTU"], "winner-identifier": ["247744890"], "tender-value": ["300000"], "tender-value-cur": ["EUR"], "received-submissions-type-val": ["1"] },
+      { "publication-number": "137503-2024", "publication-date": "2024-03-06Z", "winner-name": { lit: ["UAB „Elektra“"] }, "winner-country": ["LTU"], "winner-identifier": ["247744890"], "tender-value": ["1700000"], "tender-value-cur": ["EUR"], "received-submissions-type-val": ["3"], "contract-tender-id": ["TEN-0001"], "tender-identifier": ["P-1"] },
+      { "publication-number": "200001-2025", "publication-date": "2025-05-01Z", "winner-name": { eng: ["Elektra UAB"] }, "winner-country": ["LTU"], "winner-identifier": ["247744890"], "tender-value": ["300000"], "tender-value-cur": ["EUR"], "received-submissions-type-val": ["1"], "contract-tender-id": ["TEN-0001"], "tender-identifier": ["P-7"] },
       { "publication-number": "300001-2025", "publication-date": "2025-06-01Z", "winner-name": { pol: ["Polska Sp. z o.o."] }, "winner-country": ["POL"], "winner-identifier": ["5260001234"], "tender-value": ["900000"], "tender-value-cur": ["PLN"] },
       { "publication-number": "400001-2025", "publication-date": "2025-07-01Z", "winner-name": { lit: ["Jono Jonaičio individuali įmonė"] }, "winner-country": ["LTU"], "winner-identifier": ["123456789"] },
       { "publication-number": "500001-2025", "publication-date": "2025-08-01Z" },
       { "publication-number": "bad" }
     ];
     const t = VS.tedSuvestine(n.map(VS.tedSkelbimas), 9);
-    lygu(t.laimetojai, [{ pav: "UAB „Elektra“", salis: "LTU", kodas: "247744890", kiekis: 2, suma: 2000000, paskutine: "2025-05-01", skelbimas: "200001-2025" },
-      { pav: "Polska Sp. z o.o.", salis: "POL", kodas: null, kiekis: 1, suma: 0, paskutine: "2025-06-01", skelbimas: "300001-2025" }]);
-    lygu([t.skelbimu, t.viso, t.apribota, t.beLaimetojo, t.pasiulymuMediana, t.paslepta], [5, 9, true, 1, 2, 1]);
+    lygu(t.laimetojai, [{ pav: "UAB „Elektra“", salis: "LTU", kodas: "247744890", kiekis: 2, suma: 2000000, beVertes: 0, paskutine: "2025-05-01", skelbimas: "200001-2025" },
+      { pav: "Polska Sp. z o.o.", salis: "POL", kodas: null, kiekis: 1, suma: null, beVertes: 1, paskutine: "2025-06-01", skelbimas: "300001-2025" }]);
+    lygu([t.skelbimu, t.viso, t.apribota, t.beLaimetojo, t.pasiulymuMediana, t.paslepta, t.laikotarpis], [5, 9, true, 1, 2, 1, { nuo: "2024-03-06", iki: "2025-08-01" }]);
     lygu(t.vidus, [{ kodas: "247744890", didziausia: 1700000 }]);
+    const u = VS.uzklausaTed("3121", "lt", VS_DABAR).kunas.fields;
+    ["organisation-name-tenderer", "organisation-identifier-tenderer", "organisation-country-tenderer", "contract-tender-id", "tender-identifier"].forEach(f => tiesa(u.indexOf(f) >= 0, "TED laukas: " + f));
+  });
+  /* 2026-11-20, trečias pilotas: TED paieškos sąrašai - be tarpusavio sąsajų. Duomenų sandara - kaip tikruose skelbimuose
+     (laimėtojų vardai pagal dalių rezultatus, kodai - pagal organizacijas, vertės - pagal pasiūlymus); pavadinimai ir kodai išgalvoti. */
+  await testas("TED: kodas ir šalis - pagal pasiūlymų teikėjų sąrašus (ne pagal eilės numerį); vertė - tik vieninteliam laimėtojui, kai visi pasiūlymai yra sutarčių; kitaip - nežinoma", () => {
+    const sk = o => VS.tedSkelbimas(Object.assign({ "publication-number": "900001-2026", "publication-date": "2026-05-27+02:00", "tender-value-cur": ["EUR"] }, o));
+    // 3 dalys, 2 laimėtojai: vardai pagal dalis (Beta, Alfa, Beta), kodai ir teikėjai - organizacijų tvarka (Alfa, Beta), vertės - pasiūlymų
+    const a = sk({ "winner-name": { lit: ["UAB Beta", "UAB \"Alfa\"", "UAB Beta"] }, "winner-identifier": ["111111111", "222222222"], "winner-country": ["LTU", "LTU"],
+      "organisation-name-tenderer": { lit: ["UAB \"Alfa\"", "UAB Beta"] }, "organisation-identifier-tenderer": ["111111111", "222222222"], "organisation-country-tenderer": ["LTU", "LTU"],
+      "tender-value": ["750000.3", "1600000.00", "1300000.60"], "contract-tender-id": ["TEN-0001", "TEN-0002", "TEN-0003"], "tender-identifier": ["A1", "B1", "B1"] });
+    lygu(a.laimetojai, [{ pav: "UAB Beta", salis: "LTU", kodas: "222222222", vertes: null }, { pav: "UAB \"Alfa\"", salis: "LTU", kodas: "111111111", vertes: null }], "kodai pagal teikėjų sąrašą, vertės - nežinomos");
+    // atvirkštinė tvarka (trys laimėtojai, viena dalis)
+    const b = sk({ "winner-name": { lit: ["UAB Gama", "UAB Delta", "Epsilon LT"] }, "winner-identifier": ["333333333", "444444444", "555555555"],
+      "organisation-name-tenderer": { lit: ["Epsilon LT", "UAB Delta", "UAB Gama"] }, "organisation-identifier-tenderer": ["333333333", "444444444", "555555555"], "organisation-country-tenderer": ["LTU", "LTU", "LTU"],
+      "tender-value": ["97000", "26000", "13000"], "contract-tender-id": ["TEN-0003", "TEN-0002", "TEN-0001"], "tender-identifier": ["x", "y", "z"] });
+    lygu(b.laimetojai.map(w => [w.pav, w.kodas]), [["UAB Gama", "555555555"], ["UAB Delta", "444444444"], ["Epsilon LT", "333333333"]], "atvirkštinė tvarka");
+    // organizacija su dviem kodais - sąrašų ilgiai skiriasi: kodų nėra (ne spėjama), šalis - bendra
+    const c = sk({ "winner-name": ["Zeta s.r.o.", "Eta s.r.o."], "winner-identifier": ["1", "2", "3", "4"].map(x => "SK" + x.repeat(8)), "winner-country": ["SVK"],
+      "organisation-name-tenderer": ["Zeta s.r.o.", "Eta s.r.o."], "organisation-identifier-tenderer": ["SK11111111", "2020", "SK33333333", "4040"], "tender-value": ["1", "2"] });
+    lygu(c.laimetojai.map(w => [w.kodas, w.salis, w.vertes]), [[null, "SVK", null], [null, "SVK", null]], "kodų ilgiai skiriasi");
+    // vienas laimėtojas: visi pasiūlymai - sutarčių -> vertės jo; yra nelaimėjęs pasiūlymas -> nežinoma; du laimėtojų kodai -> nežinoma
+    const v1 = sk({ "winner-name": ["UAB Teta", "UAB Teta"], "winner-identifier": ["666666666"], "winner-country": ["LTU"], "tender-value": ["100000", "50000"], "contract-tender-id": ["TEN-1", "TEN-2"], "tender-identifier": ["t1", "t2"] });
+    lygu(v1.laimetojai, [{ pav: "UAB Teta", salis: "LTU", kodas: "666666666", vertes: [100000, 50000] }], "vienas laimėtojas");
+    const v2 = sk({ "winner-name": ["UAB Teta"], "winner-identifier": ["666666666"], "tender-value": ["100000", "120000"], "contract-tender-id": ["TEN-1"], "tender-identifier": ["t1"] });
+    lygu(v2.laimetojai[0].vertes, null, "nelaimėjęs pasiūlymas sąraše");
+    const v4 = sk({ "winner-name": ["UAB Teta"], "winner-identifier": ["666666666"], "tender-value": ["100000", "120000"], "contract-tender-id": ["TEN-1"], "tender-identifier": ["t1", "t2"] });
+    lygu(v4.laimetojai[0].vertes, null, "nelaimėjęs pasiūlymas su identifikatoriumi - sutarčių mažiau nei pasiūlymų");
+    const v3 = sk({ "winner-name": ["UAB Teta", "UAB Teta"], "winner-identifier": ["666666666", "777777777"], "organisation-name-tenderer": ["UAB Teta", "UAB Kita"], "organisation-identifier-tenderer": ["666666666", "777777777"],
+      "tender-value": ["100000", "50000"], "contract-tender-id": ["TEN-1", "TEN-2"], "tender-identifier": ["t1", "t2"] });
+    lygu([v3.laimetojai.length, v3.laimetojai[0].kodas, v3.laimetojai[0].vertes], [1, "666666666", null], "du laimėtojų kodai - vertė nežinoma");
+    lygu(sk({ "winner-name": ["UAB Teta"], "winner-identifier": ["666666666"], "tender-value": ["100000"], "tender-value-cur": ["PLN"], "contract-tender-id": ["TEN-1"], "tender-identifier": ["t1"] }).laimetojai[0].vertes, null, "ne EUR");
+    lygu(sk({ "winner-name": ["UAB Teta"], "winner-identifier": ["666666666"], "tender-value": ["100000"], "contract-tender-id": ["TEN-1"] }).laimetojai[0].vertes, null, "be pasiūlymų identifikatorių");
+  });
+  await testas("TED: ne įmonės laimėtojo vietoje atmetamos ir suskaičiuojamos (sutartis nesudaryta, „Partneris 1“), dalies priesaga „- L1“ nuimama; ta pati įmonė su kodu ir be, kitomis kabutėmis - viena eilutė; Lietuvos įmonės su skirtingais kodais - atskirai", () => {
+    const n = [
+      { "publication-number": "900002-2026", "publication-date": "2026-08-12+02:00", "winner-name": { lit: ["Pirkimas pabaigtas nesudarius sutarties"] }, "winner-identifier": ["Pirkimas pabaigtas nesudarius sutarties"], "winner-country": ["LTU"],
+        "organisation-name-tenderer": { lit: ["Pirkimas pabaigtas nesudarius sutarties"] }, "organisation-identifier-tenderer": ["Pirkimas pabaigtas nesudarius sutarties"], "tender-value": ["0"], "tender-value-cur": ["EUR"], "contract-tender-id": ["TEN-0001"], "tender-identifier": ["1"] },
+      { "publication-number": "900003-2026", "publication-date": "2026-10-20+02:00", "winner-name": { deu: ["Rahmenvereinbarungspartner 1"] }, "winner-identifier": ["FN 123456a"], "winner-country": ["AUT"] },
+      { "publication-number": "900004-2026", "publication-date": "2026-10-21+02:00", "winner-name": { deu: ["Muster Energie GmbH - L1", "Muster Energie GmbH - L2"] }, "winner-identifier": ["FN 999999b"], "winner-country": ["AUT"] },
+      { "publication-number": "900005-2026", "publication-date": "2026-04-01+02:00", "winner-name": ["UAB „Omega“"], "winner-identifier": ["888888888"], "winner-country": ["LTU"], "tender-value": ["20000"], "tender-value-cur": ["EUR"], "contract-tender-id": ["TEN-1"], "tender-identifier": ["o1"] },
+      { "publication-number": "900006-2026", "publication-date": "2026-05-01+02:00", "winner-name": ["Omega, UAB", "UAB Pi"], "winner-country": ["LTU"] },
+      { "publication-number": "900007-2026", "publication-date": "2026-06-01+02:00", "winner-name": ["UAB „Omega“"], "winner-identifier": ["999999999"], "winner-country": ["LTU"] },
+      { "publication-number": "900008-2026", "publication-date": "2026-07-01+02:00", "winner-name": ["Roman SRL"], "winner-identifier": ["RO 1234567"], "winner-country": ["ROU"] },
+      { "publication-number": "900009-2026", "publication-date": "2026-07-02+02:00", "winner-name": ["ROMAN S.R.L."], "winner-identifier": ["1234568"], "winner-country": ["ROU"] }
+    ].map(VS.tedSkelbimas);
+    lygu([n[0].laimetojai.length, n[0].neImoniu, n[1].laimetojai.length, n[1].neImoniu], [0, 1, 0, 1], "ne įmonės");
+    lygu(n[2].laimetojai.map(w => [w.pav, w.kodas]), [["Muster Energie GmbH", "FN999999b"]], "dalies priesaga");
+    const t = VS.tedSuvestine(n, 9);
+    lygu([t.beLaimetojo, t.neImoniu], [2, 2], "skelbimai be laimėtojo įmonės");
+    const om = t.laimetojai.filter(x => /Omega/.test(x.pav));
+    lygu(om.map(x => [x.kodas, x.kiekis, x.suma, x.beVertes]), [["888888888", 2, 20000, 1], ["999999999", 1, null, 1]], "be kodo - prie įrašo su kodu; kitas kodas - atskirai");
+    lygu(t.laimetojai.filter(x => /roman/i.test(x.pav)).map(x => [x.salis, x.kiekis, x.kodas]), [["ROU", 2, null]], "užsienio - pagal pavadinimą");
+    lygu(t.laimetojai.filter(x => /Pi$/.test(x.pav)).length, 1, "kitas laimėtojas lieka");
+    // tas pats kodas skirtingu formatu ir kitu pavadinimu - viena įmonė; ta pati įmonė dviem pavadinimais viename skelbime - vienas skelbimas
+    const t2 = VS.tedSuvestine([
+      { "publication-number": "900010-2026", "publication-date": "2026-03-01+02:00", "winner-name": ["Lumen Power SRL"], "winner-identifier": ["RO 7654321"], "winner-country": ["ROU"] },
+      { "publication-number": "900011-2026", "publication-date": "2026-04-01+02:00", "winner-name": ["Lumen Power SRL Sucursala Cluj"], "winner-identifier": ["7654321"], "winner-country": ["ROU"] },
+      { "publication-number": "900012-2026", "publication-date": "2026-05-01+02:00", "winner-name": ["UAB Sigma", "UAB Sigma filialas"], "winner-identifier": ["121212121"], "winner-country": ["LTU"],
+        "organisation-name-tenderer": ["UAB Sigma", "UAB Sigma filialas"], "organisation-identifier-tenderer": ["121212121", "121212121"], "organisation-country-tenderer": ["LTU", "LTU"] }
+    ].map(VS.tedSkelbimas), 3);
+    lygu(t2.laimetojai.map(x => [x.pav, x.kiekis, x.kodas]), [["Lumen Power SRL", 2, null], ["UAB Sigma", 1, "121212121"]], "kodo formatas ir pavadinimų variantai");
+    tiesa(!t.laimetojai.some(x => /nesudarius|partner/i.test(x.pav)), "ne įmonių sąraše nėra");
+    tiesa(["Pirkimas pabaigtas nesudarius sutarties", "Rahmenvereinbarungspartner 1", "Bieter 2", "n/a", "---"].every(x => VS.neImone(x, null)) && !["UAB Statyba 1", "PRO 8 s.r.o.", "UAB Elektra 2000", "Siemens Energy AB"].some(x => VS.neImone(x, null)), "ne įmonių atpažinimas");
   });
   await testas("Pajėgumas - tik skaičiai: naujausių finansinių metų pajamos, asmens vardu pavadintos ir be ataskaitų - „nežinoma“, TED Lietuvos laimėtojai įskaitomi; patirtis - didžiausia panaši sutartis", () => {
     const paj = VS.pajamuSuvestine([
@@ -964,8 +1036,11 @@ async function testaiViesosSutartys1119(){
     const ted = { vidus: [{ kodas: "300513148", didziausia: 1200000 }, { kodas: "555555555", didziausia: 700000 }] };
     const kid = { "300513148": vsU("1"), "111111111": vsU("2"), "555555555": vsU("3"), "222222222": vsU("4"), "666666666": vsU("6") };
     const r = VS.pajegumas(rinka, ted, paj, kid, 1000000, 600000);
-    lygu(r, { visi: 6, apyvarta: { atitiktu: 3, neatitiktu: 1, nezinoma: 2 }, patirtis: { atitiktu: 4, neatitiktu: 2 }, finansiniaiMetai: { nuo: 2023, iki: 2025 } }, "riba imtinai, asmens vardu pavadintai - nežinoma net turint duomenų");
-    lygu(VS.pajegumas(rinka, null, {}, {}, null, 100000), { visi: 5, apyvarta: null, patirtis: { atitiktu: 4, neatitiktu: 1 }, finansiniaiMetai: null });
+    lygu(r, { visi: 6, apyvarta: { atitiktu: 3, neatitiktu: 1, nezinoma: 2 }, patirtis: { atitiktu: 4, neatitiktu: 2, nezinoma: 0 }, finansiniaiMetai: { nuo: 2023, iki: 2025 } }, "riba imtinai, asmens vardu pavadintai - nežinoma net turint duomenų");
+    lygu(VS.pajegumas(rinka, null, {}, {}, null, 100000), { visi: 5, apyvarta: null, patirtis: { atitiktu: 4, neatitiktu: 1, nezinoma: 0 }, finansiniaiMetai: null });
+    // TED vertė nežinoma (null): tik TED įmonė - patirtis „nežinoma“, ne „neatitiktų“; VDA įmonei TED null jos vertės nesumažina
+    const tedN = { vidus: [{ kodas: "777777777", didziausia: null }, { kodas: "300513148", didziausia: null }] };
+    lygu(VS.pajegumas(rinka, tedN, {}, {}, null, 400000), { visi: 6, apyvarta: null, patirtis: { atitiktu: 3, neatitiktu: 2, nezinoma: 1 }, finansiniaiMetai: null }, "TED be vertės");
   });
 
   grupe("Viešų pirkimų sutarčių duomenys (2026-11-19) - darbai su netikru šaltiniu ir HTTP atsakymai");

@@ -65,7 +65,8 @@
   var B = nauja();
   function nauja() {
     return { docs: null, vaidmenys: {}, laikas: null, rez: null, ankstesne: null, palyg: {}, formos: {}, sprendimai: {},
-             vaizdas: "svarbiausia", palygDok: null, laukiami: false, radiniai: [], rodytiVisus: {}, atsisiusta: "{}", eiga: 0 };
+             vaizdas: "svarbiausia", palygDok: null, laukiami: false, radiniai: [], rodytiVisus: {}, atsisiusta: "{}", eiga: 0,
+             nk: { irt: null, skaitmeniniai: null, kritinis: null, nzia: null, kat: [], s3: [], bat: null } };
   }
   function $(id) { return document.getElementById(id); }
   function P() { return global.GP_PALYGINIMAS; }
@@ -516,6 +517,13 @@
         x.rez = P().lygink(f.ps, ir.imone && x.psOrg ? x.psOrg : x.ps, { zemelapis: f.zem, kitosVersijos: P().kitosVersijos(ir.sutartis ? ir.kitos : ir), sutartis: !!ir.sutartis, naujos: naujos });
       }
       x.pagalPasa = pagalPasa;
+      // Citata - tikras dokumento tekstas (trečias pilotas 2026-11-20, P3-A6): bendro LITGRID AB ir AB „Amber Grid“ dokumento pastraipos lyginamos
+      // su forma, kurioje AB „Amber Grid“ duomenys grąžinti į šablono žymas, bet žmogui rodoma „AB „AMBER GRID“ – Eur be PVM“, ne „ĮMONĖS PAVADINIMAS ...“
+      if (x.psOrg && x.rez && x.rez.pakeitimai) {
+        var orig = {};
+        x.ps.forEach(function (p, i) { if (x.psOrg[i] && x.psOrg[i].t !== p.t) orig[p.t] = x.psOrg[i].t; });
+        x.rez.pakeitimai.forEach(function (pk) { if (pk.dok && orig[pk.dok] != null) pk.dok = orig[pk.dok]; });
+      }
     } catch (e) { x.klaidaLyg = e.message; }
   }
 
@@ -539,9 +547,70 @@
     Object.keys(B.vaidmenys).forEach(function (id) { v[id] = B.vaidmenys[id]; });
     return v;
   }
+  /* NZIA 25 str. ir kibernetinio saugumo nuostatos parengtame pakete (trečias pilotas 2026-11-20, P3-B1/B5): iki tol grupė veikė tik generuojant -
+     paskelbto ar kito rengėjo paketo patikrinti nebuvo galima. Klausimai - tie patys kaip 1 žingsnyje (GP_KIBER.KLAUSIMAI, GP_NZIA), atsakymai -
+     tik šiame puslapyje; būdas, objektas ir pirkimo vykdytojas - iš kortelės, o be jos - iš skelbimo. Neatsakius - grupės nėra. */
+  var NK_OBJ = { prekes: "prekes", paslaugos: "paslaugos", paslaugos_it: "paslaugos", darbai: "darbai" };
+  function nkKontekstas() {
+    var kk = cfg.kortele ? cfg.kortele() : null, sk = B.rez && B.rez.faktai && B.rez.faktai.skelbimas, L = sk && sk.laukai || {};
+    var rv = function (x) { return x && x.reiksme != null ? x.reiksme : null; };
+    return { budas: (kk && kk.budas) || rv(L.budas) || "", objektas: NK_OBJ[(kk && kk.objektas) || rv(L.objektas) || ""] || null, org: (kk && kk.vykdytojas) || rv(L.vykdytojas) || null };
+  }
+  function nkPrivalomos() {
+    var a = B.nk, c = nkKontekstas(), out = [];
+    if (!a.irt && !a.skaitmeniniai && !a.nzia) return null;
+    if (global.GP_NZIA && a.nzia && GP_NZIA.tarptautinis(c.budas)) {
+      var r = GP_NZIA.vertink({ budas: c.budas, objektas: c.objektas, technologija: a.nzia, kategorijos: a.kat, salygos3: a.s3, baterijos: a.bat });
+      if (r && (r.busena === "taikoma" || r.busena === "neaisku")) r.salygos.forEach(function (x) { out.push({ id: x.id, saltinis: "nzia", kur: x.tikrinti || "sutartis", pav: x.pav, cit: x.cit, zodziai: x.zodziai || "" }); });
+    }
+    if (global.GP_KIBER && (a.irt || a.skaitmeniniai)) {
+      var kb = GP_KIBER.parink({ irt: a.irt, skaitmeniniai: a.skaitmeniniai, kritinis: a.kritinis, org: c.org });
+      ["sps", "sutartis", "ts"].forEach(function (g) { kb.grupes[g].filter(function (x) { return g !== "ts" || x.zodziai; }).forEach(function (x) { out.push({ id: x.id, saltinis: "kiber", kur: g, pav: x.tekstas, cit: x.cit, zodziai: x.zodziai || "" }); }); });
+    }
+    return out;
+  }
+  function nkHtml() {
+    if (!global.GP_KIBER && !global.GP_NZIA) return "";
+    var a = B.nk, c = nkKontekstas(), radijas = function (vardas, reiksme, ets) {
+      return '<span class="opts" role="radiogroup" aria-labelledby="' + vardas + '-k">' + ets.map(function (e) {
+        return '<label class="opt"><input type="radio" name="' + vardas + '" value="' + e[0] + '" data-tk-nk="' + vardas + '"' + (reiksme === e[0] ? " checked" : "") + "> " + esc(e[1]) + "</label>";
+      }).join("") + "</span>";
+    };
+    var TN = [["taip", "Taip"], ["ne", "Ne"]], h = "";
+    var kb = global.GP_KIBER ? GP_KIBER.parink({ irt: a.irt, skaitmeniniai: a.skaitmeniniai, kritinis: a.kritinis, org: c.org }) : null;
+    if (global.GP_KIBER) {
+      h += '<div class="tk-nk-q"><div class="t" id="tknk-irt-k">' + esc(GP_KIBER.KLAUSIMAI[0].tekstas) + "</div>" + radijas("tknk-irt", a.irt, TN) + "</div>";
+      h += '<div class="tk-nk-q"><div class="t" id="tknk-sk-k">' + esc(GP_KIBER.KLAUSIMAI[1].tekstas) + "</div>" + radijas("tknk-sk", a.skaitmeniniai, TN) + "</div>";
+      if (kb && kb.kritinisKlausiamas) h += '<div class="tk-nk-q"><div class="t" id="tknk-krit-k">' + esc(GP_KIBER.KLAUSIMAI[2].tekstas) + "</div>" + radijas("tknk-krit", a.kritinis, TN) + "</div>";
+    }
+    if (global.GP_NZIA) {
+      if (!GP_NZIA.tarptautinis(c.budas)) h += '<p class="cite">Poveikio klimatui neutralizavimo pramonės akto 25 straipsnio sąlygos tikrinamos tik tarptautiniam pirkimui' +
+        (c.budas ? "" : " - pirkimo būdas nežinomas: pasirinkite pirkimo kortelę arba įkelkite skelbimą") + ".</p>";
+      else {
+        h += '<div class="tk-nk-q"><div class="t" id="tknk-nzia-k">Ar į pirkimo dalyką įtrauktos nulinio balanso technologijos?</div>' +
+          radijas("tknk-nzia", a.nzia, [["taip", "Taip"], ["ne", "Ne"], ["neaisku", "Neaišku - įvertins teisės specialistas"]]) + "</div>";
+        if (a.nzia === "taip" || a.nzia === "neaisku") {
+          h += '<div class="tk-nk-q"><div class="t" id="tknk-kat-k">Kurios technologijos?</div><span class="opts" role="group" aria-labelledby="tknk-kat-k">' +
+            GP_NZIA.TECHNOLOGIJOS.map(function (x) { return '<label class="opt"><input type="checkbox" value="' + x.k + '" data-tk-nk="tknk-kat"' + (a.kat.indexOf(x.k) >= 0 ? " checked" : "") + "> " + esc(x.pav.charAt(0).toUpperCase() + x.pav.slice(1)) + "</label>"; }).join("") + "</span></div>";
+          if (c.objektas === "darbai") h += '<div class="tk-nk-q"><div class="t" id="tknk-s3-k">Kurios darbų sutarties sąlygos taikomos (bent viena)?</div><span class="opts" role="group" aria-labelledby="tknk-s3-k">' +
+            Object.keys(GP_NZIA.SALYGOS3).map(function (x) { return '<label class="opt"><input type="checkbox" value="' + x + '" data-tk-nk="tknk-s3"' + (a.s3.indexOf(x) >= 0 ? " checked" : "") + "> " + esc(GP_NZIA.SALYGOS3[x].pav) + "</label>"; }).join("") + "</span></div>";
+          if (GP_NZIA.priklausomybe(a.kat).length) h += '<div class="tk-nk-q"><div class="t" id="tknk-bat-k">Ar pirkimo dalyke yra produktų, kuriems Komisija nustatė didelę priklausomybę: ' +
+            esc(GP_NZIA.priklausomybe(a.kat).map(function (x) { return x.pav; }).join("; ")) + "?</div>" + radijas("tknk-bat", a.bat, TN) + "</div>";
+        }
+      }
+    }
+    var kiek = nkPrivalomos();
+    return '<details class="tk-nk" id="tkNk"' + (B.nkAtverta ? " open" : "") + '><summary>Kibernetinio saugumo ir Poveikio klimatui neutralizavimo pramonės akto nuostatos (neprivaloma)' +
+      (kiek ? " - tikrinama: " + kiek.length : "") + "</summary>" +
+      '<p class="cite">Atsakius, patikra ieško šių nuostatų pirkimo sąlygose, sutartyje, techninėje specifikacijoje ir prieduose (grupė „NZIA ir kibernetinis saugumas“). ' +
+      "Ieškoma raktinių žodžių - turinio atitiktis nevertinama. Atsakymai neišsaugomi.</p>" + h + "</details>";
+  }
   function tikrinkParengti() {
     if (!B.docs) return;
-    B.rez = GP_PARENGTIS.patikrink({ docs: B.docs, vaidmenys: vaidmenysSuFormomis(), kortele: cfg.kortele ? cfg.kortele() : null, kalba: "lt" });
+    var o = { docs: B.docs, vaidmenys: vaidmenysSuFormomis(), kortele: cfg.kortele ? cfg.kortele() : null, kalba: "lt" };
+    B.rez = GP_PARENGTIS.patikrink(o);                 // pirmas kartas - faktai (skelbimo būdas, objektas) NZIA klausimams
+    var pr = nkPrivalomos();
+    if (pr) { o.privalomos = pr; B.rez = GP_PARENGTIS.patikrink(o); }
   }
   function parengtiesRaktas(r) {
     var c = (r.vietos || []).map(function (v) { return v.citata || ""; }).join("|");
@@ -906,6 +975,11 @@
     if (!B.docs) return;
     $("tkSantrauka").innerHTML = santraukaHtml();
     $("tkSaltinis").textContent = saltinisTekstas();
+    var nk = $("tkNkVieta");
+    if (nk) { var fid = document.activeElement && document.activeElement.closest && document.activeElement.closest("#tkNk") ? document.activeElement : null;
+      var fv = fid && fid.dataset ? { n: fid.dataset.tkNk, v: fid.value } : null;
+      nk.innerHTML = nkHtml();
+      if (fv && fv.n) { var x = nk.querySelector('input[data-tk-nk="' + fv.n + '"][value="' + fv.v + '"]'); if (x) x.focus(); } }
     VAIZDAI.forEach(function (v) {
       var t = $("tkv-" + v), p = $("tkp-" + v), ar = v === B.vaizdas;
       t.setAttribute("aria-selected", ar ? "true" : "false"); t.tabIndex = ar ? 0 : -1; p.hidden = !ar;
@@ -1001,8 +1075,19 @@
         $("tkSantrauka").innerHTML = santraukaHtml();
       }
     });
+    rez.addEventListener("toggle", function (e) { if (e.target && e.target.id === "tkNk") B.nkAtverta = e.target.open; }, true);
     rez.addEventListener("change", async function (e) {
       var t = e.target, ds = t.dataset || {};
+      if (ds.tkNk) {
+        var NK = { "tknk-irt": "irt", "tknk-sk": "skaitmeniniai", "tknk-krit": "kritinis", "tknk-nzia": "nzia", "tknk-bat": "bat" };
+        if (NK[ds.tkNk]) B.nk[NK[ds.tkNk]] = t.value;
+        else if (ds.tkNk === "tknk-kat" || ds.tkNk === "tknk-s3") {
+          var sar = B.nk[ds.tkNk === "tknk-kat" ? "kat" : "s3"], ix = sar.indexOf(t.value);
+          if (t.checked && ix < 0) sar.push(t.value); else if (!t.checked && ix >= 0) sar.splice(ix, 1);
+        }
+        B.nkAtverta = true; tikrinkParengti(); surinkRadinius(); piesk();
+        return;
+      }
       if (ds.tkVaidmuo) { B.vaidmenys[ds.tkVaidmuo] = t.value; tikrinkParengti(); surinkRadinius(); piesk(); var s = $("tkvm-" + ds.tkVaidmuo); if (s) s.focus(); }
       else if (ds.tkForma) {
         var d = B.docs.find(function (q) { return q.id === ds.tkForma; });

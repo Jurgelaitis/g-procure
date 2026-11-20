@@ -2647,9 +2647,10 @@ async function testaiKiber1119() {
       lygu([...d.querySelectorAll('#genKiberSarasas [data-kiber-grupe]')].map(x => x.querySelector('summary').textContent),
         ['Perkelkite į pirkimo sąlygas (tiekėjų atranka) (' + p.grupes.sps.length + ')', 'Perkelkite į sutartį (' + p.grupes.sutartis.length + ')',
          'Organizacijos pareigos (ne pirkimo dokumentų turinys) (' + p.grupes.organizacija.length + ')'], 'sąrašai');
-      tiesa(!d.getElementById('genKiberTs'), 'be skaitmeninių elementų - TS skyriaus nebus');
+      // nuo 2026-11-20 GP_KIBER.tsEilutes ir IRT pirkimui duoda TS eilutę (kelių veiksnių tapatumo nustatymas) - skyrius rodomas pagal GP_KIBER
+      lygu(!!d.getElementById('genKiberTs'), K.tsEilutes({ irt: 'taip' }).length > 0, 'TS skyrius be skaitmeninių elementų - kaip GP_KIBER');
       nust('genKiberSk', 'taip'); nust('genKiberKrit', 'ne');
-      turi(d.getElementById('genKiberTs').textContent, 'Į TS bus įtrauktas skyrius „Kibernetinio saugumo reikalavimai“ (' + K.tsEilutes({ skaitmeniniai: 'taip', kritinis: 'ne' }).length + ')', 'TS skyrius');
+      turi(d.getElementById('genKiberTs').textContent, 'Į TS bus įtrauktas skyrius „Kibernetinio saugumo reikalavimai“ (' + K.tsEilutes({ irt: 'taip', skaitmeniniai: 'taip', kritinis: 'ne' }).length + ')', 'TS skyrius');
       d.querySelector('#genKiberSarasas [data-kiber-grupe="sutartis"] [data-kiber-kop]').click();
       tiesa(kop.length === 1 && kop[0].split('\n').length === p.grupes.sutartis.length && /Kibernetinio saugumo reikalavimų aprašo 34\.3 p\./.test(kop[0]), 'kopijuojamas sutarties sąrašas');
       tiesa(!d.querySelector('#genKiberSarasas [data-kiber-grupe="organizacija"] [data-kiber-kop]'), 'organizacijos pareigos nekopijuojamos (ne dokumentų turinys)');
@@ -2732,7 +2733,7 @@ async function testaiAdresatai1119() {
     tiesa(!r.querySelector('img') && !w.__xss && /UAB <img src=x onerror=window.__xss=1>/.test(t), 'pavadinimas - tik tekstas');
     const a = [...r.querySelectorAll('a')].map(x => x.getAttribute('href'));
     lygu(a, ['https://ted.europa.eu/lt/notice/-/detail/137503-2024'], 'TED nuoroda - tik tikram numeriui');
-    tiesa(/Visoje ES \(TED\)/.test(t) && /pasiūlymų skaičiaus mediana - 2,5/.test(t) && /Asmens vardu pavadintų įmonių: 1 \(pavadinimai nerodomi\)/.test(t), 'TED ir paslėptų skaičius');
+    tiesa(/Visoje ES \(TED sutarčių sudarymo skelbimai\)/.test(t) && /Pasiūlymų skaičiaus mediana - 2,5/.test(t) && /Asmens vardu pavadintų įmonių: 1 \(pavadinimai nerodomi\)/.test(t), 'TED ir paslėptų skaičius');
     tiesa(/CC BY 4\.0/.test(t) && /laisvai pakartotinai naudoti/.test(t) && /niekur neišsaugomas ir į kvietimą neįrašomas/.test(t), 'šaltiniai');
     tiesa(d.getElementById('rkAdrKopijuoti').disabled, 'be pažymėtų - kopijuoti negalima');
     const kop = []; const ok = w.GP_KOPIJA.kopijuok; w.GP_KOPIJA.kopijuok = (tx, o) => { kop.push(tx); return Promise.resolve(true); };
@@ -2780,6 +2781,56 @@ async function testaiAdresatai1119() {
       lygu(q, [['https://api.g-procure.com/api/sutartys/busena', 'omit', 'no-referrer']], 'neįdiegta - BVPŽ kodas nesiųstas');
       tiesa(/dar neįdiegta/.test(d.getElementById('rkAdrBusena').textContent), d.getElementById('rkAdrBusena').textContent);
     } finally { w.fetch = of; }
+  });
+  /* 2026-11-20, trečias pilotas: antraštės sakė „nuo 10 000 Eur, per 3 metus“ ir TED daliai, nors TED sumos - kaip paskelbta, o ES dalyje -
+     tik 250 naujausių skelbimų (kelios savaitės); BVPŽ pavyzdžio kontrolinis skaitmuo buvo neteisingas; sąrašo filtro nebuvo. */
+  await testas('Antraštės sako tiesą: 10 000 Eur riba ir 3 metai - Lietuvos CVP IS sutartims, TED - kiek skelbimų įvertinta ir kada paskelbti; TED kiekis - skelbimų, nežinoma vertė - „vertė nežinoma“; BVPŽ pavyzdys - galiojantis kodas', async () => {
+    const { w, d } = rkParuosk({}); M('App.rkZingsnis(3)'); d.getElementById('rkAdrBvpz').value = '31211000-8'; d.getElementById('rkAdrApimtis').value = 'es';
+    stub(rkAdrAtsakymas({
+      lt: Object.assign(rkAdrAtsakymas().lt, { sutarciu: 1000, apribota: true, laikotarpis: { nuo: '2025-06-01', iki: '2026-11-10' } }),
+      ted: Object.assign(rkAdrAtsakymas().ted, { skelbimu: 250, viso: 3100, apribota: true, laikotarpis: { nuo: '2026-09-22', iki: '2026-11-20' }, neImoniu: 2, laimetojai: [
+        { pav: 'Pavyzdys Energie GmbH', salis: 'AUT', kodas: null, kiekis: 3, suma: 900000, beVertes: 1, paskutine: '2026-11-01', skelbimas: '900001-2026' },
+        { pav: 'Kitas UAB', salis: 'LTU', kodas: '222222222', kiekis: 2, suma: null, beVertes: 2, paskutine: '2026-10-01', skelbimas: '900002-2026' }] }) }));
+    await M('App.rkAdresatai()');
+    const r = d.getElementById('rkAdrRez'), t = r.textContent;
+    tiesa(/Lietuvoje \(CVP IS sutartys nuo 10 000 Eur\)/.test(t) && /Sutarčių per 3 metus daugiau - įvertintos naujausios 1000, sudarytos 2025-06-01 - 2026-11-10/.test(t), 'Lietuvos dalis: ' + t.slice(0, 400));
+    tiesa(/Skelbimų per 3 metus: 3100 - įvertinti naujausi 250, paskelbti 2026-09-22 - 2026-11-20/.test(t) && /10 000 Eur riba netaikoma/.test(t) && /ne įmonė .* - 2, nerodoma/.test(t), 'TED dalis: ' + t);
+    tiesa(!/BVPŽ grupė 3121\. Sutartys nuo 10 000 Eur/.test(t), 'bendroje eilutėje nebeteigiama, kad visos sutartys nuo 10 000 Eur');
+    tiesa(/skelbimų: 3 · 900\s000 Eur \(dar 1 skelb\. be žinomos vertės\)/.test(t) && /skelbimų: 2 · vertė nežinoma/.test(t), 'TED eilutės: ' + t);
+    const ph = d.getElementById('rkAdrBvpz').getAttribute('placeholder').replace(/^pvz\., /, '');
+    const cpv = await (await fetch('../shared/cpv-data.js')).text();
+    tiesa(cpv.indexOf('"' + ph + '"') >= 0, 'pavyzdžio kodas turi būti BVPŽ žodyne: ' + ph);
+    d.getElementById('rkAdrBvpz').value = ''; d.getElementById('rkAdrBvpz').dispatchEvent(new w.Event('input'));
+    await M('App.rkAdresatai()');
+    const kl = /pvz\., (\d{8}-\d)/.exec(d.getElementById('rkAdrBusena').textContent);
+    tiesa(kl && cpv.indexOf('"' + kl[1] + '"') >= 0, 'klaidos pavyzdys - galiojantis kodas: ' + d.getElementById('rkAdrBusena').textContent);
+  });
+  await testas('Sąrašo filtras: žodis pavadinime (be diakritikų ir raidžių dydžio) ir mažiausia suma; nežinoma suma - nerodoma ir suskaičiuojama; netinkama suma - klaida prie lauko (aria-invalid), sąrašas nepakeičiamas; pažymėjimai lieka; „Pradėti iš naujo“ išvalo', async () => {
+    const { w, d } = rkParuosk({}); M('App.rkZingsnis(3)'); d.getElementById('rkAdrBvpz').value = '31211000-8';
+    stub(rkAdrAtsakymas({ ted: Object.assign(rkAdrAtsakymas().ted, { laimetojai: [
+      { pav: 'ELEKTROS ĮRANGA', salis: 'LTU', kodas: '333333333', kiekis: 1, suma: 50000, beVertes: 0, paskutine: '2026-01-01', skelbimas: '900003-2026' },
+      { pav: 'UAB Laivų darbai', salis: 'LTU', kodas: '444444444', kiekis: 1, suma: null, beVertes: 1, paskutine: '2026-02-01', skelbimas: '900004-2026' }] }) }));
+    await M('App.rkAdresatai()');
+    const r = d.getElementById('rkAdrRez'), z = d.getElementById('rkAdrZodis'), m = d.getElementById('rkAdrMin');
+    tiesa(z && m && d.querySelector('label[for=rkAdrZodis]') && d.querySelector('label[for=rkAdrMin]') && z.hasAttribute('data-darbas-ne') && m.hasAttribute('data-darbas-ne'), 'laukai su pavadinimais');
+    const matomi = () => [...r.querySelectorAll('[data-adr-sarasas] > li')].filter(li => !li.hidden && li.offsetParent !== null).map(li => li.querySelector('label').textContent.replace(/\s+\d{9}.*$/, '').trim());
+    lygu(matomi().length, 4, 'be filtro - visi');
+    r.querySelector('[data-adr="lt:0"]').click();
+    z.value = 'elektro'; z.dispatchEvent(new w.Event('input', { bubbles: true }));
+    lygu(matomi(), ['ELEKTROS ĮRANGA'], 'žodis');
+    turi(d.getElementById('rkAdrFiltroBusena').textContent, 'Rodoma 1 iš 4', 'skaičius');
+    z.value = 'IRANGA'; z.dispatchEvent(new w.Event('input', { bubbles: true }));
+    lygu(matomi(), ['ELEKTROS ĮRANGA'], 'be diakritikų');
+    z.value = ''; m.value = '100 000'; z.dispatchEvent(new w.Event('input', { bubbles: true }));
+    lygu(matomi(), ['UAB "TETAS"'], 'suma nuo 100 000 Eur');
+    turi(d.getElementById('rkAdrFiltroBusena').textContent, 'nerodoma be žinomos sumos: 1', 'nežinoma suma');
+    lygu([m.getAttribute('aria-invalid'), d.getElementById('rkAdrPazymeta').textContent], [null, 'Pažymėta: 1'], 'tinkama suma, pažymėjimas lieka');
+    m.value = '1,5 mln.'; m.dispatchEvent(new w.Event('input', { bubbles: true }));
+    lygu([m.getAttribute('aria-invalid'), matomi().length], ['true', 4], 'netinkama suma - klaida, filtras pagal sumą netaikomas');
+    tiesa(/Įrašykite sumą eurais skaičiumi/.test(d.getElementById('rkAdrMinPastaba').textContent) && (m.getAttribute('aria-describedby') || '').indexOf('rkAdrMinPastaba') >= 0, 'klaida prie lauko');
+    const oc = w.confirm; w.confirm = () => true;
+    try { M('App.rkNaujas()'); } finally { w.confirm = oc; }
+    lygu(M('App.rkAdrBusena()').filtras, { zodis: '', min: '' }, 'išvalyta');
   });
 }
 

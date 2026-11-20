@@ -177,7 +177,15 @@ paslauga neturi - naudotojas jo nepatvirtino.
 |---|---|---|
 | Valstybės duomenų agentūra, `get.data.gov.lt/datasets/gov/lsd/vpt/cvpp/` (`Sutartis`, `Salis`) | CVP IS sutartys (BVPŽ kodai, vertė, sudarymo ir galiojimo datos, objektas, pirkimo numeris) ir sutarčių šalys (pirkėjas, tiekėjas, asmens rūšis) | CC BY 4.0 |
 | Valstybės duomenų agentūra, `get.data.gov.lt/datasets/gov/rc/jar/` (`iregistruoti/JuridinisAsmuo`, `pelno_ataskaitos/PelnoAtaskaita`) | juridinio asmens identifikatorius ir pardavimo pajamos (tik suskaičiuoti pajėgumui) | CC BY 4.0 |
-| TED API v3, `api.ted.europa.eu/v3/notices/search` | sutarčių sudarymo skelbimai (`can-standard`, `can-social`, `can-desg`): laimėtojai, šalis, vertė, pasiūlymų skaičius | ES leidinių biuras, laisvas pakartotinis naudojimas |
+| TED API v3, `api.ted.europa.eu/v3/notices/search` | sutarčių sudarymo skelbimai (`can-standard`, `can-social`, `can-desg`): laimėtojai, šalis, kodas, vertė, pasiūlymų skaičius | ES leidinių biuras, laisvas pakartotinis naudojimas |
+
+TED paieškos laukai yra atskiri sąrašai be tarpusavio sąsajų (2026-11-20, trečias pilotas: kodas buvo priskiriamas kitai įmonei): `winner-name` -
+po vieną pirkimo dalies rezultatui, `winner-identifier` ir `winner-country` - po vieną laimėtojo organizacijai kita tvarka, `tender-value` - kiekvienam
+pasiūlymui (ir nelaimėjusiam). Todėl kodas ir šalis imami iš `organisation-name-tenderer` / `-identifier-tenderer` / `-country-tenderer` (ta pati
+organizacijų tvarka - patikrinta 14 skelbimų XML; organizacija su keliais kodais ilgius išskiria - tada nesiejama), vertė - tik vieninteliam laimėtojui,
+kai visi skelbimo pasiūlymai yra sudarytų sutarčių, kitaip - `null` (nežinoma); laimėtojo vietoje įrašyta ne įmonė („Pirkimas pabaigtas nesudarius
+sutarties“, „Rahmenvereinbarungspartner 1“) - atmetama ir suskaičiuojama (`neImoniu`). Ta pati įmonė su kodu ir be, kitomis kabutėmis ar žodžių
+tvarka - viena eilutė. Išmatuota su 413 skelbimų: kodų priskyrimo klaidų nėra, vertė žinoma ~70 % Lietuvos laimėtojų skelbimų.
 
 Šaltinių užklausų kalba (Spinta) neatkoduoja `%22`, todėl kabutės ir `>`, `|` siunčiami neužkoduoti per `node:https` (ne `fetch`, kuris
 kabutes užkoduotų); `in()` nepalaikomas - naudojamos `|` grupės. Išmatuota 2026-11-19: LITGRID AB - 6 894 sutartys šalyje „pirkėjas“, žemėlapis

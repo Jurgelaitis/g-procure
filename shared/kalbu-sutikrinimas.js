@@ -87,10 +87,12 @@
     return null;
   }
 
-  /* Reikšmės tekste: { suma: { raktas: { t, i } }, proc: ..., trukme: ..., data: ... } (t - kaip parašyta, i - pozicija) */
+  var AKTAS = /(\((?:es|eu|eb|ec|eeb|eec)\)\s*(?:nr\.?|no\.?)?\s*)(\d{1,4}\/\d{1,4})(?![\d\/])/g;
+  var DIREKTYVA = /((?:^|[^a-z])(?:direktyv[a-z]*|directive)\s+(?:nr\.?\s*|no\.?\s*)?)(\d{4}\/\d{1,4})\/(?:es|eu|eb|ec|eeb|eec)(?![a-z])/g;
+  /* Reikšmės tekste: { suma: { raktas: { t, i } }, proc: ..., trukme: ..., data: ..., aktas: ... } (t - kaip parašyta, i - pozicija) */
   function reiksmes(tekstas) {
     var s = String(tekstas == null ? "" : tekstas), f = fold(s);
-    var r = { suma: {}, proc: {}, trukme: {}, data: {} };
+    var r = { suma: {}, proc: {}, trukme: {}, data: {}, aktas: {} };
     function dek(rusis, raktas, i, ilg) {
       if (raktas == null) return;
       var x = r[rusis][raktas];
@@ -120,6 +122,12 @@
     while ((m = DATA_ISO.exec(f))) dek("data", dataRaktas(m[2], +m[3], +m[4]), m.index + m[1].length, m[0].length - m[1].length);
     DATA_DMY.lastIndex = 0;
     while ((m = DATA_DMY.exec(f))) dek("data", dataRaktas(m[4], +m[3], +m[2]), m.index + m[1].length, m[0].length - m[1].length);
+    // ES teisės aktų numeriai (trečias pilotas 2026-11-20, P3-A8): lietuviškai „reglamentu (ES) Nr. 2022/576“, angliškai „Council Regulation (EU)
+    // No 2022/578“ - kitas numeris, o sumos, datos ir terminai sutapo; direktyvos - „2014/25/ES“, „Directive 2014/25/EU“
+    AKTAS.lastIndex = 0;
+    while ((m = AKTAS.exec(f))) { i = m.index + m[1].length; dek("aktas", m[2], i, m[2].length); }
+    DIREKTYVA.lastIndex = 0;
+    while ((m = DIREKTYVA.exec(f))) { i = m.index + m[1].length; dek("aktas", m[2], i, m[2].length); }
     return r;
   }
 
@@ -204,8 +212,8 @@
     return d;
   }
 
-  var RUSYS = ["suma", "proc", "trukme", "data"];
-  var RUSIU_PAV = { lt: { suma: "Suma", proc: "Procentai", trukme: "Terminas", data: "Data" }, en: { suma: "Amount", proc: "Percentage", trukme: "Period", data: "Date" } };
+  var RUSYS = ["suma", "proc", "trukme", "data", "aktas"];
+  var RUSIU_PAV = { lt: { suma: "Suma", proc: "Procentai", trukme: "Terminas", data: "Data", aktas: "Teisės aktas" }, en: { suma: "Amount", proc: "Percentage", trukme: "Period", data: "Date", aktas: "Legal act" } };
   function rusiesPav(r, kalba) { return RUSIU_PAV[kalba === "en" ? "en" : "lt"][r] || r; }
 
   function palygink(v) {
@@ -431,5 +439,5 @@
     return rez;
   }
 
-  global.GP_KALBU_SUTIKRINIMAS = { version: "1.1.0", tikrink: tikrink, skaiciaiZodziai: skaiciaiZodziai, skaiciusIsZodziu: skaicius_is_zodziu, zodziuVirsenybe: zodziuVirsenybe, poros: poros, pirmumas: pirmumas, rusiesPav: rusiesPav, reiksmes: reiksmes, kalbaTeksto: kalbaTeksto, palygink: palygink, eilutes: eilutes, stulpeliuVietos: stulpeliuVietos };
+  global.GP_KALBU_SUTIKRINIMAS = { version: "1.2.0", tikrink: tikrink, skaiciaiZodziai: skaiciaiZodziai, skaiciusIsZodziu: skaicius_is_zodziu, zodziuVirsenybe: zodziuVirsenybe, poros: poros, pirmumas: pirmumas, rusiesPav: rusiesPav, reiksmes: reiksmes, kalbaTeksto: kalbaTeksto, palygink: palygink, eilutes: eilutes, stulpeliuVietos: stulpeliuVietos };
 })(typeof window !== "undefined" ? window : this);

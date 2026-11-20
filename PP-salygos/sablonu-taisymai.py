@@ -429,6 +429,7 @@ def taisymas_tekstas(taisyk):
     viso += _autoriai(taisyk)
     viso += _as_lenteles_31(taisyk)
     viso += _at_rasyba(taisyk)
+    viso += _au_reglamentas(taisyk)
     return viso
 
 
@@ -1666,6 +1667,21 @@ def _at_rasyba(taisyk):
     n = _su_zemelapiais(_be_raudono(_AT_POROS, _AT_RAUDONI), None, '„patvirtinu“', taisyk)
     n += _su_zemelapiais(_be_raudono(_AT_DERYBOS, _AT_RAUDONI), ['PRIEDAI_LT_DERYBOS'], 'derybų formos „ /“', taisyk)
     for t in _AT_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# AU (trečias pilotas 2026-11-20, P3-A8): angliškame tekste Rusijos sankcijų reglamento pakeitimas - „Council Regulation (EU) No 2022/578“,
+# lietuviškai tame pačiame šablone - „reglamentu (ES) Nr. 2022/576“. Reglamentą (ES) Nr. 833/2014 iš dalies keičia Tarybos reglamentas (ES) 2022/576
+# (ES leidinių biuras, CELEX 32022R0576), o 2022/578 - Tarybos sprendimas (BUSP), ne reglamentas. Anglų tekstas - kaip lietuviškas (AO principas).
+_AU_POROS = [(_re.compile(r'Council Regulation \(EU\) No (2022/578) of 8 April'), '2022/576', 1)]
+_AU_RAUDONI = []
+
+
+def _au_reglamentas(taisyk):
+    print("\nTREČIAS PILOTAS: angliškas reglamento numeris 2022/578 -> 2022/576 (AU, 2026-11-20):")
+    n = _su_zemelapiais(_be_raudono(_AU_POROS, _AU_RAUDONI), None, 'reglamentas 2022/576', taisyk)
+    for t in _AU_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 

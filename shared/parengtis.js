@@ -37,7 +37,7 @@
         dokumentai: "Ar yra visi dokumentai pagal būdą", priedai: "SPS priedų sąrašas ir failai", neperskaityti: "Perskaityti failai",
         kalba: "Pasiūlymų kalba: skelbimas ir SPS", pavadinimas: "Pavadinimas: skelbimas ir SPS", dalys: "Dalys: skelbimas ir SPS",
         terminas: "Terminas: skelbimas ir SPS grafikas", skelbimo_data: "Paskelbimo data: skelbimas ir SPS grafikas",
-        trukme: "Sutarties trukmė: skelbimas ir sutartis", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
+        trukme: "Sutarties trukmė: skelbimas ir sutartis", galiojimas_skelbimas: "Pasiūlymo galiojimas: skelbimas ir pirkimo dokumentai", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
         kortele: "Kortelė ir skelbimas", punktai: "Pasikartojantys punktų numeriai", alternatyvos: "Paliktos šablono alternatyvos",
         laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", kalbu_sutapimas: "Sumos, procentai, datos ir terminai lietuviškai ir angliškai", skaiciai_zodziai: "Skaičiai ir žodžiai", grafikas: "SPS grafiko datų tvarka",
         nuos_terminai: "Pristatymo ar atlikimo terminas: TS ir sutartis", nuos_zalieji: "Žaliųjų reikalavimų vieta: SPS, TS ir sutartis", nuos_kvalifikacija: "Tiekėjo reikalavimai techninėje specifikacijoje", nuos_standartai: "Nuorodos į standartus su „arba lygiavertis“", nzia_salygos: "Poveikio klimatui neutralizavimo pramonės akto 25 straipsnio sąlygos", kiber_reikalavimai: "Kibernetinio saugumo reikalavimai SPS ir sutartyje",
@@ -66,6 +66,7 @@
       terminas: "Skelbime pasiūlymų ar paraiškų terminas - {s}, o SPS grafike - {p}.",
       skelbimoData: "Skelbimas išsiųstas {s}, o SPS grafike paskelbimo data - {p}.",
       trukme: "Skelbime sutarties trukmė - {s} mėn., o sutartyje rasti terminai: {p}. Jei tai skirtingi dalykai (pvz., sutarties galiojimas ir darbų terminas), tai nėra klaida.",
+      galiojimas: "Skelbime pasiūlymas turi galioti {s}, o pirkimo dokumentuose - {p}. Pasiūlymo galiojimo terminas turi būti vienodas - patikslinkite skelbimą arba pirkimo sąlygas.",
       budas: "Skelbime pirkimo būdas - {s}, o SPS nurodyta: {p}.",
       vykdytojas: "Skelbime pirkėjas - {s}, o SPS antraštėje - {p}.",
       kortele: "Kortelėje {l} - {k}, o {kur} - {d}. Atnaujinkite kortelę arba dokumentą.",
@@ -125,6 +126,7 @@
       nkRasta: "Rasta galimai susijusi nuostata: {e} ({c}). Patikrinkite, ar ji atitinka reikalavimą - tikrinami tik žodžiai, ne turinys.",
       nkNerasta: "Nerasta: {e} ({c}). Ieškota {kur}. Įrašykite nuostatą; jei ji suformuluota kitaip, patikrinkite rankiniu būdu.",
       nkKur: { sps: "SPS ir BPS", sutartis: "sutarties specialiosiose ir bendrosiose sąlygose", sps_sutartis: "SPS, BPS ir sutarties sąlygose", ts: "techninėje specifikacijoje" },
+      nkKurPriedai: ", taip pat techninėje specifikacijoje ir prieduose", nkKurTsPriedai: " ir prieduose",
       nkBeDok: "pakete nėra dokumento ({kur}), nepatikrinta: {n}", nkTurinys: "ieškota raktinių žodžių - turinio atitiktis nevertinama",
       nkBeZodziu: "kitus reikalavimus ({n}) patikrinkite patys pagal sąrašą 4 žingsnyje",
       sutNerasta: "Sutarties projekte nerasta: {e}. Ieškota: {kur}. Jei tai parašyta kitais žodžiais ar kitame sutarties dokumente, tai nėra klaida - nurodykite vietą sprendimo pagrindime.",
@@ -149,7 +151,7 @@
         dokumentai: "All documents for the procedure", priedai: "SPS list of annexes and files", neperskaityti: "Files read",
         kalba: "Tender language: notice and SPS", pavadinimas: "Title: notice and SPS", dalys: "Lots: notice and SPS",
         terminas: "Deadline: notice and SPS schedule", skelbimo_data: "Publication date: notice and SPS schedule",
-        trukme: "Contract duration: notice and contract", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
+        trukme: "Contract duration: notice and contract", galiojimas_skelbimas: "Tender validity: notice and procurement documents", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
         kortele: "Card and notice", punktai: "Repeated clause numbers", alternatyvos: "Template alternatives left in",
         laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", kalbu_sutapimas: "Amounts, percentages, dates and periods in Lithuanian and English", skaiciai_zodziai: "Numbers and words", grafikas: "Order of SPS schedule dates",
         nuos_terminai: "Delivery or completion period: TS and contract", nuos_zalieji: "Where the green requirements are: SPC, TS and contract", nuos_kvalifikacija: "Supplier requirements in the technical specification", nuos_standartai: "References to standards with “or equivalent”", nzia_salygos: "Article 25 Net-Zero Industry Act conditions", kiber_reikalavimai: "Cybersecurity requirements in the SPC and contract",
@@ -178,6 +180,7 @@
       terminas: "The deadline in the notice is {s}, while the SPS schedule says {p}.",
       skelbimoData: "The notice was dispatched on {s}, while the SPS schedule gives {p} as the publication date.",
       trukme: "The notice gives a contract duration of {s} months, while the contract mentions: {p}. If these are different things (e.g. contract validity and works period), that is fine.",
+      galiojimas: "The notice requires the tender to remain valid for {s}, while the procurement documents say {p}. The tender validity period must be the same - correct the notice or the procurement conditions.",
       budas: "The notice gives the procedure as {s}, while the SPS says: {p}.",
       vykdytojas: "The buyer in the notice is {s}, while the SPS heading says {p}.",
       kortele: "On the card the {l} is {k}, while {kur} it is {d}. Update the card or the document.",
@@ -237,6 +240,7 @@
       nkRasta: "A possibly related provision was found: {e} ({c}). Check that it meets the requirement - only words are checked, not content.",
       nkNerasta: "Not found: {e} ({c}). Searched {kur}. Add the provision; if it is worded differently, check manually.",
       nkKur: { sps: "in the SPC and GPC", sutartis: "in the special and general conditions of the contract", sps_sutartis: "in the SPC, GPC and contract conditions", ts: "in the technical specification" },
+      nkKurPriedai: ", as well as in the technical specification and annexes", nkKurTsPriedai: " and annexes",
       nkBeDok: "the package has no document ({kur}), not checked: {n}", nkTurinys: "keywords were searched - compliance of content is not assessed",
       nkBeZodziu: "check the other requirements ({n}) yourself using the list in step 4",
       sutNerasta: "Not found in the draft contract: {e}. Searched: {kur}. If it is worded differently or is in another contract document, that is fine - give the location in the decision note.",
@@ -299,6 +303,30 @@
     return m ? +(m[1] || m[2]) : null;
   }
   function docVieta(doc, e, l) { return { dok: doc.id, failas: trumpas(doc.name), vieta: e ? vieta(e.loc, l) : "", citata: e ? iskarpa(e.t) : "" }; }
+
+  /* Pasiūlymo galiojimas tekste -> { n, vnt: "d" | "dd" | "men" | "sav", tekstas, citata } arba null. Skelbime - eForms laukas
+     „Laikotarpis, per kurį pasiūlymas turi išlikti galiojantis: 90 Diena“ (EN „... remain valid: 3 Month“), dokumente - „Pasiūlymas galioja
+     90 kalendorinių dienų“, „... galioti ne trumpiau kaip 3 (tris) mėnesius“. */
+  function galiojimasTekste(t, skelb, l) {
+    var s = be(t).replace(/\s+/g, " ");
+    var re = skelb ? /(?:pasiulymas turi islikti galiojantis|tender must remain valid)\s*:?\s*(\d{1,3})\s*([a-z]+)/
+                   : /pasiulym[a-z]* (?:turi )?(?:galioja|galioti|galiojimo terminas)[^\d.;]{0,30}?(?:ne trumpiau kaip |ne maziau kaip |iki )?(\d{1,3})\s*(?:\([^)]{1,30}\)\s*)?((?:kalendorin|darbo )?[a-z]+)/;
+    var m = re.exec(s);
+    if (!m) return null;
+    var v = m[2], vnt = /^darbo dien/.test(v) ? "dd" : /^(dien|day|kalendorin)/.test(v) ? "d" : /^(men|month)/.test(v) ? "men" : /^(savait|week)/.test(v) ? "sav" : null;
+    if (!vnt) return null;
+    var n = +m[1], pav = l === "en" ? { d: ["day", "days", "days"], dd: ["working day", "working days", "working days"], men: ["month", "months", "months"], sav: ["week", "weeks", "weeks"] }[vnt]
+      : { d: ["diena", "dienos", "dienų"], dd: ["darbo diena", "darbo dienos", "darbo dienų"], men: ["mėnuo", "mėnesiai", "mėnesių"], sav: ["savaitė", "savaitės", "savaičių"] }[vnt];
+    var f = l === "en" ? (n === 1 ? 0 : 1) : n % 10 === 1 && n % 100 !== 11 ? 0 : n % 10 >= 2 && n % 10 <= 9 && (n % 100 < 10 || n % 100 > 20) ? 1 : 2;
+    return { n: n, vnt: vnt, tekstas: n + " " + pav[f], citata: String(t).replace(/\s+/g, " ").trim().slice(0, 220) };
+  }
+  // Tas pats terminas: tas pats vienetas ir skaičius; mėnesiai ir dienos - apytiksliai (3 mėn. ir 90 d.)
+  function galiojimasLygus(a, b) {
+    if (a.vnt === b.vnt) return a.n === b.n;
+    var d = function (x) { return x.vnt === "men" ? x.n * 30 : x.vnt === "sav" ? x.n * 7 : x.vnt === "d" ? x.n : null; };
+    var x = d(a), y = d(b);
+    return x != null && y != null && Math.abs(x - y) <= 3;
+  }
 
   /* ---------------------------------------------------------------- vaidmenys */
   /* Dokumento vaidmuo pagal failo vardą ir pradžios tekstą (GP_DOK.rusis - tik pagalbinė žyma: tikruose LITGRID
@@ -816,6 +844,22 @@
       patikra("trukme", "skelbimas", sutampa ? "gerai" : "radinys");
     }
 
+    // Pasiūlymo galiojimas (trečias pilotas 2026-11-20, P3-B13): skelbime „Laikotarpis, per kurį pasiūlymas turi išlikti galiojantis: 3 Diena“,
+    // o pasiūlymo formoje „Pasiūlymas galioja 3 mėnesius“ - iki tol tik ieškota, ar galiojimas nurodytas
+    var skGal = sk ? galiojimasTekste(skText, true, l) : null, dokGal = null;
+    [P.pasiulymas, P.sps].concat(P.spsVisi || []).some(function (d) {
+      if (!d) return false;
+      return eilutes(d).some(function (e) { var g = galiojimasTekste(e.t, false, l); if (g) { dokGal = { g: g, d: d, e: e }; return true; } return false; });
+    });
+    if (!skGal || !dokGal) patikra("galiojimas_skelbimas", "skelbimas", "nepatikrinta", !sk ? X.beSkelbimo : X.beDuomenu);
+    else {
+      var galSut = galiojimasLygus(skGal, dokGal.g);
+      if (!galSut) radinys({ id: "galiojimas_skelbimas", grupe: "skelbimas", lygis: "tikrinti",
+        tekstas: sub(X.galiojimas, { s: skGal.tekstas, p: dokGal.g.tekstas }),
+        vietos: [docVieta(sk.doc, { loc: null, t: skGal.citata }, l), docVieta(dokGal.d, dokGal.e, l)], teise: teise(VIRS) });
+      patikra("galiojimas_skelbimas", "skelbimas", galSut ? "gerai" : "radinys");
+    }
+
     // Režimas: skelbimas (su direktyva) ir pirkimo sąlygų sąvoka
     var skRz = sk && sk.laukai.rezimas;
     if (!sk) patikra("rezimas_salygos", "skelbimas", "nepatikrinta", X.beSkelbimo);
@@ -1137,19 +1181,22 @@
     if (o.privalomos) {
       var NKDOK = { sps: (P.spsVisi || []).concat(P.bpsVisi || []), sutartis: (P.sutartisVisi || []).concat(P.sutartis_bendrosiosVisi || []), ts: P.tsVisi || [] };
       NKDOK.sps_sutartis = NKDOK.sps.concat(NKDOK.sutartis);   // sutarties įvykdymo sąlygos nurodomos ir pirkimo sąlygose
+      // Trečias pilotas (2026-11-20): LITGRID kibernetinio saugumo reikalavimus (incidentai, spragos, auditas, prieigos) dažniausiai surašo
+      // techninėje specifikacijoje ir jos prieduose, kurie yra ir sutarties dalis - jų ieškoma visada, kai jie pakete yra
+      var NKPRIED = (P.tsVisi || []).concat(P.priedasVisi || []);
       ["nzia", "kiber"].forEach(function (sal) {
         var sar = o.privalomos.filter(function (x) { return x && x.saltinis === sal && NKDOK[x.kur]; });
         if (!sar.length) return;
         var pid = sal === "nzia" ? "nzia_salygos" : "kiber_reikalavimai", nerasta = 0, rasta = 0, beDok = {}, beZod = 0;
         sar.forEach(function (x) {
           if (!x.zodziai) { beZod++; return; }
-          var dd = NKDOK[x.kur];
+          var dd = NKDOK[x.kur].concat(x.kur === "ts" ? (P.priedasVisi || []) : NKPRIED.filter(function (d) { return NKDOK[x.kur].indexOf(d) < 0; }));
           if (!dd.length) { beDok[x.kur] = (beDok[x.kur] || 0) + 1; return; }
           var re; try { re = new RegExp(x.zodziai); } catch (e) { beZod++; return; }
           var hit = null;
           dd.some(function (d) { return eilutes(d).some(function (e) { if (re.test(be(e.t))) { hit = { d: d, e: e }; return true; } return false; }); });
           if (hit) { rasta++; radinys({ id: pid, grupe: "nzia_kiber", lygis: "info", tekstas: sub(X.nkRasta, { e: x.pav, c: x.cit || "" }), vietos: [docVieta(hit.d, hit.e, l)] }); }
-          else { nerasta++; radinys({ id: pid, grupe: "nzia_kiber", lygis: "tikrinti", tekstas: sub(X.nkNerasta, { e: x.pav, c: x.cit || "", kur: X.nkKur[x.kur] }), vietos: [] }); }
+          else { nerasta++; radinys({ id: pid, grupe: "nzia_kiber", lygis: "tikrinti", tekstas: sub(X.nkNerasta, { e: x.pav, c: x.cit || "", kur: X.nkKur[x.kur] + (x.kur === "ts" ? ((P.priedasVisi || []).length ? X.nkKurTsPriedai : "") : (NKPRIED.length ? X.nkKurPriedai : "")) }), vietos: [] }); }
         });
         var past = [X.nkTurinys].concat(Object.keys(beDok).map(function (kk) { return sub(X.nkBeDok, { kur: X.nkKur[kk], n: beDok[kk] }); }))
           .concat(beZod ? [sub(X.nkBeZodziu, { n: beZod })] : []).join("; ");

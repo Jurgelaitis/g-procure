@@ -158,6 +158,9 @@ def tekstas(celex, kalba, trumpai=False):
 # Pasiūlymų svarstymo eiga Europos Parlamente (nuo 2026-11-19)
 # ---------------------------------------------------------------------------------------------------------------------------
 EP_API = "https://data.europarl.europa.eu/api/v2/procedures/"
+# Parlamento komitetų pavadinimai lietuviškai (prefLabel lt; 2026-11-20 patikrinta: IMCO - „Vidaus rinkos ir vartotojų apsaugos komitetas“)
+EP_ORGANAI = "https://data.europarl.europa.eu/api/v2/corporate-bodies/"
+KOMITETO_RE = re.compile(r"^[A-Z0-9]{2,8}$")
 OEIL = "https://oeil.europarl.europa.eu/oeil/en/procedure-file?reference="
 PROCEDURA_RE = re.compile(r"^(\d{4})/(\d{4})\(([A-Z]{3})\)$")
 DATA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -303,9 +306,33 @@ def is_ep(d, proc):
             tekstas += " (%d)" % g["kiek"]
         veiksmai.append({"nuo": g["nuo"], "iki": g["iki"], "kodas": g["kodas"], "kiek": g["kiek"], "tekstas": tekstas})
     pask = max(veiksmai, key=lambda v: (v["iki"], v["nuo"])) if veiksmai else None
+    # Atsakingas komitetas (2026-11-20, trečias pilotas): dalyvavimas su vaidmeniu COMMITTEE_LEAD (bendram svarstymui - keli)
+    komitetai = []
+    for x in p.get("had_participation") or []:
+        if not isinstance(x, dict) or not str(x.get("participation_role") or "").endswith("/COMMITTEE_LEAD"):
+            continue
+        for o in x.get("had_participant_organization") or []:
+            k = str(o).rsplit("/", 1)[-1] if str(o).startswith("org/") else ""
+            if KOMITETO_RE.match(k) and k not in komitetai:
+                komitetai.append(k)
     return {"etapas": {"kodas": st, "pavadinimas": ETAPAI[st]}, "veiksmai": veiksmai,
             "paskutinisVeiksmas": {"data": pask["iki"], "kodas": pask["kodas"], "tekstas": pask["tekstas"]} if pask else None,
-            "nezinomi": nezinomi, "netinkami": netinkami}
+            "komitetai": komitetai, "nezinomi": nezinomi, "netinkami": netinkami}
+
+
+def organo_adresas(kodas):
+    return EP_ORGANAI + kodas + "?format=application%2Fld%2Bjson&language=lt"
+
+
+def is_organo(d, kodas):
+    """EP organo atsakymas -> lietuviškas pavadinimas (prefLabel lt) arba None (kito organo atsakymas, nėra pavadinimo)."""
+    if not isinstance(d, dict) or not isinstance(d.get("data"), list):
+        return None
+    for o in d["data"]:
+        if isinstance(o, dict) and o.get("identifier") == kodas:
+            lt = (o.get("prefLabel") or {}).get("lt") if isinstance(o.get("prefLabel"), dict) else None
+            return lt.strip()[:200] if isinstance(lt, str) and lt.strip() else None
+    return None
 
 
 def _svarus(h):
@@ -347,8 +374,8 @@ def is_oeil(t, proc):
     return {"en": en, "lt": lt or ("„%s“ (OEIL, anglų k.)" % en if en else None), "prognozes": prognozes, "nezinomi": nezinomi}
 
 
-def sudaryk_eiga(proc, ep, oeil, siandien):
-    """projektoEiga įrašas iš EP API ir (jei pavyko) OEIL duomenų."""
+def sudaryk_eiga(proc, ep, oeil, siandien, komitetai=None):
+    """projektoEiga įrašas iš EP API ir (jei pavyko) OEIL duomenų. komitetai - [{kodas, pavadinimas}] (pavadinimas gali būti None)."""
     et = ep["etapas"]
     busena = "Europos Parlamento duomenimis - " + mazaja(et["pavadinimas"])
     if oeil and oeil.get("lt"):
@@ -361,9 +388,12 @@ def sudaryk_eiga(proc, ep, oeil, siandien):
         pastaba += " Preliminari data - Parlamento planas, ji gali keistis."
     if oeil is None:
         pastaba += " Teisėkūros observatorijos būsenos ir preliminarių datų gauti nepavyko - rodomi tik Europos Parlamento atvirų duomenų veiksmai."
-    return {"busena": busena, "procedura": proc, "etapas": dict(et), "parlamentas": (oeil or {}).get("lt"),
-            "paskutinisVeiksmas": ep.get("paskutinisVeiksmas"), "veiksmai": ep.get("veiksmai") or [],
-            "prognoze": ateities[0] if ateities else None, "patikrinta": siandien, "saltinis": oeil_adresas(proc), "pastaba": pastaba}
+    e = {"busena": busena, "procedura": proc, "etapas": dict(et), "parlamentas": (oeil or {}).get("lt"),
+         "paskutinisVeiksmas": ep.get("paskutinisVeiksmas"), "veiksmai": ep.get("veiksmai") or [],
+         "prognoze": ateities[0] if ateities else None, "patikrinta": siandien, "saltinis": oeil_adresas(proc), "pastaba": pastaba}
+    if komitetai:
+        e["komitetai"] = [{"kodas": k["kodas"], "pavadinimas": k.get("pavadinimas")} for k in komitetai]
+    return e
 
 
 def nauja_versija(sena, siandien):
@@ -427,7 +457,7 @@ def eiga(proceduros, rasyk):
     if not tikrinti:
         print("Registre nėra pasiūlymų su teisėkūros procedūros numeriu - nėra ką tikrinti.")
         return
-    eigos, klaidos = {}, []
+    eigos, klaidos, organai = {}, [], {}
     for proc in tikrinti:
         try:
             ep = is_ep(json.loads(_gauk(ep_adresas(proc), "application/ld+json")), proc)
@@ -438,9 +468,21 @@ def eiga(proceduros, rasyk):
             oeil = is_oeil(_gauk(oeil_adresas(proc), "text/html"), proc)
         except Exception:
             oeil = None
-        eigos[proc] = sudaryk_eiga(proc, ep, oeil, siandien)
+        komitetai = []
+        for kodas in ep.get("komitetai") or []:
+            if kodas not in organai:
+                try:
+                    organai[kodas] = is_organo(json.loads(_gauk(organo_adresas(kodas), "application/ld+json")), kodas)
+                except Exception:
+                    organai[kodas] = None
+                if organai[kodas] is None:
+                    print("    ! komiteto %s pavadinimo gauti nepavyko - įrašomas tik kodas" % kodas)
+            komitetai.append({"kodas": kodas, "pavadinimas": organai[kodas]})
+        eigos[proc] = sudaryk_eiga(proc, ep, oeil, siandien, komitetai)
         e = eigos[proc]
         print("%s  %s" % (proc, e["busena"]))
+        if e.get("komitetai"):
+            print("    atsakingas komitetas: %s" % ", ".join((k["pavadinimas"] + " (" + k["kodas"] + ")") if k["pavadinimas"] else k["kodas"] for k in e["komitetai"]))
         if e["paskutinisVeiksmas"]:
             print("    paskutinis veiksmas %s: %s" % (e["paskutinisVeiksmas"]["data"], e["paskutinisVeiksmas"]["tekstas"]))
         if e["prognoze"]:

@@ -28,8 +28,13 @@ def veikla(data, kodas, etapas="RDG1"):
     return {"type": "Activity", "activity_date": data, "had_activity_type": "def/ep-activities/" + kodas, "occured_at_stage": FAZE + etapas}
 
 
-def ep_atsakymas(label="2026/0068(COD)", etapas="RDG1", veiklos=None):
+def dalyvavimas(org, role="COMMITTEE_LEAD"):
+    return {"type": "Participation", "had_participant_organization": ["org/" + org], "participation_role": "def/ep-roles/" + role}
+
+
+def ep_atsakymas(label="2026/0068(COD)", etapas="RDG1", veiklos=None, dalyvavimai=None):
     return {"data": [{"id": "eli/dl/proc/2026-0068", "type": "Process", "label": label, "current_stage": FAZE + etapas,
+                      "had_participation": dalyvavimai or [],
                       "consists_of": veiklos if veiklos is not None else [
                           veikla("2026-04-30", "REFERRAL"), veikla("2026-09-11", "COMMITTEE_TABLING_REPORT"),
                           veikla("2026-10-05", "COMMITTEE_ADOPTING_OPINION"),
@@ -118,6 +123,31 @@ class IsOeil(unittest.TestCase):
         self.assertEqual(M.is_oeil(t, "2026/0068(COD)")["prognozes"], [])
 
 
+class Komitetas(unittest.TestCase):
+    """Atsakingas komitetas (2026-11-20, trečias pilotas: COM(2026) 590 įraše komitetas nebuvo įvardytas, nors EP duomenyse jis yra)."""
+    def test_is_ep_tik_atsakingas(self):
+        d = ep_atsakymas(dalyvavimai=[dalyvavimas("INTA", "COMMITTEE_OPINION"), dalyvavimas("IMCO"), dalyvavimas("IMCO"),
+                                      {"type": "Participation", "had_participant_person": ["person/1"], "participation_role": "def/ep-roles/RAPPORTEUR"},
+                                      dalyvavimas("imco<x>"), "ne objektas"])
+        self.assertEqual(M.is_ep(d, "2026/0068(COD)")["komitetai"], ["IMCO"], "tik COMMITTEE_LEAD, be pasikartojimų ir netinkamų kodų")
+        self.assertEqual(M.is_ep(ep_atsakymas(), "2026/0068(COD)")["komitetai"], [], "be dalyvavimų - tuščia")
+        self.assertEqual(M.is_ep(ep_atsakymas(dalyvavimai=[dalyvavimas("IMCO"), dalyvavimas("JURI")]), "2026/0068(COD)")["komitetai"], ["IMCO", "JURI"], "bendras svarstymas")
+
+    def test_is_organo(self):
+        d = {"data": [{"id": "org/IMCO", "identifier": "IMCO", "prefLabel": {"lt": "Vidaus rinkos ir vartotojų apsaugos komitetas"}}]}
+        self.assertEqual(M.is_organo(d, "IMCO"), "Vidaus rinkos ir vartotojų apsaugos komitetas")
+        self.assertIsNone(M.is_organo(d, "JURI"), "kito organo atsakymas")
+        self.assertIsNone(M.is_organo({"data": [{"identifier": "IMCO", "prefLabel": {"en": "Internal Market"}}]}, "IMCO"), "be lietuviško pavadinimo")
+        self.assertIsNone(M.is_organo({"x": 1}, "IMCO"))
+        self.assertEqual(M.organo_adresas("IMCO"), "https://data.europarl.europa.eu/api/v2/corporate-bodies/IMCO?format=application%2Fld%2Bjson&language=lt")
+
+    def test_sudaryk(self):
+        ep = M.is_ep(ep_atsakymas(), "2026/0068(COD)")
+        self.assertNotIn("komitetai", M.sudaryk_eiga("2026/0068(COD)", ep, None, "2026-11-20"), "nežinomas - neįrašomas")
+        e = M.sudaryk_eiga("2026/0068(COD)", ep, None, "2026-11-20", [{"kodas": "IMCO", "pavadinimas": "Vidaus rinkos ir vartotojų apsaugos komitetas"}, {"kodas": "JURI", "pavadinimas": None}])
+        self.assertEqual(e["komitetai"], [{"kodas": "IMCO", "pavadinimas": "Vidaus rinkos ir vartotojų apsaugos komitetas"}, {"kodas": "JURI", "pavadinimas": None}])
+
+
 class Sudaryk(unittest.TestCase):
     def test_su_oeil(self):
         ep = M.is_ep(ep_atsakymas(), "2026/0068(COD)")
@@ -191,16 +221,33 @@ class Komanda(unittest.TestCase):
     def tearDown(self):
         M.REGISTRAS, M._gauk = self.senas
 
-    def tinklas(self, nepavyksta=()):
+    def tinklas(self, nepavyksta=(), komitetai=None):
         def gauk(adresas, accept, bandymai=3):
             self.kvietimai.append((adresas, accept))
             if any(n in adresas for n in nepavyksta):
                 raise OSError("ryšys")
+            if adresas.startswith(M.EP_ORGANAI):
+                k = adresas[len(M.EP_ORGANAI):].split("?")[0]
+                return json.dumps({"data": [{"identifier": k, "prefLabel": {"lt": "Vidaus rinkos ir vartotojų apsaugos komitetas"}}]})
             proc = "2026/0068(COD)" if "0068" in adresas else "2026/0011(COD)"
             if adresas.startswith(M.EP_API):
-                return json.dumps(ep_atsakymas(label=proc))
+                return json.dumps(ep_atsakymas(label=proc, dalyvavimai=[dalyvavimas(k) for k in (komitetai or [])]))
             return oeil_puslapis(proc=proc)
         M._gauk = gauk
+
+    def test_komitetas(self):
+        self.tinklas(komitetai=["IMCO"])
+        out = self.paleisk([], True)
+        r = json.loads(self.registras())
+        self.assertEqual([i["projektoEiga"]["komitetai"] for i in r["irasai"]], [[{"kodas": "IMCO", "pavadinimas": "Vidaus rinkos ir vartotojų apsaugos komitetas"}]] * 2)
+        self.assertEqual(sum(1 for a, _ in self.kvietimai if a.startswith(M.EP_ORGANAI)), 1, "tas pats komitetas - viena užklausa")
+        self.assertIn("atsakingas komitetas: Vidaus rinkos ir vartotojų apsaugos komitetas (IMCO)", out)
+
+    def test_komiteto_pavadinimas_nepavyksta(self):
+        self.tinklas(nepavyksta=("corporate-bodies",), komitetai=["IMCO"])
+        out = self.paleisk(["2026/0068(COD)"], True)
+        self.assertEqual(json.loads(self.registras())["irasai"][0]["projektoEiga"]["komitetai"], [{"kodas": "IMCO", "pavadinimas": None}], "tik kodas")
+        self.assertIn("komiteto IMCO pavadinimo gauti nepavyko", out)
 
     def paleisk(self, *a, **k):
         out = io.StringIO()

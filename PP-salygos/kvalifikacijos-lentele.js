@@ -241,11 +241,14 @@
   const neVisaTekstas = n => /netikrinama.{0,200}isipareigoja|kvalifikacija .{0,120}netikrinama/.test(n);
 
   /* ---------- Lentelių atpažinimas ------------------------------------------------------------------------------ */
+  /* Antraštės langelis trumpas (trečias pilotas 2026-11-20, P3-A1): TS duomenų eilutė „1.1 | Bendrieji CDE funkcionalumo reikalavimai | CDE turi užtikrinti
+     centralizuotą projekto dokumentų ...“ tapdavo antrašte („reikalavim“ ir „dokument“), todėl ilgas sakinys antraštės langeliu nelaikomas */
+  const ANTRASTES_LANGELIS = 100;
   function stulpeliai(c){
     const r = {};
     c.forEach(x => {
       const n = norm(x.tekstas);
-      if (!n) return;
+      if (!n || n.length > ANTRASTES_LANGELIS) return;
       if (/^(eil\.? ?nr|nr\b|no\b)/.test(n) && n.length < 24){ r.nr = x; return; }
       if (/dokument|documents|evidence/.test(n)){
         if (/dokument/.test(n)) r.dokLt = r.dokLt || x;

@@ -20,7 +20,11 @@
  *  - dokumentai(nr, { eiga, signal }) - /api/cvpis/dokumentai/<nr> (nuo 2026-10-29): viešas pirkimo dokumentų ZIP iš CVP IS per serverį
  *    (srautu, serveris nieko nesaugo) -> { ok: true, blob, baitai, vardas } arba { ok: false, rusis }; dokumentuKlaida(rusis, kalba).
  *  - skirtumai(kortele, pirkimas) - kortelės pasiūlymų termino, paskelbimo datos ir būsenos skirtumai nuo VPT duomenų
- *    („Mano pirkimai“ patikra „Patikrinti CVP IS duomenis“, kortelių puslapio ?vpt=1); abejotina trukmė - `abejotini`, ne skirtumas.
+ *    („Mano pirkimai“ patikra „Patikrinti CVP IS duomenis“, kortelių puslapio ?vpt=1); abejotina trukmė - `abejotini`, ne skirtumas;
+ *    tolesnio etapo terminas (activeCycle >= 2 kelių etapų būde) nelyginamas - `nelyginta` (2026-11-20).
+ *  - dvikalbis(pavadinimas) - „LT dalis/EN dalis“ -> { lt, en } arba null; korteles() siūlo lietuvišką dalį (2026-11-20).
+ *  - korteles(): tolesnio etapo terminas nesiūlomas (pastaba), dalys - pagal contractAwardedInLots (false - „neskaidomas“ iš anksto
+ *    nepažymėtas, true - pastaba; DPS ir sistemoms - ne), 2026-11-20.
  *  - trukmesInfo(s) / trukmesAbejone(s, kalba) - trukmė su vienetu; metais ilgiau kaip 10 metų - abejotina (2026-11-12).
  *
  * Duomenys - iki 6 val. senumo VPT sąrašo kopija; oficialiu šaltiniu lieka CVP IS. Datos - Lietuvos laikas.
@@ -426,6 +430,10 @@
           rinkosTerminas: "Rinkos konsultacijos atsakymų terminas {d} - tai ne pasiūlymų terminas, todėl jo kortelei nesiūlome.",
           bvpzRusis: "CVP IS duomenys pagrindinio BVPŽ kodo nenurodo - kodas parinktas pagal objekto rūšį ({r}); patikrinkite skelbimą",
           bvpzPirmas: "CVP IS duomenys pagrindinio BVPŽ kodo nenurodo, o objekto rūšies kodo sąraše nėra - siūlomas pirmas sąraše; patikrinkite skelbimą",
+          tolesnisTerminas: "CVP IS terminas {d} - tolesnio pirkimo etapo (CVP IS duomenimis pirkimas jau {n} etape), ne paraiškų ar kito pirmo etapo terminas, todėl kortelei jis nesiūlomas. Pirmo etapo terminą rasite skelbime (pvz., „Dalyvavimo prašymų priėmimo terminas“).",
+          dalysNe: "CVP IS duomenyse pirkimas nepažymėtas kaip skaidomas į dalis. VPT šio lauko neaprašo, todėl iš anksto nepažymėta - patikrinkite skelbimo 5 skyrių („Pirkimo dalis“: viena dalis LOT-0001 reiškia, kad pirkimas neskaidomas)",
+          dalysTaip: "CVP IS duomenyse pirkimas pažymėtas kaip skaidomas į dalis, bet dalių skaičiaus ir pavadinimų VPT duomenyse nėra - įrašykite dalis patys (skelbimo 5 skyrius „Pirkimo dalis“).",
+          pavadinimasEn: "CVP IS pavadinimas parašytas dviem kalbomis - siūloma lietuviška dalis; angliška dalis „{e}“ - pavadinimas anglų kalba. Kortelėje jam lauko nėra - jį įrašysite rengdami dvikalbius dokumentus",
           rusys: { Works: "darbai", Supplies: "prekės", Services: "paslaugos" } },
     en: { neregistre: "Contracting entity “{p}” is not in the organisation register - no entity suggested.",
           mv: "In the VPT data no directive applies (low-value procurement) - no law suggested; the procurement documents state which one applies.",
@@ -446,8 +454,41 @@
           rinkosTerminas: "Market consultation response deadline {d} - not a tender deadline, so it is not suggested for the card.",
           bvpzRusis: "The CVP IS data do not state the main CPV code - the code was chosen by the type of contract ({r}); check the notice",
           bvpzPirmas: "The CVP IS data do not state the main CPV code and the list has no code of the contract type - the first one is suggested; check the notice",
+          tolesnisTerminas: "CVP IS deadline {d} is for a later stage of the procedure (according to CVP IS the procurement is at stage {n}), not the deadline for requests to participate or another first-stage deadline, so it is not suggested for the card. The first-stage deadline is in the notice (e.g. “Deadline for receipt of requests to participate”).",
+          dalysNe: "In the CVP IS data the procurement is not marked as divided into lots. VPT does not describe this field, so it is not preselected - check section 5 of the notice (“Lot”: a single lot LOT-0001 means the procurement is not divided)",
+          dalysTaip: "In the CVP IS data the procurement is marked as divided into lots, but the VPT data have no number or titles of the lots - enter the lots yourself (notice section 5 “Lot”).",
+          pavadinimasEn: "The CVP IS title is written in two languages - the Lithuanian part is suggested; the English part “{e}” is the title in English. The card has no field for it - you will enter it when preparing bilingual documents",
           rusys: { Works: "works", Supplies: "supplies", Services: "services" } }
   };
+
+  /* Dvikalbis pavadinimas (2026-11-20, trečias pilotas: „Mobili 110 kV skirstykla/110 kV MOBILE SWITCHYARD“ kortelei buvo siūlomas visas):
+     dvi dalys, atskirtos „/“ po raidės ar skliausto (ne „110/10 kV“); angliška - be lietuviškų raidžių, su bent dviem žodžiais ir bent vienu
+     angliškai būdingu žodžiu; lietuviška - be tokių žodžių, su lietuviška raide arba lietuviška žodžio galūne („skirstykla“, „pirkimas“).
+     Kitaip - null (pavadinimas nekeičiamas): klaidingai perskeltas pavadinimas būtų blogiau nei nepastebėtas dvikalbis. -> { lt, en } */
+  var LT_RAIDES = /[ąčęėįšųūžĄČĘĖĮŠŲŪŽ]/;
+  var EN_ZODIS = /(^|[^a-z])(of|for|and|the|on|in|to|with|by|procurement|purchase|supply|supplies|services?|works?|consultation|market|participants|equipment|systems?|maintenance|mobile|assessment|management|development|deployment|delivery|software|licen[cs]es?|contract|design|construction|reconstruction|repair|installation|switchyard|substation|transformers?|cables?|boards?|electronic|interfaces?|between|group|maturity|insurance)(?=$|[^a-z])/i;
+  var LT_GALUNE = /\p{L}{3,}(as|is|ys|us|a|ė|os|ės|ų|ai|iai|ių|ui|ei|imo|ymo)(?=$|[^\p{L}])/iu;
+  function zodziai(s) { return (String(s).match(/\p{L}{2,}/gu) || []).length; }
+  function ltPuse(s) { return !EN_ZODIS.test(s) && zodziai(s) >= 1 && (LT_RAIDES.test(s) || LT_GALUNE.test(s)); }
+  function enPuse(s) { return !LT_RAIDES.test(s) && zodziai(s) >= 2 && EN_ZODIS.test(s) && !/\//.test(s.replace(/\d\/\d|\band\/or\b/gi, "")); }
+  function dvikalbis(t) {
+    t = typeof t === "string" ? t.trim() : "";
+    var re = /\s*\/\s*/g, m;
+    while ((m = re.exec(t))) {
+      var a = t.slice(0, m.index).trim(), b = t.slice(m.index + m[0].length).trim();
+      if (!a || !b || !/[\p{L})]$/u.test(a)) continue;
+      if (ltPuse(a) && enPuse(b)) return { lt: a, en: b };
+      if (enPuse(a) && ltPuse(b)) return { lt: b, en: a };
+    }
+    return null;
+  }
+  /* Ar VPT laukas contractAwardedInLots tikrai pasako apie dalis (2026-11-20, trečias pilotas; OpenAPI lauko neaprašo). Patikrinta su VPT
+     duomenimis: pirkimai, kurių pavadinime ar aprašyme parašyta, kad jie skaidomi į dalis, - visi true; false - LITGRID pirkimai, kurių
+     pirkimo sąlygose „Pirkimo objektas į Pirkimo objekto dalis neskaidomas“. Nepatikimas: konkretūs pirkimai pagal DPS („skaidomas į 49 dalis“ -
+     false) ir sistemos; atskirai paskelbta dalis („... II DALIS“) - false, nors visas pirkimas skaidomas. Todėl false siūlomas tik iš anksto
+     nepažymėtas, ir tik kai pavadinimas bei aprašymas dalių nemini. */
+  var DALYS_NEPATIKIMA = { "DPS Specific Contract": 1, "Dynamic Purchasing System": 1, "Qualification System": 1, "cft.procedure.type.qs.specific.contract": 1, "Preliminary Market Consultation": 1 };
+  var DALYS_TEKSTE = /(^|[^\p{L}\p{N}])(dal(is|ys|ių|ims|imis|ies|imi)|lots?|skaidom\p{L}*)(?=$|[^\p{L}\p{N}])/iu;
 
   /* Grąžina { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [] } - kaip shared/skelbimas.js atpazink() */
   /* Pirkimo numeris lauko pradžioje: „26PP-999“, „(VPP-763) ...“, „(2026-PS-099) ...“ - kodas iš raidžių ir skaitmenų su brūkšneliais; kitaip null */
@@ -466,7 +507,9 @@
     };
     var keisk = function (t, o) { return t.replace(/\{(\w)\}/g, function (m, k) { return o[k] != null ? String(o[k]) : m; }); };
 
-    if (typeof p.title === "string" && p.title.trim()) prideti("pavadinimas", p.title.trim().slice(0, 300), "title: " + tx(p.title));
+    var dk = typeof p.title === "string" ? dvikalbis(p.title) : null;
+    if (dk) prideti("pavadinimas", dk.lt.slice(0, 300), "title: " + tx(p.title), keisk(P.pavadinimasEn, { e: tx(dk.en, 200) }));
+    else if (typeof p.title === "string" && p.title.trim()) prideti("pavadinimas", p.title.trim().slice(0, 300), "title: " + tx(p.title));
     if (typeof p.caName === "string" && p.caName.trim()) {
       var org = global.GP_ORG && global.GP_ORG.rask(p.caName);
       if (org) prideti("vykdytojas", org.id, "caName: " + tx(p.caName));
@@ -502,6 +545,12 @@
       else pastabos.push(keisk(P.bvpz, { k: tx(pagr, 20) }));
     }
     if (typeof p.estimatedValue === "number" && isFinite(p.estimatedValue) && p.estimatedValue > 0) prideti("verte", p.estimatedValue, "estimatedValue: " + p.estimatedValue);
+    /* Dalys (2026-11-20): true - dalių VPT duomenyse nėra, tik pastaba; false - „neskaidomas“, iš anksto nepažymėtas (žr. DALYS_NEPATIKIMA) */
+    if (!DALYS_NEPATIKIMA[p.procedure]) {
+      var dalysMinimos = DALYS_TEKSTE.test(String(p.title || "")) || DALYS_TEKSTE.test(String(p.description || ""));
+      if (p.contractAwardedInLots === true) pastabos.push(P.dalysTaip);
+      else if (p.contractAwardedInLots === false && !dalysMinimos) { prideti("dalys", [], "contractAwardedInLots: false", P.dalysNe); laukai[laukai.length - 1].abejotina = true; }
+    }
     /* Trukmė metais ilgiau kaip 10 metų - abejotina (trukmesInfo): siūloma su pastaba ir iš anksto nepažymima */
     var men = trukmeMen(p.contractDuration), trk = trukmesInfo(p.contractDuration);
     if (men && trk && trk.abejotina) { prideti("trukmeMen", men, "contractDuration: " + tx(p.contractDuration, 30), trukmesAbejone(p.contractDuration, kalba)); laukai[laukai.length - 1].abejotina = true; }
@@ -514,6 +563,9 @@
     var tm = typeof p.tenderSubmissionDeadline === "string" && iso.exec(p.tenderSubmissionDeadline);
     /* Rinkos konsultacijos terminas - atsakymų, ne pasiūlymų (2026-11-06; iki tol kortelėje tapdavo „Pasiūlymų terminas“) */
     if (tm && rinkos) pastabos.push(keisk(P.rinkosTerminas, { d: tm[1] + " " + tm[2] }));
+    /* Tolesnio etapo terminas (2026-11-20, trečias pilotas): kortelės laukas - pirmo etapo (paraiškų ar pasiūlymų) terminas, pagal jį taisyklės
+       tikrina trumpiausią terminą; activeCycle >= 2 kelių etapų būde CVP IS terminas jau kito etapo - nesiūlomas, kaip ir PP-tiekejams. */
+    else if (tm && tolesnisEtapas(p)) pastabos.push(keisk(P.tolesnisTerminas, { d: tm[1] + " " + tm[2], n: p.activeCycle }));
     else if (tm) prideti("pasiulymuTerminas", tm[1] + "T" + tm[2], "tenderSubmissionDeadline: " + p.tenderSubmissionDeadline, P.terminas);
     /* Paskelbimo data (2026-11-06): kortelėje - diena, nuo kurios skaičiuojami terminai (PĮ 53 str. 2 d. / VPĮ 40 str. 2 d.):
        tarptautiniam pirkimui - skelbimo išsiuntimas iš VPT, supaprastintam - paskelbimas CVP IS. VPT datePublished - paskelbimas
@@ -552,10 +604,12 @@
   var PO_VERTINIMO = { "Awarded": 1, "Concluded": 1, "Closed": 1 };
   var TARPTAUTINIO_SKELBIMAS_IKI = 5;      // ES leidinių biuras skelbia ne vėliau kaip per 5 d. nuo išsiuntimo
   function skirtumai(k, p) {
-    var r = { skirtumai: [], palyginta: [], abejotini: [] };
+    var r = { skirtumai: [], palyginta: [], abejotini: [], nelyginta: [] };
     if (!k || typeof k !== "object" || !p || typeof p !== "object") return r;
     var iso = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):\d{2}$/;
     var tm = typeof p.tenderSubmissionDeadline === "string" && iso.exec(p.tenderSubmissionDeadline);
+    /* Tolesnio etapo terminas (2026-11-20): kortelėje - pirmo etapo terminas, todėl nelyginama (kitaip „Atnaujinti kortelę“ jį perrašytų) */
+    if (tm && tolesnisEtapas(p)) { r.nelyginta.push({ laukas: "pasiulymuTerminas", priezastis: "tolesnisEtapas", vpt: tm[1] + "T" + tm[2], etapas: p.activeCycle }); tm = null; }
     if (tm) {
       r.palyginta.push("pasiulymuTerminas");
       if (tm[1] + "T" + tm[2] !== String(k.pasiulymuTerminas || "")) r.skirtumai.push({ laukas: "pasiulymuTerminas", kortele: String(k.pasiulymuTerminas || ""), vpt: tm[1] + "T" + tm[2] });
@@ -595,7 +649,7 @@
 
   global.GP_VPT = { nutrauktas: nutrauktas, nutrauktaPavadinime: nutrauktaPavadinime, busena: busena, tolesnisEtapas: tolesnisEtapas, rinkosKonsultacija: rinkosKonsultacija, sistema: sistema,
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, trukmesInfo: trukmesInfo, trukmesAbejone: trukmesAbejone, ted: ted, atnaujinta: atnaujinta,
-    PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai,
+    PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai, dvikalbis: dvikalbis,
     paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas,
     dokumentai: dokumentai, dokumentuKlaida: dokumentuKlaida
   };

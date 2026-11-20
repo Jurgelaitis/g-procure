@@ -7,7 +7,8 @@
  * nepriima (nėra CORS), todėl - per serverį: GET https://api.g-procure.com/api/sutartys/...
  *
  *   pirkejas(kodas, o)            -> { ok, zemelapis, meta }   PP-plan „Sutarčių žemėlapis“
- *   rinka(bvpz, { ted: "lt"|"es" }) -> { ok, lt, ted, klaidos, meta }   PP-ts „Galimi adresatai“
+ *   rinka(bvpz, { ted: "lt"|"es" }) -> { ok, lt, ted, klaidos, meta }   PP-ts „Galimi adresatai“ (nuo 2026-11-20: lt ir ted - laikotarpis
+ *                                  { nuo, iki }; TED laimėtojo suma - null, kai vertės jam priskirti negalima, beVertes, neImoniu)
  *   pajegumas(bvpz, { apyvarta, patirtis }) -> { ok, pajegumas, meta }   PP-qual „Rinkos pajėgumas“ (tik skaičiai)
  *   klaida -> { ok: false, rusis }: "neidiegta" (404 - paslauga dar neįdiegta), "parametrai" (400), "uzimta" (429),
  *            "saltinis" (503 - šaltinis neatsakė), "ruosiama" (serveris vis dar ruošia), "rysys", "atsaukta".
@@ -73,7 +74,7 @@
     return (k === "en" ? "Sources: " : "Šaltiniai: ") + (kurie || ["vda", "ted"]).map(function (x) { return SALTINIAI[x][k]; }).join("; ") + ".";
   }
 
-  /* BVPŽ kodo pradžia užklausai: „31210000-8“, „31210000“, „3121“ -> „3121“ (galiniai nuliai nuimami, ne trumpiau nei 3 skaitmenys) */
+  /* BVPŽ kodo pradžia užklausai: „31210000-1“, „31210000“, „3121“ -> „3121“ (galiniai nuliai nuimami, ne trumpiau nei 3 skaitmenys) */
   function cpvPradzia(kodas) {
     var m = /^\s*(\d{3,8})(?:-\d)?\s*$/.exec(String(kodas == null ? "" : kodas));
     if (!m) return null;

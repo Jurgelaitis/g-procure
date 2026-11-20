@@ -52,6 +52,7 @@
       cvpSutampa: "Sutampa su CVP IS duomenimis: {l}.", cvpLTerminas: "pasiūlymų terminas", cvpLPaskelbimas: "paskelbimo data", cvpLBusena: "būsena",
       cvpNeraDuomenu: "CVP IS duomenyse termino, paskelbimo datos ir būsenos nėra.",
       cvpAbejotina: " Su kortele sutarties trukmė nelyginta.",
+      cvpTolesnis: "CVP IS pasiūlymų terminas {d} skirtas tolesniam pirkimo etapui ({e} etapas), todėl su kortelės terminu nelygintas. Pirmo etapo terminą rasite skelbime.",
       cvpNera: "CVP IS numerio {nr} VPT sąraše nėra - patikrinkite numerį kortelėje.",
       cvpKlaida: "Šios kortelės CVP IS duomenų gauti nepavyko.",
       cvpAtnaujinti: "Atnaujinti kortelę", cvpAtverti: "Atverti CVP IS",
@@ -89,6 +90,7 @@
       cvpSutampa: "Matches the CVP IS data: {l}.", cvpLTerminas: "tender deadline", cvpLPaskelbimas: "publication date", cvpLBusena: "status",
       cvpNeraDuomenu: "The CVP IS data have no deadline, publication date or status.",
       cvpAbejotina: " The contract duration was not compared with the card.",
+      cvpTolesnis: "The CVP IS tender deadline {d} is for a later stage of the procurement (stage {e}), so it was not compared with the card deadline. The first-stage deadline is in the notice.",
       cvpNera: "CVP IS number {nr} is not in the VPT list - check the number on the card.",
       cvpKlaida: "Could not get the CVP IS data for this card.",
       cvpAtnaujinti: "Update the card", cvpAtverti: "Open in CVP IS",
@@ -485,6 +487,10 @@
         var s = V.skirtumai(k, cr.pirkimas);
         /* Abejotina CVP IS trukmė („36_years“, 2026-11-12) - ne skirtumas: pasakoma, kodėl nelyginta */
         var abej = (s.abejotini || []).map(function (x) { return el("p", "gpmp-cvp-abej", (V.trukmesAbejone ? V.trukmesAbejone(x.cd, l) : "") + t.cvpAbejotina); });
+        /* Tolesnio etapo terminas (2026-11-20, trečias pilotas) - nelygintas: pasakoma kodėl, ne „sutampa“ */
+        (s.nelyginta || []).filter(function (x) { return x.priezastis === "tolesnisEtapas"; }).forEach(function (x) {
+          abej.push(el("p", "gpmp-cvp-abej", fmt(t.cvpTolesnis, { d: rodomas(x.vpt), e: x.etapas })));
+        });
         if (!s.skirtumai.length) {
           p.className += " gpmp-cvp--ok";
           p.appendChild(el("span", null, s.palyginta.length

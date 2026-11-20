@@ -832,6 +832,10 @@
       bendra: { a: "KSA", p: "39" } },
     ksa_isigijimas: { tikrinta: "2026-11-19", apie: "tinklų ir informacinių sistemų įsigijimo, plėtojimo ir priežiūros saugumo tvarka apima įsigijimo ir diegimo reikalavimus",
       bendra: { a: "KSA", p: "40.1" } },
+    // trečias pilotas (2026-11-20, P3-B7): LITGRID CDE pirkimo TS reikalavo kelių veiksnių tapatumo nustatymo - Aprašo 69 p. 7 lentelė, techninis
+    // reikalavimas esminiams ir svarbiems subjektams (perskaityta e-tar 2026-11-20, aktuali redakcija); perkama sistema turi leisti jį įgyvendinti
+    ksa_t61: { tikrinta: "2026-11-20", apie: "naudotojas ir administratorius turi patvirtinti savo tapatybę slaptažodžiu ir papildoma tapatumo nustatymo priemone (kelių veiksnių tapatumo nustatymo priemonės)",
+      bendra: { a: "KSA", lent: 7, eil: 61 } },
     ksa_terminas: { tikrinta: "2026-11-19", apie: "kibernetinio saugumo reikalavimai įgyvendinami ne vėliau kaip per 12 mėnesių nuo subjekto įregistravimo Kibernetinio saugumo informacinėje sistemoje (techniniai 72 p. reikalavimai - per 24 mėnesius)",
       bendra: { a: "KSA", p: "71" } },
     nccs_tiekimas: { tikrinta: "2026-11-19", apie: "būtinoji kibernetinio saugumo kontrolė tiekimo grandinėje: rekomenduojamos viešojo pirkimo kibernetinio saugumo specifikacijos - tiekėjo darbuotojų asmens patikrinimai, saugaus projektavimo ir gamybos procesai, sandara, kurioje įrenginiai nelaikomi patikimais, tiekėjo prieiga prie turto, neskelbtinos informacijos apsauga, specifikacijos subrangovams, atsekamumas, saugumo naujiniai per visą naudojimo laikotarpį, audito teisė, tiekėjo rizikos profilio vertinimas",
@@ -952,7 +956,8 @@
     if (n.a === "NSOAI") return (en ? "Law on the Protection of Objects of Importance to Ensuring National Security, Art. " + n.s
       + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "")
       : "Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : ""));
-    if (n.a === "KSA") return en ? "Cybersecurity Requirements Description, point " + n.p : "Kibernetinio saugumo reikalavimų aprašo " + n.p + " p.";
+    if (n.a === "KSA") return n.lent ? (en ? "Cybersecurity Requirements Description, Table " + n.lent + ", row " + n.eil : "Kibernetinio saugumo reikalavimų aprašo " + n.lent + " lentelės " + n.eil + " eil.")
+      : en ? "Cybersecurity Requirements Description, point " + n.p : "Kibernetinio saugumo reikalavimų aprašo " + n.p + " p.";
     if (n.a === "KSI") return en ? "Law on Cybersecurity, Art. " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "")
       : "Kibernetinio saugumo įstatymo " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : "");
     // ES aktai (2026-11-19): „Reglamento (ES) 2024/1735 25 str. 7 d. a p.“, priedas - „... I priedo II dalies 1 p.“, komunikatas - vieta tekstu

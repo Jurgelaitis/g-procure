@@ -219,6 +219,12 @@
   var RE_UZT_TAIP = /(?:^|[^a-z])(privalo|turi|reikia) pateikti[^.|]{0,90}pasiulymo (galiojimo )?uztikrinim|pasiulymo (galiojimo )?uztikrinim\w*[^.|]{0,40}(suma|dydis)[^.|]{0,40}\d/;
   var RE_SUMA_EUR = /(\d[\d \u00a0]*(?:[.,]\d+)?)\s*(eur|€)/;      // tarp skaitmenų - ir jungiamasis tarpas („10 000 Eur“)
   var RE_KVAL_NE = /kvalifikacija nera tikrinama|kvalifikacijos reikalavimai nenustatomi|kvalifikacijos reikalavimu nera/;
+  /* Privalomų pasiūlymo dokumentų sąrašo punktai (2026-11-20, trečias pilotas: SPS 7.2 nacionalinio saugumo deklaracija ir gamintojo įgaliojimas
+     buvo „Dar neįvertinta“). Tekstas - be diakritikų ir mažosiomis (fold). */
+  var RE_NS_DEKL = /nacionalinio saugumo reikalavimu atitikties deklaracij|national security (?:requirements )?compliance declaration|declaration of compliance with (?:the )?national security/;
+  var RE_NS_TEIKTI = /teikiam|pateik|uzpildyt|pasirasyt|privalo|submit|fill/;
+  var RE_GAMINTOJAS = /gamintoj\w*\s+(?:isduot\w*\s+)?(?:igaliojim|autorizacij)|(?:igaliot\w*|autorizuot\w*|sertifikuot\w*)\s+(?:\([^)]{0,30}\)\s*)?(?:\S+\s+){0,4}gamintoj\w*\s+atstov|gamintoj\w*\s+isduot\w*\s+dokument\w*[^.|\n]{0,80}(?:igaliot|atstov|platint)|manufacturer'?s?\s+authori[sz]ation|authori[sz]ed\s+(?:\S+\s+){0,3}(?:representative|distributor|dealer|reseller|partner)\s+of\s+the\s+manufacturer/;
+  var RE_NEREIKIA = /nereikia|nereikalaujam|neprivalo|nebutina|not required|need not/;
   var RE_KAINOS = /ikainiu lentel|kain\w* (detalizavimo )?(lentel|form)|kiekiu (sarasas|lentel|ziniarast)|sanaud\w* (lentel|form)|price (table|form|schedule)/;
   var RE_CVP_TEIKTI = /(pasiulym\w*|paraisk\w*)[^.|\n]{0,40}(reikia pateikti|turi buti pateik\w*|gali teikti)[^.|\n]{0,80}(cvp is|elektronin\w+ priemon)|(pasiulym\w*|paraisk\w*) (reikia pateikti|gali teikti)/;
   var RE_CVP_MINI = /(pasiulym\w*|paraisk\w*)[^.|\n]{0,80}(teikiam\w*|pateikiam\w*|pateikt\w*|teikt\w*)[^.|\n]{0,80}(cvp is|elektronin\w+ priemon)|(cvp is|elektronin\w+ priemon)[^.|\n]{0,60}(pateikiam\w*|teikiam\w*|pateikt\w*)[^.|\n]{0,40}(pasiulym|paraisk)/;
@@ -278,6 +284,14 @@
     var SKIRTINGI = { duration: L("sutarties trukmė", "contract duration"), value: L("numatoma vertė", "estimated value"), validity: L("pasiūlymo galiojimas", "bid validity") };
     Object.keys(SKIRTINGI).forEach(function (k) {
       var x = meta[k]; if (!x || !x.alt || !x.alt.length || x.pratestas) return;
+      /* Sutarties trukmė sutartyje ir skelbime (2026-11-20, trečias pilotas): šaltiniai įvardijami - skelbimo „Numatomas galiojimas“
+         kartais užpildomas pasiūlymo galiojimu, todėl klausiama, kuri galioja, nurodant, kur kokia reikšmė */
+      if (k === "duration" && x.rusis === "sutartis" && x.alt.every(function (a) { return a.rusis === "skelbimas"; })) {
+        var sk = x.alt.map(function (a) { return a.value; }).slice(0, 2), en = function (v) { return String(v).replace(/\s*mėn\.?/, " months").replace(/\s*m\.$/, " years"); };
+        q("skirtinga-" + k, 12, L("Skelbime nurodyta sutarties trukmė " + sk.join(" ir ") + ", o sutartyje - " + x.value + " - kuri galioja?",
+          "The notice gives a contract duration of " + sk.map(en).join(" and ") + ", while the contract gives " + en(x.value) + " - which one applies?"), metaKodel(x, o.docs));
+        return;
+      }
       var vals = [x.value].concat(x.alt.map(function (a) { return a.value; })).slice(0, 3).join(kalba === "en" ? " and " : " ir ");
       var pav = T(SKIRTINGI[k]);
       q("skirtinga-" + k, 12, L("Dokumentuose skiriasi " + pav + " (" + vals + ") - kuri reikšmė galioja?", "The documents give a different " + pav + " (" + vals + ") - which one applies?"),
@@ -640,9 +654,26 @@
         punktas("ebvpd", "nerasta", L("Specialiosiose sąlygose ir pakete EBVPD neminimas.", "The special conditions and the package do not mention the ESPD."), []);
     }
 
-    /* Kvalifikacija: tik „netikrinama“ - reikalavimų sąrašo be DI nepildome */
+    /* Kvalifikacija: tik „netikrinama“ - reikalavimų sąrašo be DI nepildome. Kai kvalifikacija netikrinama, bet sąlygose su pasiūlymu prašoma
+       gamintojo įgaliojimo (2026-11-20, trečias pilotas: SPS 7.2), - tas dokumentas privalomas, ne „netaikoma“. Kai kvalifikacija tikrinama, punktą
+       vertina žmogus arba DI su visais reikalavimais. */
     var kvNe = rask(g.sprendimai, RE_KVAL_NE);
-    if (kvNe && !atsakymuose(/kvalifikacij/)) punktas("kvalifikacija", "netaikoma", L("Kvalifikacija šiame pirkime netikrinama.", "Qualification is not checked in this procurement."), [kodel(kvNe)]);
+    var gam = kvNe ? rask(g.sprendimai, RE_GAMINTOJAS, { ne: RE_NEREIKIA }) : null;
+    if (kvNe && gam && !atsakymuose(/kvalifikacij|gamintoj|manufacturer/))
+      punktas("kvalifikacija", "privaloma", L("Kvalifikacija šiame pirkime netikrinama, tačiau su pasiūlymu reikia pateikti gamintojo dokumentą, patvirtinantį, kad tiekėjas yra įgaliotas gamintojo atstovas.",
+        "Qualification is not checked in this procurement, but a document from the manufacturer confirming that the supplier is its authorised representative must be submitted with the tender."), [kodel(gam), kodel(kvNe)]);
+    else if (kvNe && !atsakymuose(/kvalifikacij/)) punktas("kvalifikacija", "netaikoma", L("Kvalifikacija šiame pirkime netikrinama.", "Qualification is not checked in this procurement."), [kodel(kvNe)]);
+
+    /* Nacionalinio saugumo reikalavimų atitikties deklaracija (2026-11-20, trečias pilotas): sąlygų sakinys, kad ji teikiama su pasiūlymu;
+       forma pakete - pavadinimu. Kiti bendri reikalavimai (sankcijos, kilmė, aplinkosauga) taisyklėmis neįvertinami - tai pasakoma. */
+    var ns = rask(g.sprendimai, RE_NS_DEKL, { turi: RE_NS_TEIKTI, ne: RE_NEREIKIA });
+    if (ns && !atsakymuose(/nacionalinio saugumo|national security/)) {
+      var nsF = formos(g, /nacionalinio saugumo|national security/, 1);
+      punktas("horizontalus", "privaloma", L("Su pasiūlymu pateikite nacionalinio saugumo reikalavimų atitikties deklaraciją" + (nsF.length ? " (forma: " + failai(nsF) + ")" : "") + ".",
+        "Submit the national security compliance declaration with the tender" + (nsF.length ? " (form: " + failai(nsF) + ")" : "") + "."), [kodel(ns)].concat(nsF.map(dokSaltinis)),
+        L("Kiti bendri reikalavimai (sankcijos, prekių kilmė, aplinkosauga, socialiniai) šiuo sąrašu neįvertinti - perskaitykite pirkimo sąlygas.",
+          "Other horizontal requirements (sanctions, origin of goods, environmental, social) are not assessed in this list - read the procurement conditions."));
+    }
 
     /* Pasiūlymo galiojimo užtikrinimas */
     if (!atsakymuose(UZT_TEMA)) {

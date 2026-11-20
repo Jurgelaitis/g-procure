@@ -25,6 +25,9 @@
  *     nepatvirtintas. Nesutapimas su skelbimu rodomas naudotojui, ne nutylimas.
  *   - `cvpisPaieska` - pirkimo vykdytojo lauko reikšmė CVP IS sąrašo adresui;
  *     patikrinta curl 2026-09-24 (sąrašas grąžino šios organizacijos pirkimus).
+ *   - `sektorius` (2026-11-20) - veiklos sektorius: "elektra" (elektros perdavimas, elektros energijos kaupimas), "dujos" (dujų perdavimas),
+ *     "valdymas" (grupės valdymas). Nuo jo priklauso, ar siūlomi elektros sektoriaus tinklo kodekso dėl kibernetinio saugumo
+ *     (Deleguotasis reglamentas (ES) 2024/1366) reikalavimai (shared/kibernetinis-saugumas.js).
  *   - `centrinesValdzios` - ar organizacija įrašyta į centrinės valdžios institucijų
  *     sąrašą (GP_TEISE „centrines_valdzios_sarasas“). Nuo to priklauso VPĮ tarptautinio
  *     pirkimo riba prekėms ir paslaugoms (shared/taisykles.js). Sąrašas perskaitytas e-tar
@@ -49,7 +52,7 @@
      apklausa (ir žodžiu) ir kokie punktai; perskaityta iš aprašų. Įmonei, kurios aprašo G-Procure neturi, - null (rūšis nesiūloma). */
 
   var ORGANIZACIJOS = [
-    { id: "litgrid", pavadinimas: "LITGRID AB", jarKodas: "302564383", atpazinimas: /\blitgrid\b/i, cvpisPaieska: "LITGRID AB", rezimasTiketinas: "PI", centrinesValdzios: false,
+    { id: "litgrid", pavadinimas: "LITGRID AB", jarKodas: "302564383", atpazinimas: /\blitgrid\b/i, cvpisPaieska: "LITGRID AB", rezimasTiketinas: "PI", centrinesValdzios: false, sektorius: "elektra",
       nuorodos: { taisykles: "https://www.litgrid.eu/index.php/apie-litgrid/litgrid-pirkimai/pirkimu-taisykles/837", planas: "https://www.litgrid.eu/index.php/apie-litgrid/litgrid-pirkimai/pirkimai/829" },
       taisykles: { saltinis: "S3", patikrinta: "2026-09-02", pastaba: { lt: "Mažos vertės pirkimų aprašas ir informacija tiekėjams (LITGRID svetainė).", en: "Low-value procurement rules and supplier information (LITGRID website)." } },
       rekvizitai: { kodas: "302564383", adresas: "Karlo Gustavo Emilio Manerheimo g. 8, LT-05131 Vilnius", pvmKodas: "LT100005748413", saskaita: "LT242150051000021766",
@@ -61,7 +64,7 @@
       patikrinta: PATIKRINTA },
     // Amber Grid (2026-10-22): svetainės „Viešieji pirkimai“ nuoroda „Mažos vertės pirkimų tvarkos aprašas“ veda į nebeveikiantį seną
     // CVP IS adresą (mw.eviesiejipirkimai.lt neatsako), todėl taisyklės neįrašytos - tik pirkimų puslapis
-    { id: "amber-grid", pavadinimas: "AB Amber Grid", jarKodas: "303090867", atpazinimas: /\bamber\s*grid\b/i, cvpisPaieska: "Amber Grid", rezimasTiketinas: "PI", centrinesValdzios: false,
+    { id: "amber-grid", pavadinimas: "AB Amber Grid", jarKodas: "303090867", atpazinimas: /\bamber\s*grid\b/i, cvpisPaieska: "Amber Grid", rezimasTiketinas: "PI", centrinesValdzios: false, sektorius: "dujos",
       nuorodos: { pirkimai: "https://ambergrid.lt/viesieji-pirkimai/10" }, taisykles: null, mvApklausa: null,
       // Rekvizitai (2026-11-03): iš įmonės paskelbtų CVP IS sutarčių projektų (specialiosios sąlygos) ir bendrųjų pirkimo sąlygų
       rekvizitai: { kodas: "303090867", adresas: "Laisvės pr. 10, LT-04215 Vilnius", gatve: "Laisvės pr. 10", pastoKodas: "LT-04215", pvmKodas: "LT100007844014", saskaita: "LT71 7044 0600 0790 5969",
@@ -70,7 +73,7 @@
       patikrinta: "2026-10-22" },
     // EPSO-G (2026-10-22): svetainėje - EPSO-G įmonių grupės pirkimų politika (valdyba 2021-12-21, galioja nuo 2022-02-21; taikoma visoms
     // grupės įmonėms) ir 5 metų reikšmingų pirkimų planas; mažos vertės pirkimų tvarkos aprašo svetainėje nėra
-    { id: "epso-g", pavadinimas: "UAB EPSO-G", jarKodas: "302826889", atpazinimas: /\bepso[\s­‐‑-]*g\b/i, cvpisPaieska: "EPSO-G", rezimasTiketinas: "VPI", centrinesValdzios: false,
+    { id: "epso-g", pavadinimas: "UAB EPSO-G", jarKodas: "302826889", atpazinimas: /\bepso[\s­‐‑-]*g\b/i, cvpisPaieska: "EPSO-G", rezimasTiketinas: "VPI", centrinesValdzios: false, sektorius: "valdymas",
       nuorodos: { pirkimai: "https://epsog.lt/informacija-partneriams", taisykles: "https://epsog.lt/wp-content/uploads/2026/08/20211221_Grupes_Pirkimu_politika.pdf",
                   planas5: "https://epsog.lt/wp-content/uploads/2026/08/EPSO-G_pirkimu_planas.pdf" }, mvApklausa: null,
       taisykles: { saltinis: "S11", patikrinta: "2026-10-22", pav: { lt: "grupės pirkimų politika", en: "group procurement policy" },
@@ -78,7 +81,7 @@
       patikrinta: "2026-10-22" },
     // Energy cells (2026-10-22): mažos vertės pirkimų tvarkos aprašas (vadovo 2024-07-10 įsak. Nr. 24BV-37) parengtas pagal PĮ
     // („Įstatymas“ - perkančiųjų subjektų įstatymas), todėl ir tikėtinas režimas - PĮ; principus nustato EPSO-G grupės pirkimų politika
-    { id: "energy-cells", pavadinimas: "UAB Energy cells", jarKodas: "305689545", atpazinimas: /\benergy[\s­‐‑-]*cells\b/i, cvpisPaieska: "Energy cells", rezimasTiketinas: "PI", centrinesValdzios: false,
+    { id: "energy-cells", pavadinimas: "UAB Energy cells", jarKodas: "305689545", atpazinimas: /\benergy[\s­‐‑-]*cells\b/i, cvpisPaieska: "Energy cells", rezimasTiketinas: "PI", centrinesValdzios: false, sektorius: "elektra",
       nuorodos: { pirkimai: "https://energy-cells.eu/viesieji-pirkimai/", taisykles: "https://energy-cells.eu/wp-content/uploads/2024/07/24BV-37_MVPTA_tvirtinimas.pdf" },
       mvApklausa: { neskelbiamaIki: 15000, tiekejuMin: 3,
                     aprasas: { lt: "mažos vertės pirkimų tvarkos aprašą (2024-07-10 įsak. Nr. 24BV-37)", en: "low-value procurement rules (order No. 24BV-37 of 2024-07-10)" },
@@ -104,5 +107,5 @@
   // Sutarties šalies rekvizitai pagal organizacijos id arba pavadinimą; nežinomai ar be rekvizitų - null (nespėjama)
   function rekvizitai(kas) { var o = pagalId(kas) || rask(kas); return o && o.rekvizitai ? o.rekvizitai : null; }
 
-  global.GP_ORG = { version: "0.5.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl, rekvizitai: rekvizitai };
+  global.GP_ORG = { version: "0.6.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl, rekvizitai: rekvizitai };
 })(typeof window !== "undefined" ? window : this);

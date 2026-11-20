@@ -41,7 +41,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var VERSIJA = "2026-11-19";
+  var VERSIJA = "2026-11-20";
   var KILMES = ["https://g-procure.com", "https://www.g-procure.com"];
   var VIETINE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
 
@@ -123,10 +123,21 @@
 
   /* Asmens vardu pavadinta įmonė: individuali įmonė, mažoji bendrija, tikroji ir komanditinė ūkinė bendrija, ūkininkas.
      Jų pavadinimas dažnai yra savininko vardas - tokie tiekėjai tik suskaičiuojami (be pavadinimo, kodo ir finansų). */
-  var ASMENS_FORMA = /(^|[^\p{L}])(individuali(?:oji)?\s+įmonė|individualioji\s+įmonė|mažoji\s+bendrija|tikroji\s+ūkinė\s+bendrija|komanditinė\s+ūkinė\s+bendrija|ūkinė\s+bendrija|ūkininkas|ūkininkė|ūkininko\s+ūkis|fizinis\s+asmuo|IĮ|MB|TŪB|KŪB|ŪB)(?=$|[^\p{L}])/iu;
+  var ASMENS_FORMA = /(^|[^\p{L}])(individuali(?:oji)?\s+(?:įmonė|firma)|individualioji\s+įmonė|mažoji\s+bendrija|tikroji\s+ūkinė\s+bendrija|komanditinė\s+ūkinė\s+bendrija|ūkinė\s+bendrija|ūkininkas|ūkininkė|ūkininko\s+ūkis|fizinis\s+asmuo|IĮ|MB|TŪB|KŪB|ŪB|e\.\s?K\.|Einzelunternehm(?:en|er(?:in)?)|sole\s+(?:trader|proprietor(?:ship)?)|enskild\s+firma|toiminimi)(?=$|[^\p{L}])/iu;
+  /* Senos individualios įmonės dažnai pavadintos savininko vardu be „IĮ“: „V. Pavardienės firma „X““, „Jono Jonaičio prekybinė firma“,
+     „A. Petraičio įmonė“ (2026-11-20, trečias pilotas: toks pavadinimas buvo rodomas). Atpažįstama: žodis didžiąja raide su asmenvardžio
+     kilmininko galūne (ir vardininko -ė - „Danutės Pavardienė prekybos firma“), iki 4 žodžių mažąja raide ir „firma“ ar „įmonė“ kaip
+     atskiras žodis. Bendrovė (UAB, AB, ŽŪB, „uždaroji akcinė bendrovė“ ir pan.) - ne asmens vardu pavadinta įmonė, net jei pavadinime
+     yra asmens vardas („UAB „P. Petraičio firma““); „agrofirma“ - ne žodis „firma“. */
+  var ASMENS_FIRMA = /(^|[^\p{L}])\p{Lu}\p{Ll}+(?:o|io|ės|os|aus|iaus|ienės|ytės|aitės|utės|ūtės|ė)\s+(?:\p{Ll}+\s+){0,4}(?:firma|įmonė)(?=$|[^\p{L}])/u;
+  var BENDROVE = /(^|[^\p{L}])(UAB|AB|ŽŪB|SIA|AS|OÜ|VšĮ)(?=$|[^\p{L}])/u;
+  var BENDROVE_ZODZIAI = /(^|[^\p{L}])((uždaroji\s+akcinė|akcinė|žemės\s+ūkio|kooperatinė)\s+bendrovė|viešoji\s+įstaiga)(?=$|[^\p{L}])/iu;
+  function bendrove(t) { return BENDROVE.test(t) || BENDROVE_ZODZIAI.test(t); }
   function asmensVardoForma(pav) {
     if (typeof pav !== "string") return true;
-    return ASMENS_FORMA.test(pav.replace(/[„“"”«»]/g, " "));
+    var t = pav.replace(/[„“"”«»'‘’]/g, " ");
+    if (ASMENS_FORMA.test(t)) return true;
+    return !bendrove(t) && ASMENS_FIRMA.test(t);
   }
 
   // ---------------------------------------------------------------------------
@@ -182,7 +193,8 @@
       "&line_name.startswith(\"PARDAVIMO\")&laikotarpis_iki>=\"" + (y - METU - 1) + "-01-01\"&select(juridinis_asmuo,line_name,reiksme,laikotarpis_iki)&limit(" + (idai.length * 20) + ")" };
   }
   var TED_LAUKAI = ["publication-number", "publication-date", "buyer-country", "classification-cpv", "winner-name", "winner-country",
-    "winner-identifier", "tender-value", "tender-value-cur", "received-submissions-type-val"];
+    "winner-identifier", "tender-value", "tender-value-cur", "received-submissions-type-val", "organisation-name-tenderer",
+    "organisation-identifier-tenderer", "organisation-country-tenderer", "contract-tender-id", "tender-identifier"];
   function uzklausaTed(cpv, apimtis, dabar) {
     var nuo = pridekMen(siandien(dabar), -12 * METU).replace(/-/g, "");
     return { saltinis: "ted", kunas: {
@@ -222,7 +234,11 @@
     var pav = svarus(o.salies_pavadinimas, 200);
     var juridinis = o.salies_asmens_rusis === "Juridinis" && !!kodas;
     var viesas = juridinis && !!pav && !asmensVardoForma(pav);
-    return { dok: dok, kodas: viesas || juridinis ? kodas : null, pav: viesas ? pav : null, viesas: viesas, juridinis: juridinis };
+    /* Kodėl tiekėjas nerodomas - kad sąsaja nesakytų daugiau, nei žinoma (2026-11-20, trečias pilotas: „juridinis asmuo“ buvo rašoma
+       ir tada, kai šaltinis asmens rūšies nežino, o kodas ir pavadinimas užkoduoti): asmens vardu pavadinta įmonė, fizinis asmuo arba
+       nežinoma (rūšis „Nežinomas“, kodas ar pavadinimas nenurodytas). */
+    var priezastis = viesas ? null : juridinis && pav ? "asmens-vardu" : o.salies_asmens_rusis === "Fizinis" ? "fizinis" : "nezinomas";
+    return { dok: dok, kodas: viesas || juridinis ? kodas : null, pav: viesas ? pav : null, viesas: viesas, juridinis: juridinis, priezastis: priezastis };
   }
   function tedTekstas(v) {
     if (typeof v === "string") return v;
@@ -239,22 +255,76 @@
     if (typeof v === "object") { var k = Object.keys(v); return k.length ? tedSarasas(v[k.indexOf("lit") >= 0 ? "lit" : (k.indexOf("eng") >= 0 ? "eng" : k[0])]) : []; }
     return [v];
   }
+  /* TED paieškos laukai - atskiri sąrašai be tarpusavio sąsajų, todėl pagal eilės numerį jų poruoti negalima (2026-11-20, trečias pilotas:
+     įmonės kodas buvo priskirtas kitai įmonei). Išmatuota su TED XML (14 skelbimų) ir 413 skelbimų paieškos atsakymais:
+      - winner-name - po vieną kiekvienam pirkimo dalies rezultatui (tas pats laimėtojas kartojasi, tvarka - ne organizacijų);
+      - winner-identifier, winner-country - po vieną kiekvienai laimėtojo organizacijai, kita tvarka nei winner-name;
+      - tender-value - kiekvienam skelbime nurodytam pasiūlymui (ir nelaimėjusiam), dar kita tvarka;
+      - organisation-name-tenderer, organisation-identifier-tenderer, organisation-country-tenderer - ta pati organizacijų tvarka (XML
+        patikrinta visais atvejais, kai sąrašų ilgiai vienodi; organizacija su keliais kodais ilgius išskiria - tada nesiejama).
+     Todėl: laimėtojai - skirtingi winner-name; kodas ir šalis - iš pasiūlymų teikėjų sąrašų, kai tas pavadinimas ten vienas, o vienam
+     laimėtojui su vienu laimėtojo kodu - tas kodas; vertė - tik vieninteliam laimėtojui ir tik kai visi skelbimo pasiūlymai yra sudarytų
+     sutarčių (pasiūlymų, sutarčių pasiūlymų ir verčių skaičius sutampa, visos vertės EUR ir didesnės už nulį). Kitaip - nežinoma (null),
+     ne priskirta spėjant. Ne įmonės laimėtojo vietoje („Pirkimas pabaigtas nesudarius sutarties“, „Rahmenvereinbarungspartner 1“) -
+     atmetamos ir suskaičiuojamos. */
+  var MAX_LAIMETOJU = 20;
+  var NE_IMONE = /(^|[^\p{L}])(nesudar\p{L}*|nesudaryt\p{L}*|nutrauk\p{L}*|neįvyk\p{L}*|nenustatyt\p{L}*|nėra\s+laimėtoj\p{L}*|not\s+awarded|no\s+(?:contract|award|winner)|unsuccessful|non\s+aggiudicat\p{L}*|nicht\s+vergeben|kein\s+zuschlag|anonym\p{L}*|confidential|konfidencial\p{L}*|not\s+disclosed|nicht\s+veröffentlicht|redacted|withheld|n\/a)(?=$|[^\p{L}])/iu;
+  var VIETOS_ZYME = /^\s*\p{L}+(?:\s+\p{L}+)?\s*(?:nr\.?\s*|no\.?\s*)?\d{1,2}\s*$/iu;   // „Rahmenvereinbarungspartner 1“, „Bieter 2“, „Lot 3“
+  var DALIES_PRIESAGA = /\s+-\s+L\d{1,3}\s*$/;                                         // „Siemens AG - L2“ - ta pati organizacija kitai daliai
+  function tedPavadinimas(v) { var p = svarus(tedTekstas(v), 200); return p ? (p.replace(DALIES_PRIESAGA, "").trim() || p) : null; }
+  function vardoRaktas(p) {
+    if (typeof p !== "string") return "";
+    // be diakritikų, raidžių dydžio, skyrybos („S.R.L.“ = „SRL“) ir žodžių tvarkos („UAB „X““ = „X, UAB“)
+    return p.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\./g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").filter(Boolean).sort().join(" ");
+  }
+  function tedKodas(v) {
+    var k = typeof v === "string" ? v.replace(/\s+/g, "") : (typeof v === "number" && isFinite(v) ? String(v) : null);
+    return k && /^[A-Za-z0-9.\-\/]{3,30}$/.test(k) ? k : null;
+  }
+  // Kodo raktas palyginimui: be skyrybos, didžiosiomis, be PVM šalies priešdėlio („RO 1057757“ = „1057757“)
+  function kodoRaktas(k) { var t = String(k).toUpperCase().replace(/[.\-\/]/g, ""); return /^[A-Z]{2}\d{5,}$/.test(t) ? t.slice(2) : t; }
+  function tedSalis(v) { return typeof v === "string" && /^[A-Z]{3}$/.test(v) ? v : null; }
+  function unikalus(a) { return a.filter(function (x, i) { return x !== null && x !== undefined && a.indexOf(x) === i; }); }
+  function neImone(pav, kodas) {
+    if (!pav) return false;
+    if (!/\p{L}{2}/u.test(pav) || NE_IMONE.test(pav)) return true;
+    if (VIETOS_ZYME.test(pav) && !bendrove(pav)) return true;
+    return !!kodas && /\s/.test(pav) && vardoRaktas(kodas) === vardoRaktas(pav);   // kodo vietoje - tas pats tekstas
+  }
   function tedSkelbimas(o) {
     if (!o || typeof o !== "object" || typeof o["publication-number"] !== "string" || !/^\d{1,8}-\d{4}$/.test(o["publication-number"])) return null;
-    var vardai = tedSarasas(o["winner-name"]), salys = tedSarasas(o["winner-country"]), kodai = tedSarasas(o["winner-identifier"]);
-    var vertes = tedSarasas(o["tender-value"]), val = tedSarasas(o["tender-value-cur"]), pas = tedSarasas(o["received-submissions-type-val"]);
-    var n = Math.max(vardai.length, kodai.length);
-    var laimetojai = [];
-    for (var i = 0; i < Math.min(n, 20); i++) {
-      var pav = svarus(tedTekstas(vardai[i]), 200), salisK = typeof salys[i] === "string" && /^[A-Z]{3}$/.test(salys[i]) ? salys[i] : (typeof salys[0] === "string" && /^[A-Z]{3}$/.test(salys[0]) ? salys[0] : null);
-      var kodas = typeof kodai[i] === "string" ? kodai[i].replace(/\s+/g, "") : null;
-      if (kodas && !/^[A-Za-z0-9.\-\/]{3,30}$/.test(kodas)) kodas = null;
-      if (!pav && !kodas) continue;
-      var vertesI = suma(vertes[i] !== undefined ? vertes[i] : null), eur = (val[i] || val[0]) === "EUR";
-      laimetojai.push({ pav: pav, salis: salisK, kodas: kodas, verte: eur ? vertesI : null });
-    }
+    var wKodai = unikalus(tedSarasas(o["winner-identifier"]).map(tedKodas)), wSalys = unikalus(tedSarasas(o["winner-country"]).map(tedSalis));
+    var tn = tedSarasas(o["organisation-name-tenderer"]).map(tedPavadinimas), ti = tedSarasas(o["organisation-identifier-tenderer"]).map(tedKodas);
+    var tc = tedSarasas(o["organisation-country-tenderer"]).map(tedSalis);
+    var porinti = tn.length > 0 && tn.length === ti.length, tnr = porinti ? tn.map(vardoRaktas) : [];
+    var laimetojai = [], matyta = {};
+    tedSarasas(o["winner-name"]).forEach(function (v) {
+      var pav = tedPavadinimas(v), r = vardoRaktas(pav);
+      if (!pav || !r || matyta[r] || laimetojai.length >= MAX_LAIMETOJU) return;
+      matyta[r] = 1;
+      laimetojai.push({ pav: pav, r: r, salis: null, kodas: null, vertes: null });
+    });
+    if (!laimetojai.length && wKodai.length === 1) laimetojai.push({ pav: null, r: "", salis: null, kodas: null, vertes: null });   // tik kodas, be pavadinimo
+    var vienas = laimetojai.length === 1;
+    laimetojai.forEach(function (w) {
+      var at = [];
+      if (w.r) tnr.forEach(function (r, i) { if (r === w.r) at.push(i); });
+      if (at.length === 1) { w.kodas = ti[at[0]]; w.salis = tc.length === tn.length ? tc[at[0]] : null; }
+      else if (vienas && wKodai.length === 1) w.kodas = wKodai[0];
+      if (!w.salis && wSalys.length === 1) w.salis = wSalys[0];   // visi laimėtojai - vienos šalies
+    });
+    // Vertė - tik vieninteliam laimėtojui, kai visi skelbimo pasiūlymai yra sudarytų sutarčių
+    var tv = tedSarasas(o["tender-value"]).map(function (x) { return suma(typeof x === "string" ? x.trim() : x); });
+    var cur = unikalus(tedSarasas(o["tender-value-cur"])), ct = unikalus(tedSarasas(o["contract-tender-id"]).filter(function (x) { return typeof x === "string"; }));
+    var tid = tedSarasas(o["tender-identifier"]);
+    // winner-name ne visada išvardija visus laimėtojus (rasta: trys tie patys pavadinimai, o laimėtojų kodai - du), todėl ir kodų ne daugiau vieno
+    if (vienas && wKodai.length <= 1 && cur.length === 1 && cur[0] === "EUR" && tv.length > 0 && tv.every(function (x) { return x !== null && x > 0; }) && tv.length === ct.length && tid.length === tv.length) laimetojai[0].vertes = tv;
+    var neImoniu = 0;
+    laimetojai = laimetojai.filter(function (w) { if (neImone(w.pav, w.kodas)) { neImoniu++; return false; } return true; })
+      .map(function (w) { return { pav: w.pav, salis: w.salis, kodas: w.kodas, vertes: w.vertes }; });
+    var pas = tedSarasas(o["received-submissions-type-val"]);
     var p = pas.map(function (x) { var k = typeof x === "number" ? x : (typeof x === "string" && /^\d{1,4}$/.test(x) ? +x : NaN); return isFinite(k) && k >= 0 && k < 10000 ? k : null; }).filter(function (x) { return x !== null; });
-    return { nr: o["publication-number"], data: data(o["publication-date"]), laimetojai: laimetojai, pasiulymu: p.length ? Math.max.apply(null, p) : null };
+    return { nr: o["publication-number"], data: data(o["publication-date"]), laimetojai: laimetojai, pasiulymu: p.length ? Math.max.apply(null, p) : null, neImoniu: neImoniu };
   }
 
   // ---------------------------------------------------------------------------
@@ -283,14 +353,14 @@
         var t = ts.length ? ts[0] : null;
         gr(k).sutartys.push({ id: c.id, cpv: c.cpv.slice(0, 3), pav: c.pav, verte: c.verte, sudaryta: c.sudaryta, galioja: c.galioja, pirkimoNr: c.pirkimoNr,
           menesiu: menesiuIki(l.siandien, c.galioja), importuota: c.importuota,
-          tiekejas: t ? (t.viesas ? { pav: t.pav, kodas: t.kodas } : { paslepta: true }) : null, tiekeju: ts.length });
+          tiekejas: t ? (t.viesas ? { pav: t.pav, kodas: t.kodas } : { paslepta: true, priezastis: t.priezastis || "nezinomas" }) : null, tiekeju: ts.length });
       }
       if (c.sudaryta && c.sudaryta >= l.nuo && c.verte !== null && c.verte >= MIN_VERTE && ts.length) {
         var g = gr(k), dalis = c.verte / ts.length;
         g.koncSuma += c.verte; g.koncSutarciu++;
         ts.forEach(function (s) {
           var raktas = s.kodas || ("~" + s.dok);
-          var x = g.konc[raktas] = g.konc[raktas] || { suma: 0, pav: s.viesas ? s.pav : null, kodas: s.viesas ? s.kodas : null };
+          var x = g.konc[raktas] = g.konc[raktas] || { suma: 0, pav: s.viesas ? s.pav : null, kodas: s.viesas ? s.kodas : null, priezastis: s.priezastis || "nezinomas" };
           x.suma += dalis;
         });
       }
@@ -305,7 +375,7 @@
         var d = g.konc[raktai[0]];
         koncentracija = { sutarciu: g.koncSutarciu, suma: Math.round(g.koncSuma), tiekeju: raktai.length,
           didziausioDalis: Math.round(1000 * d.suma / g.koncSuma) / 10,
-          didziausias: d.pav ? { pav: d.pav, kodas: d.kodas } : { paslepta: true } };
+          didziausias: d.pav ? { pav: d.pav, kodas: d.kodas } : { paslepta: true, priezastis: d.priezastis } };
       }
       var baigiasi = g.sutartys.reduce(function (s, x) { return s + (x.verte || 0); }, 0);
       return { grupe: k, sutartys: g.sutartys.slice(0, 50), sutarciu: g.sutartys.length, baigiasiSuma: Math.round(baigiasi),
@@ -337,8 +407,11 @@
     });
     var visi = Object.keys(per).map(function (k) { return per[k]; });
     var viesi = visi.filter(function (x) { return x.viesas; }).sort(function (a, b) { return b.suma - a.suma || b.kiekis - a.kiekis; });
+    // Kada sudarytos įvertintos sutartys (kai apribota - naujausios MAX_RINKOS_SUTARCIU, ne visi 3 metai)
+    var datos = sutartys.filter(function (c) { return c && c.sudaryta; }).map(function (c) { return c.sudaryta; }).sort();
     return {
       sutarciu: sutartys.filter(Boolean).length, apribota: !!apribota,
+      laikotarpis: datos.length ? { nuo: datos[0], iki: datos[datos.length - 1] } : null,
       beTiekejo: sutartys.filter(function (c) { return c && !suTiekeju[c.id]; }).length,
       tiekeju: visi.length,
       tiekejai: viesi.slice(0, MAX_TIEKEJU).map(function (x) { return { pav: x.pav, kodas: x.kodas, kiekis: x.kiekis, suma: Math.round(x.suma), didziausia: Math.round(x.didziausia), paskutine: x.paskutine }; }),
@@ -349,30 +422,53 @@
     };
   }
 
-  /* TED sutarčių sudarymo skelbimai: laimėtojai pagal kodą arba pavadinimą ir šalį. Asmens vardu pavadintos įmonės - tik suskaičiuojamos. */
+  /* TED sutarčių sudarymo skelbimai: laimėtojai pagal šalį ir kodą arba pavadinimą. Ta pati įmonė su kodu ir be jo, kitomis kabutėmis
+     ar žodžių tvarka („UAB „X““, „X, UAB“) - viena eilutė: įrašas be kodo prijungiamas prie to paties pavadinimo įrašo su kodu;
+     Lietuvos įmonės su skirtingais kodais - atskiros, užsienio (jų kodai nerodomi) - pagal pavadinimą. kiekis - laimėtų skelbimų skaičius,
+     suma ir didžiausia - tik žinomų verčių (null - nė vienos), beVertes - skelbimų be žinomos vertės. Asmens vardu pavadintos įmonės -
+     tik suskaičiuojamos. laikotarpis - kada paskelbti įvertinti skelbimai (TED atsakymas - naujausi MAX_TED). */
   function tedSuvestine(skelbimai, viso) {
-    var per = {}, paslepta = {}, pas = [], beLaimetojo = 0, n = 0;
+    var irasai = [], idx = {}, paslepta = {}, pas = [], beLaimetojo = 0, n = 0, neImoniu = 0, nuo = null, iki = null;
     skelbimai.forEach(function (s) {
       if (!s) return;
       n++;
+      if (s.data) { if (!nuo || s.data < nuo) nuo = s.data; if (!iki || s.data > iki) iki = s.data; }
       if (s.pasiulymu !== null) pas.push(s.pasiulymu);
+      neImoniu += s.neImoniu || 0;
       if (!s.laimetojai.length) { beLaimetojo++; return; }
       s.laimetojai.forEach(function (w) {
-        var raktas = (w.salis || "") + ":" + (w.kodas ? "k" + w.kodas.toUpperCase() : "p" + String(w.pav || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim());
-        if (w.pav && asmensVardoForma(w.pav)) { paslepta[raktas] = 1; return; }
-        var x = per[raktas] = per[raktas] || { pav: w.pav, salis: w.salis, kodas: w.salis === "LTU" && w.kodas && /^\d{7,9}$/.test(w.kodas) ? w.kodas : null, kiekis: 0, suma: 0, didziausia: 0, paskutine: null, skelbimas: s.nr };
+        var sal = w.salis || "", vr = vardoRaktas(w.pav), kr = w.kodas ? kodoRaktas(w.kodas) : null;
+        var pk = vr ? sal + ":p:" + vr : null, kk = kr ? sal + ":k:" + kr : null;
+        if (w.pav && asmensVardoForma(w.pav)) { paslepta[kk || pk] = 1; return; }
+        if (!pk && !kk) return;
+        var x = kk ? idx[kk] : null;
+        if (!x && pk && idx[pk]) { var c = idx[pk]; if (!kr || !c.kodai.length || c.kodai.indexOf(kr) >= 0 || sal !== "LTU") x = c; }
+        if (!x) { x = { pav: w.pav, salis: w.salis, kodai: [], kiekis: 0, zinomu: 0, suma: 0, didziausia: null, paskutine: null, skelbimas: s.nr, sk: {} }; irasai.push(x); }
+        if (kk) { if (!idx[kk]) idx[kk] = x; if (x.kodai.indexOf(kr) < 0) x.kodai.push(kr); }
+        if (pk && !idx[pk]) idx[pk] = x;
         if (!x.pav && w.pav) x.pav = w.pav;
+        if (x.sk[s.nr]) return;
+        x.sk[s.nr] = 1;
         x.kiekis++;
-        if (w.verte !== null) { x.suma += w.verte; x.didziausia = Math.max(x.didziausia, w.verte); }
+        if (w.vertes && w.vertes.length) {
+          x.zinomu++;
+          x.suma += w.vertes.reduce(function (a, b) { return a + b; }, 0);
+          x.didziausia = Math.max(x.didziausia || 0, Math.max.apply(null, w.vertes));
+        }
         if (s.data && (!x.paskutine || s.data > x.paskutine)) { x.paskutine = s.data; x.skelbimas = s.nr; }
       });
     });
-    var visi = Object.keys(per).map(function (k) { return per[k]; }).filter(function (x) { return x.pav || x.kodas; })
-      .sort(function (a, b) { return b.kiekis - a.kiekis || b.suma - a.suma; });
+    var visi = irasai.map(function (x) {
+      x.kodas = x.salis === "LTU" && x.kodai.length === 1 && /^\d{7,9}$/.test(x.kodai[0]) ? x.kodai[0] : null;
+      return x;
+    }).sort(function (a, b) { return b.kiekis - a.kiekis || (b.suma || 0) - (a.suma || 0); });
     return {
       skelbimu: n, viso: typeof viso === "number" && viso >= 0 ? viso : n, apribota: typeof viso === "number" && viso > n,
-      beLaimetojo: beLaimetojo, pasiulymuMediana: mediana(pas), pasiulymuSkelbimu: pas.length,
-      laimetojai: visi.slice(0, MAX_TIEKEJU).map(function (x) { return { pav: x.pav, salis: x.salis, kodas: x.kodas, kiekis: x.kiekis, suma: Math.round(x.suma), paskutine: x.paskutine, skelbimas: x.skelbimas }; }),
+      laikotarpis: nuo ? { nuo: nuo, iki: iki } : null,
+      beLaimetojo: beLaimetojo, neImoniu: neImoniu, pasiulymuMediana: mediana(pas), pasiulymuSkelbimu: pas.length,
+      laimetojai: visi.slice(0, MAX_TIEKEJU).map(function (x) {
+        return { pav: x.pav, salis: x.salis, kodas: x.kodas, kiekis: x.kiekis, suma: x.zinomu ? Math.round(x.suma) : null, beVertes: x.kiekis - x.zinomu, paskutine: x.paskutine, skelbimas: x.skelbimas };
+      }),
       daugiau: Math.max(0, visi.length - MAX_TIEKEJU), paslepta: Object.keys(paslepta).length,
       vidus: visi.filter(function (x) { return x.kodas; }).map(function (x) { return { kodas: x.kodas, didziausia: x.didziausia }; })
     };
@@ -393,15 +489,17 @@
   }
 
   /* Rinkos pajėgumas - tik skaičiai. Visi: juridiniai asmenys, laimėję panašias sutartis (Lietuva - VDA, ir TED Lietuvos kodai).
+     Imtis - tik Lietuvos įmonės ir tik Lietuvos viešos sutartys: užsienio tiekėjų čia nėra, o patirtis kitur nežinoma (sąsaja tai sako).
      Apyvarta: naujausių finansinių metų pardavimo pajamos (asmens vardu pavadintoms įmonėms neieškoma - „nežinoma“).
-     Patirtis: didžiausia panaši sutartis per METU metų. */
+     Patirtis: didžiausia panaši sutartis per METU metų; kai žinomos vertės nėra (tik TED be priskiriamos vertės) - „nežinoma“. */
   function pajegumas(rinka, ted, pajamos, kodasId, apyvarta, patirtis) {
     var visi = {};
     (rinka && rinka.vidus || []).forEach(function (x) { visi[x.kodas] = { viesas: x.viesas, didziausia: x.didziausia }; });
+    // TED vertė gali būti nežinoma (null): skelbimas su keliais laimėtojais ar nelaimėjusiais pasiūlymais - vertės priskirti negalima
     (ted && ted.vidus || []).forEach(function (x) {
-      var v = visi[x.kodas];
-      if (v) v.didziausia = Math.max(v.didziausia, x.didziausia);
-      else visi[x.kodas] = { viesas: true, didziausia: x.didziausia, tikTed: true };
+      var v = visi[x.kodas], d = typeof x.didziausia === "number" && isFinite(x.didziausia) ? x.didziausia : null;
+      if (v) { if (d !== null) v.didziausia = v.didziausia === null ? d : Math.max(v.didziausia, d); }
+      else visi[x.kodas] = { viesas: true, didziausia: d, tikTed: true };
     });
     var kodai = Object.keys(visi), metai = {};
     var r = { visi: kodai.length, apyvarta: null, patirtis: null, finansiniaiMetai: null };
@@ -418,8 +516,8 @@
       r.finansiniaiMetai = m.length ? { nuo: m[0], iki: m[m.length - 1] } : null;
     }
     if (patirtis) {
-      var p = { atitiktu: 0, neatitiktu: 0 };
-      kodai.forEach(function (k) { if (visi[k].didziausia >= patirtis) p.atitiktu++; else p.neatitiktu++; });
+      var p = { atitiktu: 0, neatitiktu: 0, nezinoma: 0 };
+      kodai.forEach(function (k) { var d = visi[k].didziausia; if (d === null) p.nezinoma++; else if (d >= patirtis) p.atitiktu++; else p.neatitiktu++; });
       r.patirtis = p;
     }
     return r;
@@ -623,7 +721,7 @@
     asmensVardoForma: asmensVardoForma, jarKodas: jarKodas, cpvPradzia: cpvPradzia, riba: riba,
     uzklausaPirkejoId: uzklausaPirkejoId, uzklausaPirkejoSutartys: uzklausaPirkejoSutartys, uzklausaTiekejai: uzklausaTiekejai,
     uzklausaRinka: uzklausaRinka, uzklausaJa: uzklausaJa, uzklausaPajamos: uzklausaPajamos, uzklausaTed: uzklausaTed,
-    sutartis: sutartis, salis: salis, tedSkelbimas: tedSkelbimas,
+    sutartis: sutartis, salis: salis, tedSkelbimas: tedSkelbimas, vardoRaktas: vardoRaktas, kodoRaktas: kodoRaktas, neImone: neImone, TED_LAUKAI: TED_LAUKAI,
     pirkejoZemelapis: pirkejoZemelapis, rinkosSuvestine: rinkosSuvestine, tedSuvestine: tedSuvestine, pajamuSuvestine: pajamuSuvestine, pajegumas: pajegumas,
     vykdykPirkejas: vykdykPirkejas, vykdykRinka: vykdykRinka, vykdykFinansai: vykdykFinansai, lygiagreciai: lygiagreciai,
     marsrutas: marsrutas, atsakymasDarbo: atsakymasDarbo, kilmesAntraste: kilmesAntraste, jsonAtsakymas: json

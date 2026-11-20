@@ -622,7 +622,8 @@
   }
   function identifikatorius(r) {
     var I = r.identifikatoriai || {};
-    if (Array.isArray(I.projektai) && I.projektai.length) return (I.projektai.length > 1 ? "Projektai " : "Projektas ") + I.projektai.join(", ");
+    // Be žodžio „Projektas“ (2026-11-20, trečias pilotas): rūšis jau parodyta šalia - sąrašo eilutėje „Projektas · ...“, detalėse - prie datos
+    if (Array.isArray(I.projektai) && I.projektai.length) return I.projektai.join(", ");
     return I.nr ? "Nr. " + I.nr : I.bylosNr ? "Byla " + I.bylosNr : I.failas ? I.failas : I.eTarId ? "e-tar " + I.eTarId : "";
   }
   function rezimoTekstas(r) { return r.rezimas.length ? r.rezimas.map(function (x) { return x === "PI" ? "PĮ" : "VPĮ"; }).join(" + ") : ""; }
@@ -903,7 +904,7 @@
     var truksta = [];
     if (!c.procedura) truksta.push("pirkimo būdas"); if (!c.objektas) truksta.push("pirkimo objektas"); if (!c.etapas) truksta.push("etapas"); if (!c.skelbimoData) truksta.push("planuojama skelbimo data");
     var h = '<div class="aktualumas" data-aktualumas="' + esc(a.lygis) + '"><b>Kodėl man aktualu? ' + esc(pav) + '</b>';
-    if (!yra) h += '<p class="muted aktualumas__pastaba">Pirkimo kontekstas nenurodytas - vertinimas remiasi tik susietais įrankiais ir taikomu įstatymu. Kad vertinimas būtų tikslesnis, nurodykite: ' + esc(truksta.join(", ")) + ' (skiltis „Mano pirkimas“ virš sąrašo). Rizikos balas neskaičiuojamas.</p>';
+    if (!yra) h += '<p class="muted aktualumas__pastaba">Pirkimo kontekstas nenurodytas - vertinimas remiasi tik susietais įrankiais ir taikomu įstatymu. Kad vertinimas būtų tikslesnis, nurodykite: ' + esc(truksta.join(", ")) + ' (skiltis „Mano pirkimas“ virš sąrašo).</p>';
     else if (truksta.length) h += '<p class="muted aktualumas__pastaba">Trūksta duomenų tikslesniam vertinimui: ' + esc(truksta.join(", ")) + '.</p>';
     if (a.priezastys.length) h += '<ul>' + a.priezastys.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join("") + '</ul>';
     if (!r.aktualumas) h += '<p class="muted aktualumas__pastaba">Įrašas neturi aktualumo požymių (būdas, objektas, etapas) - juos pildo administratorius.</p>';
@@ -937,6 +938,11 @@
     if (!e.etapas || !e.etapas.pavadinimas) return "";
     var h = '<div class="eiga" data-eiga><h4>Svarstymo eiga Europos Parlamente</h4>';
     h += '<p><b>Etapas:</b> ' + esc(e.etapas.pavadinimas) + (e.parlamentas ? ' - ' + esc(e.parlamentas) : '') + (e.procedura ? ' <span class="muted">(procedūra ' + esc(e.procedura) + ')</span>' : '') + '</p>';
+    // Atsakingas komitetas (2026-11-20; es-saltiniai.py iš EP duomenų COMMITTEE_LEAD) - tik kai jis įrašytas; neįrašytas - nespėjamas
+    var kom = (Array.isArray(e.komitetai) ? e.komitetai : []).filter(function (x) { return x && typeof x.kodas === "string" && /^[A-Z0-9]{2,8}$/.test(x.kodas); });
+    if (kom.length) h += '<p><b>' + (kom.length > 1 ? 'Atsakingi komitetai' : 'Atsakingas komitetas') + ':</b> ' + kom.map(function (x) {
+      return (x.pavadinimas ? esc(x.pavadinimas) + ' (' + esc(x.kodas) + ')' : esc(x.kodas));
+    }).join(", ") + '</p>';
     if (e.prognoze && S.yraData(e.prognoze.data) && e.prognoze.data >= DABAR) h += '<p><b>' + esc(e.prognoze.data) + '</b> - ' + esc(e.prognoze.tekstas || "") + '</p>';
     var v = (Array.isArray(e.veiksmai) ? e.veiksmai : []).filter(function (x) { return x && S.yraData(x.nuo) && S.yraData(x.iki) && x.tekstas; })
       .sort(function (a, b) { return a.iki < b.iki ? 1 : a.iki > b.iki ? -1 : (a.nuo < b.nuo ? 1 : a.nuo > b.nuo ? -1 : 0); });
@@ -947,16 +953,22 @@
     h += '<p class="muted">' + (sena === null ? 'Patikros data nenurodyta - eiga galėjo pasikeisti. ' : 'Patikrinta ' + esc(e.patikrinta) + (sena > EIGA_SENA_D ? ' (prieš ' + sena + ' d.) - eiga galėjo pasikeisti. ' : '. ')) + esc(e.pastaba || "") + '</p>';
     return h + '<div class="veiksmai">' + nuoroda(e.saltinis, "Procedūra Teisėkūros observatorijoje (anglų k.)") + '</div></div>';
   }
+  /* Projekto data (2026-11-20, trečias pilotas): ES - Komisijos pasiūlymo pateikimo data, nacionaliniam - šaltinio paskelbimo TAR data */
+  function projektoData(r) { var d = r.datos.paskelbta || r.datos.priimta; return (r.lygmuo === "es" ? "Pasiūlymas pateiktas" : "Projektas") + (d ? " " + d : ": data nenurodyta"); }
   function datosBlokas(r, sd) {
-    var h = '<p><b>' + esc(sd.zyma) + (sd.data ? ' ' + esc(sd.data) : ': nenurodyta') + '</b>' + (sd.reiksme ? ' - ' + esc(sd.reiksme) : '') + (sd.ateitis ? ' <span class="muted">(po ' + S.dienuSkirtumas(DABAR, sd.data) + ' d.)</span>' : '') + '</p>';
     var es = r.lygmuo === "es";
+    /* Projektas (2026-11-20, trečias pilotas): data, „nepriimtas“ ir eiga - po vieną kartą (iki tol eigos sakinys kartojosi trimis eilutėmis) */
+    var h = r.rusis === "projektas" ? '' : '<p><b>' + esc(sd.zyma) + (sd.data ? ' ' + esc(sd.data) : ': nenurodyta') + '</b>' + (sd.reiksme ? ' - ' + esc(sd.reiksme) : '') + (sd.ateitis ? ' <span class="muted">(po ' + S.dienuSkirtumas(DABAR, sd.data) + ' d.)</span>' : '') + '</p>';
     if (r.teismoDokumentas === "isvada") h += '<p>Generalinio advokato išvada nėra Teismo sprendimas ir Teisingumo Teismui neprivaloma; išvados data ' + esc(r.datos.priimta || "nenurodyta") + '. Sprendimo data dar nežinoma.</p>';
     else if (r.rusis === "teismu_praktika") h += es ? '<p>Teisingumo Teismo sprendimas neturi įsigaliojimo datos - jis aiškina galiojančią normą; sprendimo data ' + esc(r.datos.priimta || "nenurodyta") + '.</p>'
       : '<p>Teismo išaiškinimas neturi įsigaliojimo datos - jis aiškina galiojančią normą; nutarties data ' + esc(r.datos.priimta || "nenurodyta") + '.</p>';
     else if (r.saltinioTipas === "es_gaires" && !S.veikimoData(r)) h += '<p>Europos Komisijos gairės teisiškai neprivalomos ir įsigaliojimo datos neturi; paskelbtos ' + esc(r.datos.paskelbta || r.datos.priimta || "nenurodyta") + '.</p>';
     else if (r.rusis === "projektas") {
-      var eb = eigosBlokas(r);
-      h += '<p>Projektas nepriimtas - įsigaliojimo datos nėra' + (r.datos.paskelbta ? (es ? ' (pasiūlymo data ' : ' (registre - šaltinio paskelbimo TAR data ') + esc(r.datos.paskelbta) + ')' : '') + '; eiga: ' + esc(r.projektoEiga && r.projektoEiga.busena ? r.projektoEiga.busena : "nežinoma") + (!eb && r.projektoEiga && r.projektoEiga.pastaba ? ' (' + esc(r.projektoEiga.pastaba) + ')' : '') + '.</p>' + eb;
+      var eb = eigosBlokas(r), pe = r.projektoEiga || {};
+      h += '<p><b>' + esc(projektoData(r)) + '</b> - įsigaliojimo datos nėra: ' + (es ? 'pasiūlymas' : 'projektas') + ' dar nepriimtas.' +
+           (!es && r.datos.paskelbta ? ' <span class="muted">Data - šaltinio paskelbimo TAR data.</span>' : '') + '</p>';
+      // Eiga - viena vieta: blokas „Svarstymo eiga Europos Parlamente“, o be jo - sakinys
+      h += eb || '<p>Eiga: ' + esc(pe.busena || "nežinoma") + (pe.pastaba ? ' (' + esc(pe.pastaba) + ')' : '') + '.</p>';
     }
     else h += zingsniai(r) + (r.datos.taikoma ? '<p>Taikoma: ' + esc(r.datos.taikoma) + '</p>' : '');
     h += '<h4>Pereinamosios nuostatos ir išimtys</h4><p>' + (r.pereinamosios ? esc(r.pereinamosios) : '<span class="muted">Šaltinyje pereinamųjų nuostatų nenurodyta arba registre neįrašyta.</span>') + '</p>';
@@ -1023,7 +1035,7 @@
       '<div class="det__g"><span class="det__kal">' + S.kalendorius(r, DABAR, "lt") + '</span><div class="det__gk">' +
       '<p class="det__rus">' + S.ikona(k, 14) + esc(S.rusiesTekstas(r, "lt")) + (rezimoTekstas(r) ? ' · ' + esc(rezimoTekstas(r)) : '') + '</p>' +
       '<h2 id="detH" tabindex="-1">' + esc(S.trumpasPavadinimas(r)) + '</h2>' + (r.trumpai && r.trumpai !== r.pavadinimas ? '<p class="det__pilnas">' + esc(r.pavadinimas) + '</p>' : '') +
-      '<p class="muted detales-meta">' + (identifikatorius(r) ? esc(identifikatorius(r)) + ' · ' : '') + esc(sd.zyma) + (sd.data ? ' ' + esc(sd.data) : ': nenurodyta') + '</p>' + metos + '</div></div>' + demesio +
+      '<p class="muted detales-meta">' + (identifikatorius(r) ? esc(identifikatorius(r)) + ' · ' : '') + (r.rusis === "projektas" ? esc(projektoData(r)) : esc(sd.zyma) + (sd.data ? ' ' + esc(sd.data) : ': nenurodyta')) + '</p>' + metos + '</div></div>' + demesio +
       '<h3>Esmė</h3><p class="det__esme">' + esc(r.santrauka || "Santrauka rengiama.") + '</p>' +
       '<div class="det__daryti"><h3>Ką daryti</h3>' + darytiPunktai(r) +
       (r.moduliai.length ? '<div class="veiksmai">' + r.moduliai.map(function (m) { var M = S.MODULIAI[m.modulis]; return '<a class="btn btn--mazas" href="../' + esc(M.kelias) + (m.inkaras ? '#' + esc(m.inkaras) : '') + '">Atverti: ' + esc(M.pav) + '</a>'; }).join("") + '</div>' : '') + '</div>' +
