@@ -164,7 +164,7 @@ ribos zona `conf.d/gp-sankcijos-limit.conf`, `location /api/sankcijos/` - į `ap
 - **PP-esg** (nuo 2026-11-08): patikros lange - „Tikrinti sankcijų sąrašuose automatiškai“ (tik bendrovėms; fizinio asmens įmonėms nesiūloma,
   neaiškiai teisinei formai - klausiama). Rezultatas - sąrašų būsenos ir kandidatai; kiekvieną įvertina žmogus, siūlomą rezultatą pasirenka žmogus.
 
-## Viešų pirkimų sutarčių duomenys (nuo 2026-11-19, NEĮDIEGTA)
+## Viešų pirkimų sutarčių duomenys (nuo 2026-11-19, ĮDIEGTA 2026-11-20)
 
 G-Procure ateities perspektyvų 3 žingsnis: viešos CVP IS sutartys, TED sutarčių sudarymo skelbimai ir (tik suskaičiuoti) juridinių asmenų
 finansinės ataskaitos - pirkimo sprendimams: sutarčių žemėlapis planuojant (PP-plan), rinkos pajėgumas nustatant kvalifikacijos reikalavimus
@@ -216,7 +216,7 @@ bandymų; ne daugiau 2 darbų vienu metu, tas pats darbas - vienas. Žurnale - t
 
 Diegimas - kaip sankcijų paslaugos: kodas į `/opt/g-procure-sutartys/`, paslauga `g-procure-sutartys`, ribos zona `conf.d/gp-sutartys-limit.conf`,
 `location /api/sutartys/` - į `api.g-procure.com` server bloką. Žingsniai ir patikra - privačiai (`g-procure-privatu/serveris/viesos-sutartys-diegimas-2026-11.md`).
-Kol neįdiegta, moduliai rodo „paslauga dar neįdiegta“ (404).
+Įdiegta 2026-11-20 (naudotojo leidimas): `systemd-analyze security` - 1.5; iš išorės - 200 su CORS tik g-procure.com, 400 su parametro pavadinimu, POST - 403, po ~10 greitų užklausų - 429; prieigos žurnale `/api/sutartys` įrašų nėra, paslaugos žurnale - tik darbo rūšis ir trukmė. Išmatuota: LITGRID AB žemėlapis - 17 s (356 sutartys, kurios baigiasi per 24 mėn., 65 BVPŽ grupės), rinka BVPŽ 3121 - 3 s (136 sutartys, 67 tiekėjai, 79 TED skelbimai), pajėgumas - 0,4 s (79 juridiniai asmenys); atmintis - 78 MB. Klientas (`shared/viesos-sutartys.js`) prieš užklausą su duomenimis tikrina `/api/sutartys/busena`: be paslaugos (404) įmonės ar BVPŽ kodas nesiunčiamas.
 
 ### Kas naudoja (`shared/viesos-sutartys.js`, tik paspaudus mygtuką)
 

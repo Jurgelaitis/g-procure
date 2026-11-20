@@ -200,7 +200,7 @@ dalis ir tai pasakoma pastaboje. Nežinomą etapo kodą komanda laiko klaida (pa
 `OEIL_BUSENOS`, `OEIL_PROGNOZES`). Svarstymo Taryboje šie šaltiniai nerodo. Įraše puslapis rodo bloką „Svarstymo eiga Europos
 Parlamente“ (etapas ir būsena, būsima preliminari data, 6 naujausi veiksmai, patikros data - senesnė nei 14 d. pažymima - ir
 nuoroda į OEIL); `admin.html` nepakeistą eigą išsaugo su visais laukais ir ankstesne patikros data, pakeistą ranka - kaip rankinį
-įrašą. Komandos testai be tinklo - `python3 PP-teise/es-saltiniai-testai.py`.
+įrašą. Komandos testai be tinklo - `python3 PP-teise/es-saltiniai-testai.py`. Nuo 2026-11-20 (naudotojo sprendimas) `eiga --rasyk` paleidžia ir savaitinė užduotis (skelbimo 4 žingsnyje, po ES faktų įrašų): dalinė klaida (`PATIKRA NEPAVYKO`) skelbimo nestabdo - nepavykusių pasiūlymų eiga lieka ankstesnė ir tai pasakoma ataskaitoje bei ES patikros eilutėje.
 
 Teisingumo Teismo sprendimai, aiškinantys Direktyvą 2014/24/ES, rodomi ir PĮ režimu su žyma „Įvertinkite su teisės
 specialistu“: ar ir kaip išaiškinimas taikomas perkantiesiems subjektams, įrašas neteigia.
