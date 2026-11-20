@@ -1012,14 +1012,19 @@
       ".gps-lj__k{display:inline-block;width:11px;height:11px;border-radius:50%}",
       ".gps-lj__k--ateitis{border-radius:3px;background:repeating-linear-gradient(135deg,var(--color-warning-5,#FEF6E8) 0 3px,#F2D7A0 3px 6px)}",
       /* Portalo blokas */
-      ".gps--pb{padding:28px 32px 30px;border-radius:16px;border-left:1px solid var(--color-graphite-15,#E1E2E4);box-shadow:0 8px 24px rgba(46,54,65,.08);background:linear-gradient(180deg,#fff 0%,#FBFCFC 100%)}",
-      ".gps-pb__galva{display:flex;align-items:center;gap:16px}",
-      ".gps-pb__ikona{width:48px;height:48px;border-radius:12px;background:var(--gradient-dark,linear-gradient(120deg,#0B3B33,#0E5247 45%,#00667D));color:#fff;display:grid;place-items:center;flex:none}",
+      /* Portalo blokas (naudotojo pasirinkimas 2026-11-20, variantas B): tamsi antraštė - tas pats prekės ženklo gradientas kaip įrankių antraštėse,
+         apačia balta. Tekstas ant gradiento - baltas ir graphite-15 (>= 4,5:1 visame gradiente), mygtukas - baltas su smaragdo tekstu. */
+      ".gps--pb{padding:0 32px 30px;overflow:hidden;border-radius:16px;border:1px solid var(--color-graphite-15,#E1E2E4);box-shadow:0 8px 24px rgba(46,54,65,.08);background:#fff}",
+      ".gps-pb__galva{display:flex;align-items:center;gap:16px;margin:0 -32px;padding:24px 32px;background:var(--gradient-dark,linear-gradient(120deg,#0B3B33 0%,#0E5247 45%,#00667D 100%))}",
+      ".gps-pb__ikona{width:48px;height:48px;border-radius:12px;background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 1px rgba(255,255,255,.24);color:#fff;display:grid;place-items:center;flex:none}",
       ".gps-pb__tekstas{flex:1;min-width:0}.gps-pb__tekstas .gps__paskirtis{font-size:14px;margin-top:4px}",
-      ".gps--pb .gps__cta{background:var(--color-emerald-strong,#007554)}",
+      ".gps--pb .gps-pb__galva .gps__title{color:#fff}.gps--pb .gps-pb__galva .gps__paskirtis{color:var(--color-graphite-15,#E1E2E4)}",
+      ".gps--pb .gps__cta{background:#fff;color:var(--color-emerald-strong,#007554) !important}",
+      ".gps--pb .gps__cta:hover,.gps--pb .gps__cta:focus-visible{background:var(--color-green-5,#EFF9F1);color:var(--color-emerald-strong-hover,#006649) !important}",
+      ".gps--pb .gps__cta:focus-visible{outline:3px solid #fff;outline-offset:2px}",
       ".gps-pb__sk{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:22px 0 14px}",
       /* Lygmens perjungiklis (nuo 2026-11-13): tas pats valdiklis kaip modulyje - Nacionalinė teisė / ES teisė */
-      ".gps-pb__lygmuo{display:inline-flex;margin:20px 0 0;border:1px solid var(--color-graphite-30,#C0C2C6);border-radius:8px;background:#fff;overflow:hidden}",
+      ".gps-pb__lygmuo{display:inline-flex;margin:24px 0 0;border:1px solid var(--color-graphite-30,#C0C2C6);border-radius:8px;background:#fff;overflow:hidden}",
       ".gps-pb__lygmuo + .gps-pb__sk{margin-top:14px}",
       ".gps-lg{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;white-space:nowrap;border:0;background:none;font-family:inherit;font-size:14px;font-weight:600;color:var(--color-graphite,#2E3641);cursor:pointer}",
       ".gps-lg + .gps-lg{border-left:1px solid var(--color-graphite-30,#C0C2C6)}",
@@ -1051,7 +1056,7 @@
       "@media print{.gps-pb__lygmuo{display:none}}",
       /* Siauriausiame ekrane (320-380 px): perjungiklis be kodų ženklelių (jie - tik akims), ilga būsenos žyma kortelėje lūžta, o ne išlenda už kortelės. */
       "@media (max-width:380px){.gps-lg__k{display:none}.gps-pk__info .gps-zyma{white-space:normal;border-radius:10px}}",
-      "@media (max-width:640px){.gps--pb{padding:20px 16px}.gps-pb__galva{flex-wrap:wrap}.gps-pb__atn{margin-left:0;width:100%}.gps-pb__lygmuo{display:flex;width:100%}.gps-lg{flex:1 1 auto;justify-content:center;padding:0 8px}.gps-lj__men span{left:3px}.gps-lj__metai{display:none}}",
+      "@media (max-width:640px){.gps--pb{padding:0 16px 20px}.gps-pb__galva{flex-wrap:wrap;margin:0 -16px;padding:20px 16px}.gps-pb__atn{margin-left:0;width:100%}.gps-pb__lygmuo{display:flex;width:100%}.gps-lg{flex:1 1 auto;justify-content:center;padding:0 8px}.gps-lj__men span{left:3px}.gps-lj__metai{display:none}}",
       "@media (forced-colors:active){.gps-zyma,.gps-lust,.gps-sk,.gps-lg__k{border:1px solid CanvasText}.gps-lj__t{forced-color-adjust:none}}"
     ].join("\n");
     var st = doc.createElement("style"); st.id = STILIAUS_ID; st.textContent = css;
