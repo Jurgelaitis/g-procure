@@ -140,7 +140,9 @@
     el.setAttribute("aria-live", tipas === "klaida" ? "assertive" : "polite");
     var ic = (tipas === "eiga" || tipas === "ai") ? '<span class="gpb-ic"><span class="gpb-sukas"></span></span>'
       : '<span class="gpb-ic">' + (IKONOS[tipas] || IKONOS.tuscia) + '</span>';
-    var tekstas = o.html ? o.tekstas : esc(o.tekstas || (tipas === "nezinoma" ? ui().nezinoma : ""));
+    // Tekstas visada ekranuojamas (2026-11-21, CodeQL): parinkties `html` (tekstas be ekranavimo) nė vienas modulis nenaudojo,
+    // o per ją į puslapį galėjo patekti klaidos pranešimas su įkelto failo vardu.
+    var tekstas = esc(o.tekstas || (tipas === "nezinoma" ? ui().nezinoma : ""));
     el.innerHTML = ic + '<span class="gpb-tx">' + tekstas + '</span>' +
       (o.laikmatis || tipas === "ai" ? '<span class="gpb-laikas" data-gpb-laikas></span>' : "") +
       (o.atsaukti ? '<button type="button" class="gpb-btn" data-gpb-atsaukti>' + esc(o.atsauktiTekstas || ui().atsaukti) + '</button>' : "") +
@@ -208,7 +210,7 @@
     o = o || {};
     var valdiklis = o.valdiklis || (typeof AbortController !== "undefined" && o.atsaukiama ? new AbortController() : null);
     var signal = valdiklis ? valdiklis.signal : undefined;
-    var h = rodyk(v, { tipas: o.tipas || "eiga", tekstas: o.tekstas || "", html: o.html, procentai: o.procentai,
+    var h = rodyk(v, { tipas: o.tipas || "eiga", tekstas: o.tekstas || "", procentai: o.procentai,
                laikmatis: o.laikmatis, atsaukti: valdiklis ? function () { valdiklis.abort(); } : null });
     var el = vieta(v), manoKartas = el ? kartas(el) : 0;
     var dar = function () { return el && kartas(el) === manoKartas; };   // vieta vis dar šio veiksmo
@@ -288,7 +290,7 @@
     // automatinis saugojimas kiekvienu klavišu iki 2026-09-28 ją perpiešdavo kaskart, o ekrano skaitytuvas tą patį kartodavo.
     // Langas slenkantis (kiekvienas kvietimas jį pratęsia), tad atskiras vėlesnis veiksmas (antras paspaudimas) vėl pranešamas.
     var dabar = Date.now(), beMygtuku = function (x) { return !x || (!(x.mygtukai && x.mygtukai.length) && !x.kartoti && !x.atsaukti); };
-    if (el && !el.hidden && el._gpbO && el._gpbTipas === tipas && el._gpbTekstas === n.tekstas && !!el._gpbO.html === !!o.html
+    if (el && !el.hidden && el._gpbO && el._gpbTipas === tipas && el._gpbTekstas === n.tekstas
         && beMygtuku(o) && beMygtuku(el._gpbO) && dabar - (el._gpbLaikas || 0) < 3000) {
       el._gpbO = o; el._gpbLaikas = dabar;
       return { el: el, atnaujink: function () {}, eiga: function () {}, slepk: function () { slepk(el); } };

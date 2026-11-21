@@ -1757,6 +1757,25 @@ async function testaiBusena(){
     } finally { f.remove(); }
   });
 
+  // CodeQL 2026-11-21 (js/xss-through-exception): parinktis `html` (tekstas be ekranavimo) pašalinta - nė vienas modulis jos nenaudojo,
+  // o klaidos pranešime gali būti įkelto failo vardas („<img src=x onerror=...>.docx“)
+  await testas("Tekstas ekranuojamas visada - ir su parinktimi html (rodyk, vykdyk, juosta)", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      const blogas = 'Nepavyko perskaityti: <img src=x onerror="window.__gpbXss=1">.docx';
+      w.GP_BUSENA.rodyk("#v", { tipas: "klaida", tekstas: blogas, html: true });
+      lygu([d.querySelector("#v img"), d.querySelector("#v .gpb-tx").textContent], [null, blogas], "rodyk");
+      const p = w.GP_BUSENA.vykdyk("#v", { tekstas: blogas, html: true, veiksmas: () => new Promise(r => setTimeout(() => r("gerai"), 20)) });
+      tiesa(!d.querySelector("#v img") && d.querySelector("#v .gpb-tx").textContent === blogas, "vykdyk");
+      await p;
+      w.GP_BUSENA.juosta({ raktas: "xss", tipas: "klaida", tekstas: blogas, html: true });
+      const j = d.querySelector('[data-gpb-raktas="xss"]');
+      lygu([!!j, j && j.querySelector("img"), j && j.querySelector(".gpb-tx").textContent], [true, null, blogas], "juosta");
+      await new Promise(r => setTimeout(r, 30));
+      tiesa(!w.__gpbXss, "kodas neįvykdytas");
+    } finally { f.remove(); }
+  });
+
   await testas("Nepavykęs įkėlimas (nezinoma) niekada neatrodo kaip „duomenų nėra“ (tuscia)", async ()=>{
     const { f, w, d } = await busenosRemelis();
     try {
