@@ -19290,7 +19290,7 @@ async function testaiGrafikas1109(){
 /* Saugumo auditas 2026-11-21 (G-02): juodraščio failo žurnalo įrašas „kiek“ buvo įrašomas į 4 žingsnio HTML be patikros -
    paruoštas juodraščio failas galėjo įvykdyti svetimą kodą. Dabar atkuriami tik žinomos formos įrašai, o išvestis ekranuojama. */
 async function testaiSaugumas1121(){
-  dabartine = grupe("Saugumas: kenkėjiškas juodraščio failas (2026-11-21)");
+  dabartine = grupe("Saugumas: kenkėjiškas juodraščio failas, pavadinimas įžangoje ir lentelių nuorodų išraiškos (2026-11-21)");
   await testas("Juodraščio žurnalas: atkuriami tik žinomos formos įrašai (kiek - sveikas skaičius), kiti praleidžiami; failas su „__proto__“ prototipo neužteršia", async () => {
     await modulis(); await zingsnis2("T-AK", "LT", "prekes");
     const A = W.surinkJuodrasti();
@@ -19309,6 +19309,36 @@ async function testaiSaugumas1121(){
     W.eval("rodykRezultata([])");
     await miegok(150);
     lygu([W.__xss, D.querySelectorAll("img[onerror]").length], [undefined, 0], "kodas neįvykdytas");
+  });
+
+  // CodeQL 2026-11-21 (js/xss-through-dom): 1 žingsnio įžangos „Tęsti galima: ...“ pasekmė su pirkimo pavadinimu buvo įrašoma be ekranavimo,
+  // o pavadinimas gali ateiti iš pirkimo kortelės (CVP IS, atsarginė kopija, pirkimo bylos failas) ar juodraščio failo
+  await testas("1 žingsnio įžanga: pirkimo pavadinimas pasekmėje „Tęsti galima“ įrašomas tekstu, ne HTML", async () => {
+    await modulis();
+    const f = D.getElementById("pavadinimas"), blogas = '<img src=x onerror="__xss=2"> darbo drabužiai';
+    f.value = blogas; f.dispatchEvent(new W.Event("input", { bubbles: true }));
+    const z = W.z1Trukumai().find(x => x.tekstas === "Pirkimo pavadinimas kilmininku");
+    tiesa(z && z.pasekme.includes('<img src=x onerror="__xss=2">'), "trūkumas su pavadinimu: " + JSON.stringify(W.z1Trukumai()));
+    W.z1Ivadas();
+    const el = D.getElementById("zi1T");
+    lygu([el.querySelectorAll("img").length, e1Tx(el).includes('„<img src=x onerror="__xss=2"> darbo drabužiai pirkimas“')], [0, true], "įžanga: " + e1Tx(el).slice(0, 300));
+    await miegok(150);
+    lygu([W.__xss, D.querySelectorAll("img[onerror]").length], [undefined, 0], "kodas neįvykdytas");
+  });
+
+  // CodeQL 2026-11-21 (js/redos): „\d+\s*(?:\s+ir\s+...)“ tarpus prieš „ir“ galėjo dalyti tarp \s* ir \s+ - eilutė su daug „0  ir 0“
+  // be žodžio „lentelė“ gale tikrinta eksponentiškai ilgai (26 kartojimai - kelios sekundės, kiekvienas kitas - dvigubai ilgiau)
+  await testas("Lentelių nuorodų išraiškos (LN_LT, LN_EN): be eksponentinio grįžimo, atpažįsta tas pačias nuorodas", async () => {
+    await modulis();
+    const LT = W.eval("LN_LT"), EN = W.eval("LN_EN");
+    const visi = (re, t, g) => { re.lastIndex = 0; const o = []; let m; while ((m = re.exec(t))) o.push(m[g] + "|" + m[g + 1]); return o; };
+    lygu(visi(LT, "nurodyti 1 ir 4 lentelėse, 2, 3 arba 5 lentelėje; 7  ir  8 lentelės; 9,10 lentelė; 3.1 punkte 6 lentelės", 2),
+      ["1 ir 4| lentelėse", "2, 3 arba 5| lentelėje", "7  ir  8| lentelės", "9,10| lentelė", "6| lentelės"], "LT nuorodos");
+    lygu(visi(EN, "set out in Tables 1 and 4, Table No. 2, Tables 2, 3 or 5. Table 5.1 and Table 6x", 2),
+      ["Tables |1 and 4", "Table No. |2", "Tables |2, 3 or 5"], "EN nuorodos");
+    const lt = "0" + "  ir 0".repeat(26) + "!", en = "Table 0" + "  or 0".repeat(26) + "x";
+    const a = performance.now(); visi(LT, lt, 2); visi(EN, en, 2); const ms = performance.now() - a;
+    tiesa(ms < 500, "26 kartojimai be „lentelė“ gale tikrinami " + Math.round(ms) + " ms");
   });
 }
 
