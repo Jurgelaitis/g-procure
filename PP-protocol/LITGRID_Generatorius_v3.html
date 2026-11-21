@@ -1401,13 +1401,26 @@ function exportData() {
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   saveAs(blob, 'LITGRID_Pirkimai_' + GP_WORKDAYS.siandien() + '.json');
 }
+/* Importuojamo pirkimo protokolų žymos (2026-11-21, saugumo auditas G-02): protokolo data iš failo buvo rodoma neekranuota - dabar
+   ji ekranuojama ir rodant, o importuojant data turi būti tekstas iki 40 ženklų, „done“ - loginė reikšmė; kitokios reikšmės pašalinamos. */
+function importuojamasPirkimas(pk) {
+  const pr = pk && pk.protocols;
+  if (pr && typeof pr === 'object' && !Array.isArray(pr)) Object.keys(pr).forEach(id => {
+    const x = pr[id];
+    if (!x || typeof x !== 'object' || Array.isArray(x)) { delete pr[id]; return; }
+    if (x.date != null && (typeof x.date !== 'string' || x.date.length > 40)) delete x.date;
+    if (x.done != null) x.done = x.done === true;
+  });
+  else if (pr != null) delete pk.protocols;
+  return pk;
+}
 function importData(evt) {
   const f = evt.target.files[0];
   if (!f) return;
   const r = new FileReader();
   r.onload = e => {
     let d;
-    try { d = JSON.parse(e.target.result); } catch { toast('Klaida importuojant failą: tai ne JSON', 'err'); return; }
+    try { d = GP_SAUGYKLA.json(e.target.result); } catch { toast('Klaida importuojant failą: tai ne JSON', 'err'); return; }
     // Įkeliami tik pirkimai (objektai su būdu); kiti failo raktai praleidžiami ir įvardijami - pvz., kopija, kurioje šalia pirkimų yra
     // anksčiau per klaidą įkelto failo raktai. Iki 2026-09-28 bet kokio JSON raktai būdavo įrašomi kaip pirkimai, o po perkrovimo
     // pirkimų sąrašas lūždavo
@@ -1420,7 +1433,7 @@ function importData(evt) {
     }
     try {
       const store = loadStore();
-      geri.forEach(k => { store[k] = d[k]; });
+      geri.forEach(k => { store[k] = importuojamasPirkimas(d[k]); });
       saveStore(store);
       if (blogi.length) toast('Importuota pirkimų: ' + geri.length + '. Praleisti ne pirkimai (' + blogi.length + '): ' + blogi.slice(0, 5).join(', ') + (blogi.length > 5 ? ', ...' : ''), 'warn');
       else toast('Duomenys importuoti sėkmingai', 'ok');
@@ -1919,7 +1932,7 @@ function renderDetail(id) {
       const cls = isDone ? 'done' : 'active';
       const icon = isDone ? '✓' : (i+1).toString();
       const iconCls = isDone ? 'done' : 'active';
-      const meta = (isDone ? `Sugeneruota: ${(pk.protocols||{})[p.id]?.date||''}` : p.desc) + (p.optional ? ' · neprivalomas' : '');
+      const meta = (isDone ? `Sugeneruota: ${hx((pk.protocols||{})[p.id]?.date||'')}` : p.desc) + (p.optional ? ' · neprivalomas' : '');
       const action = isDone ? '<span class="proto-action done">✓ Atlikta</span>' : '<span class="proto-action active">Generuoti →</span>';
       return `<div class="proto-item ${cls}" onclick="openProtocol(${jsa(pk.id)},'${p.id}')">
         <div class="proto-status ${iconCls}">${icon}</div>
@@ -4779,7 +4792,7 @@ function renderProtocolDocuments(pkId, protoId){
     <div style="font-size:24px;flex-shrink:0">${isDone ? '✅' : '📄'}</div>
     <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:14px;color:var(--epso-graphite)">Protokolas Nr. ${protoInfo.num}: ${protoInfo.name}</div>
-      <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:2px">${isDone ? '✓ Sukurta '+(proto.date||'') : 'Bus sukurtas iš formos duomenų'}</div>
+      <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:2px">${isDone ? '✓ Sukurta '+hx(proto.date||'') : 'Bus sukurtas iš formos duomenų'}</div>
     </div>
     ${isDone ? '<button class="btn btn-secondary btn-sm" onclick="generateCurrentProtocol()" title="Sukurti dar kartą" aria-label="Sukurti dar kartą">↻</button>' : ''}
   </div>`;

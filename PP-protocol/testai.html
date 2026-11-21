@@ -1375,6 +1375,30 @@ function diBeTapatybiu(t, kur){
   DI_SUMOS.forEach(x => tiesa(glaustai.indexOf(x) < 0, kur + ": rasta suma " + x + "\n" + t));
   tiesa(!/€|(^|[^A-Za-z])(EUR|Eur|eur)([^A-Za-z]|$)/.test(t), kur + ": valiuta užklausoje\n" + t);
 }
+/* Saugumo auditas 2026-11-21 (G-02): protokolo data iš importuoto pirkimų failo buvo įrašoma į puslapį neekranuota -
+   atvėrus importuotą pirkimą buvo vykdomas svetimas kodas. */
+async function testaiSaugumas1121(){
+  grupe("Saugumas: kenkėjiškas pirkimų failas (2026-11-21)");
+  await testas("Importuoto pirkimo protokolo data - tekstas, ne HTML; netinkama data ir „done“ sutvarkomi; „__proto__“ raktai pašalinami", async () => {
+    await modulis();
+    localStorage.setItem("litgrid_procurements_v2", JSON.stringify({}));
+    const X = '<img src=x onerror=__xss=1>';   // iki 40 ženklų - tokia data importuojant paliekama, todėl tikrinamas ekranavimas
+    const pk = Object.assign(pirkimas("atviras_tarptautinis"), { id: "TEST-SAUG-1", name: "Saugumo testas",
+      protocols: { A1: { done: true, date: X }, A2: { done: "taip", date: { x: 1 } }, A3: "ne objektas", A4: { done: true, date: "x".repeat(41) } } });
+    // „__proto__“ - ranka į JSON tekstą (objekto literale tai būtų prototipas)
+    const tekstas = JSON.stringify({ "TEST-SAUG-1": pk }).replace(/^\{/, '{"__proto__":{"type":"x","pavojus":1},');
+    const tikrasToast = W.toast; W.toast = () => {};
+    try { W.importData({ target: { files: [new W.File([tekstas], "kopija.json")] } }); await lauk(250); } finally { W.toast = tikrasToast; }
+    const p = W.getProcurement("TEST-SAUG-1");
+    lygu([!!p, p && p.protocols.A1.date, p && "date" in p.protocols.A2, p && p.protocols.A2.done, p && "A3" in p.protocols, p && "date" in p.protocols.A4], [true, X, false, false, false, false], "importuotas pirkimas");
+    lygu([W.Object.prototype.hasOwnProperty("pavojus"), Object.keys(JSON.parse(localStorage.getItem("litgrid_procurements_v2")))], [false, ["TEST-SAUG-1"]], "prototipas ir raktai");
+    W.openProcurement("TEST-SAUG-1"); await lauk(200);
+    W.renderProtocolDocuments("TEST-SAUG-1", "A1"); await lauk(100);
+    lygu([W.__xss, D.querySelectorAll("img[onerror]").length], [undefined, 0], "kodas neįvykdytas");
+    tiesa(D.body.textContent.includes("Sugeneruota: " + X) || D.body.textContent.includes("Sukurta " + X), "data rodoma kaip tekstas");
+  });
+}
+
 async function testaiPvm(){
   grupe("PVM tarifas - iš shared/thresholds.js (2026-10-14; iki tol modulis skaičiavo su įrašytu tarifu)");
   await testas("Modulyje savo tarifo nėra; naujo pirkimo vedlys, dalių eilutės ir Excel importas - pagal bendrą tarifą (ir jį pakeitus); importo šablono pavyzdys ir užuomina - iš to paties tarifo; tarifo neįkėlus suma su PVM neskaičiuojama (laukas tuščias, ne ankstesnė reikšmė)", async () => {
@@ -2520,6 +2544,7 @@ async function testaiPatikra1025b(){
     await testaiPatikra1025b();
     await testaiPatikra1025c();
     await testaiLygiaverciai1111();
+    await testaiSaugumas1121();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

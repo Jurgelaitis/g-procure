@@ -55,6 +55,19 @@
     ["gprocure.sutikimas",       "-",               { lt: "Jūsų sprendimas dėl slapukų", en: "Your cookie decision" }]
   ];
 
+  /* Ar raktas - G-Procure įrankio (2026-11-21, saugumo auditas G-02): atkuriami tik žinomi raktai. Iki tol paruošta „atsarginė
+     kopija“ galėjo įrašyti bet kurį šios svetainės raktą ir taip pasodinti kenkėjišką reikšmę bet kuriam įrankiui. Visi kode
+     naudojami raktai yra ZENKLAI sąraše (sargas shared/testai.html); naujas įrankio raktas - pirma į ZENKLAI. */
+  function zinomas(raktas) {
+    var r = String(raktas);
+    if (r === "__proto__" || r === "constructor" || r === "prototype") return false;
+    for (var i = 0; i < ZENKLAI.length; i++) if (r.indexOf(ZENKLAI[i][0]) === 0) return true;
+    return false;
+  }
+  function saugusJson(tekstas) {
+    return JSON.parse(tekstas, function (k, v) { return k === "__proto__" || k === "constructor" || k === "prototype" ? undefined : v; });
+  }
+
   function zenklas(raktas, lang) {
     var l = lang === "en" ? "en" : "lt";
     /* Neperskaitomo įrašo kopija (shared/saugykla.js): „<raktas>.sugadinta-<data>“. */
@@ -111,7 +124,7 @@
   /* Failo tekstas -> { ok: true, obj } arba { ok: false, priezastis: "json" | "formatas" | "reiksmes", raktai } */
   function patikrinti(tekstas) {
     var obj;
-    try { obj = JSON.parse(tekstas); } catch (e) { return { ok: false, priezastis: "json" }; }
+    try { obj = saugusJson(tekstas); } catch (e) { return { ok: false, priezastis: "json" }; }
     if (!obj || obj.app !== APP || !obj.items || typeof obj.items !== "object" || Array.isArray(obj.items)) {
       return { ok: false, priezastis: "formatas" };
     }
@@ -138,7 +151,7 @@
      Grąžina [{ id, pav }] arba null (ne įrašų sąrašas). */
   function irasuSarasas(tekstas) {
     var v;
-    try { v = JSON.parse(tekstas); } catch (e) { return null; }
+    try { v = saugusJson(tekstas); } catch (e) { return null; }
     var sar = null, rakt = false;
     if (Array.isArray(v)) sar = v;
     else if (v && typeof v === "object") {
@@ -169,7 +182,7 @@
      sandaros (tada - pakeičiama visa, kaip kitų rūšių). */
   function kortelesJungti(dab, fail) {
     var a, b;
-    try { a = JSON.parse(dab); b = JSON.parse(fail); } catch (e) { return null; }
+    try { a = saugusJson(dab); b = saugusJson(fail); } catch (e) { return null; }
     var ok = function (v) { return v && typeof v === "object" && !Array.isArray(v) && Array.isArray(v.korteles); };
     if (!ok(a) || !ok(b)) return null;
     var id = function (x) { return x && typeof x === "object" && x.id != null && String(x.id) ? String(x.id) : null; };
@@ -200,6 +213,7 @@
     var st = saugykla || global.localStorage;
     return Object.keys(obj.items).map(function (raktas) {
       if (PRALEISTI[raktas]) return { raktas: raktas, busena: "praleidziamas", prarandami: [] };
+      if (!zinomas(raktas)) return { raktas: raktas, busena: "nezinomas", prarandami: [] };
       var dab = null;
       try { dab = st.getItem(raktas); } catch (e) {}
       if (dab === null) return { raktas: raktas, busena: "naujas", prarandami: [] };
@@ -221,6 +235,7 @@
     var st = saugykla || global.localStorage;
     var raktai = Object.keys(obj.items), n = 0;
     for (var i = 0; i < raktai.length; i++) {
+      if (PRALEISTI[raktai[i]] || !zinomas(raktai[i])) continue;
       try { if (st.getItem(raktai[i]) !== null) n++; } catch (e) {}
     }
     return n;
@@ -230,9 +245,10 @@
      (pvz., pilna saugykla): puslapis pasako, KURIE duomenys neatkurti, ne tik kiek. */
   function atkurti(obj, saugykla) {
     var st = saugykla || global.localStorage;
-    var raktai = Object.keys(obj.items), ok = 0, nepavyko = [], praleista = [];
+    var raktai = Object.keys(obj.items), ok = 0, nepavyko = [], praleista = [], nezinomi = [];
     for (var i = 0; i < raktai.length; i++) {
       if (PRALEISTI[raktai[i]]) { praleista.push(raktai[i]); continue; }
+      if (!zinomas(raktai[i])) { nezinomi.push(raktai[i]); continue; }
       var v = obj.items[raktai[i]];
       if (JUNGIAMI[raktai[i]]) {
         var dab = null;
@@ -243,7 +259,7 @@
       try { st.setItem(raktai[i], v); ok++; }
       catch (e) { nepavyko.push(raktai[i]); }
     }
-    return { ok: ok, blogai: nepavyko.length, nepavyko: nepavyko, praleista: praleista };
+    return { ok: ok, blogai: nepavyko.length, nepavyko: nepavyko, praleista: praleista, nezinomi: nezinomi };
   }
 
   function failoVardas(data) {
@@ -255,7 +271,7 @@
   global.GP_BACKUP = {
     version: "1.0", APP: APP, FORMATO_VERSIJA: VERSION,
     zenklas: zenklas, irasai: irasai, baitai: baitai,
-    surinkti: surinkti, patikrinti: patikrinti, perrasomi: perrasomi, palyginimas: palyginimas, irasuSarasas: irasuSarasas, kortelesJungti: kortelesJungti,
+    surinkti: surinkti, zinomas: zinomas, patikrinti: patikrinti, perrasomi: perrasomi, palyginimas: palyginimas, irasuSarasas: irasuSarasas, kortelesJungti: kortelesJungti,
     atkurti: atkurti, failoVardas: failoVardas,
     /* Raktų sąrašas (kopija) - slapukų politikos lentelei (slapukai.html, 2026-10-16) */
     ZENKLAI: ZENKLAI.map(function (z) { return [z[0], z[1], { lt: z[2].lt, en: z[2].en }]; })

@@ -64,6 +64,16 @@
     } catch (e) { return null; }
   }
 
+  /* Saugus JSON skaitymas (2026-11-21, saugumo auditas G-02): JSON.parse raktą „__proto__“ padaro tikra objekto savybe, o
+     Object.assign ar st[k] = ... su tokiu raktu pakeičia objekto (ar net visų objektų) prototipą - per importuojamą failą ar
+     atsarginę kopiją tai virsdavo svetimo kodo vykdymu. Raktai __proto__, constructor ir prototype pašalinami bet kuriame gylyje;
+     G-Procure duomenyse tokių raktų nėra. Importuojamų failų ir saugyklos JSON skaitykite tik per šią funkciją. */
+  var PAVOJINGI_RAKTAI = ["__proto__", "constructor", "prototype"];   // masyvas: objekto literale „__proto__“ būtų prototipas, ne raktas
+  function pavojingas(k) { return k === "__proto__" || k === "constructor" || k === "prototype"; }
+  function json(tekstas) {
+    return JSON.parse(tekstas, function (k, v) { return pavojingas(k) ? undefined : v; });
+  }
+
   /* o: { saugykla, tikrink(reiksme) -> true | "priežastis" } - tikrink leidžia atmesti
      ne tos formos JSON (pvz., tikėtasi masyvo) kaip sugadintą, o ne kaip tuščią. */
   function skaityk(raktas, o) {
@@ -76,7 +86,7 @@
     if (o.kitasSkirtukas && !o.saugykla) isimink(raktas, zalia, o.kitasSkirtukas);
     if (zalia === null || zalia === undefined) return { busena: "nera" };
     var reiksme;
-    try { reiksme = JSON.parse(zalia); }
+    try { reiksme = json(zalia); }
     catch (e) {
       return { busena: "sugadinta", kodas: "json", zalia: zalia, klaida: "įrašas neperskaitomas (" + ((e && e.message) || "JSON") + ")",
                kopija: kopija(s, raktas, zalia) };
@@ -224,5 +234,5 @@
     return "";
   }
 
-  global.GP_SAUGYKLA = { skaityk: skaityk, rasyk: rasyk, pranesimas: pranesimas, prisimink: prisimink, atnaujinimas: atnaujinimas, ZYME: ZYME };
+  global.GP_SAUGYKLA = { json: json, pavojingas: pavojingas, PAVOJINGI_RAKTAI: PAVOJINGI_RAKTAI, skaityk: skaityk, rasyk: rasyk, pranesimas: pranesimas, prisimink: prisimink, atnaujinimas: atnaujinimas, ZYME: ZYME };
 })(typeof window !== "undefined" ? window : this);

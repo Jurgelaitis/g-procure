@@ -303,31 +303,62 @@ async function testaiKopija(){
         await ikelk({ app: "G-Procure", version: 1, createdAt: "2026-09-28T10:00:00Z", items: { "litgrid_procurements_v2": "{}", "litgrid_pranesimai_audit_v1": "[]", "zz_kita": "1" } });
         d.getElementById("btn-atkurti").click(); await lauk(100);
         const t = d.getElementById("perziura").textContent;
-        tiesa(/Atkurta: 1 įrašas, nepavyko: 2/.test(t) && t.includes("Audito žurnalas (PP-protocol)") && t.includes("Kiti duomenys") && !t.includes("Pirkimai ir protokolai"), "žinutė: " + t);
+        // 2026-11-21: ne G-Procure raktas („zz_kita“) nebeįrašomas - praleidžiamas ir suskaičiuojamas (saugumo auditas G-02)
+        tiesa(/Atkurta: 1 įrašas, nepavyko: 1/.test(t) && t.includes("Audito žurnalas (PP-protocol)") && !t.includes("Kiti duomenys") && !t.includes("Pirkimai ir protokolai")
+          && t.includes("Praleista ne G-Procure įrankių įrašų: 1"), "žinutė: " + t);
       } finally { w.GP_BACKUP.atkurti = tikrasAtkurti; w.confirm = tikrasConfirm; }
       await lauk(100);
       lygu(window.__gpXss.length, 0, "kodas neįvykdytas");
     } finally { f.remove(); delete window.__gpXss; }
   });
 
-  await testas("Perrašomų skaičius - tik tie raktai, kurie jau yra", async ()=>{
-    const st = netikraSaugykla({ a: "sena", c: "sena" });
-    lygu(GP_BACKUP.perrasomi({ app: "G-Procure", items: { a: "nauja", b: "nauja" } }, st), 1, "perrašomų");
+  await testas("Perrašomų skaičius - tik tie G-Procure raktai, kurie jau yra", async ()=>{
+    const st = netikraSaugykla({ litgrid_cba: "sena", pp_carbon_data: "sena", zz_kita: "sena" });
+    lygu(GP_BACKUP.perrasomi({ app: "G-Procure", items: { litgrid_cba: "nauja", epsog_mpp_v1: "nauja", zz_kita: "nauja" } }, st), 1, "perrašomų");
   });
 
   await testas("Atkuriama failo reikšmė, kiti raktai nepaliečiami", async ()=>{
-    const st = netikraSaugykla({ a: "sena", c: "nesusijes" });
-    const r = GP_BACKUP.atkurti({ app: "G-Procure", items: { a: "nauja", b: "nauja" } }, st);
+    const st = netikraSaugykla({ litgrid_cba: "sena", pp_carbon_data: "nesusijes" });
+    const r = GP_BACKUP.atkurti({ app: "G-Procure", items: { litgrid_cba: "nauja", epsog_mpp_v1: "nauja" } }, st);
     lygu([r.ok, r.blogai], [2, 0], "rezultatas");
-    lygu(st.getItem("a"), "nauja", "perrašyta");
-    lygu(st.getItem("b"), "nauja", "pridėta");
-    lygu(st.getItem("c"), "nesusijes", "kitas raktas nepaliestas");
+    lygu(st.getItem("litgrid_cba"), "nauja", "perrašyta");
+    lygu(st.getItem("epsog_mpp_v1"), "nauja", "pridėta");
+    lygu(st.getItem("pp_carbon_data"), "nesusijes", "kitas raktas nepaliestas");
   });
 
   await testas("Pilna saugykla praneša apie nepavykusius įrašus - ir kuriuos", async ()=>{
     const st = netikraSaugykla({}, true);
-    const r = GP_BACKUP.atkurti({ app: "G-Procure", items: { a: "1", b: "2" } }, st);
-    lygu([r.ok, r.blogai, r.nepavyko], [0, 2, ["a", "b"]], "rezultatas");
+    const r = GP_BACKUP.atkurti({ app: "G-Procure", items: { litgrid_cba: "1", epsog_mpp_v1: "2" } }, st);
+    lygu([r.ok, r.blogai, r.nepavyko], [0, 2, ["litgrid_cba", "epsog_mpp_v1"]], "rezultatas");
+  });
+
+  /* Saugumo auditas 2026-11-21 (G-02): paruošta „atsarginė kopija“ galėjo įrašyti bet kurį šios svetainės raktą ir taip pasodinti
+     kenkėjišką reikšmę bet kuriam įrankiui. Dabar atkuriami tik G-Procure įrankių raktai, o failo JSON skaitomas be prototipo raktų. */
+  await testas("Saugumas: atkuriami tik G-Procure raktai, nežinomi ir „__proto__“ praleidžiami ir įvardijami; palyginime - „nezinomas“", async ()=>{
+    const st = netikraSaugykla({});
+    const failas = '{"app":"G-Procure","version":1,"items":{"litgrid_cba":"{}","svetimas":"x","__proto__":"y","constructor":"z","gprocure.salygos.juodrastis.abc":"{}"}}';
+    const p = GP_BACKUP.patikrinti(failas);
+    tiesa(p.ok, "failas priimtas");
+    tiesa(!Object.prototype.hasOwnProperty.call(p.obj.items, "__proto__") && !Object.prototype.hasOwnProperty.call(p.obj.items, "constructor"), "prototipo raktai pašalinti skaitant");
+    const pal = GP_BACKUP.palyginimas(p.obj, st).reduce((a, x) => (a[x.raktas] = x.busena, a), {});
+    lygu(pal, { litgrid_cba: "naujas", svetimas: "nezinomas", "gprocure.salygos.juodrastis.abc": "naujas" }, "palyginimas");
+    const r = GP_BACKUP.atkurti(p.obj, st);
+    lygu([r.ok, r.nezinomi], [2, ["svetimas"]], "atkurti");
+    lygu([st.getItem("svetimas"), st.getItem("litgrid_cba")], [null, "{}"], "svetimas neįrašytas");
+    lygu([GP_BACKUP.zinomas("ppesg.tiekejai"), GP_BACKUP.zinomas("ppesg"), GP_BACKUP.zinomas("__proto__"), GP_BACKUP.zinomas("litgrid_cba.sugadinta-2026-11-21")], [true, false, false, true], "zinomas()");
+    lygu(Object.prototype.hasOwnProperty.call({}, "y"), false, "prototipas neužterštas");
+  });
+
+  await testas("Saugumas (sargas): kiekvienas kode įrašomas naršyklės saugyklos raktas yra atsarginės kopijos sąraše - kitaip atkuriant jis būtų praleistas", async ()=>{
+    const RE = /(?:localStorage\.(?:setItem|getItem)|GP_SAUGYKLA\.(?:rasyk|skaityk))\(\s*(['"])([^'"]+)\1/g, RE2 = /\b(?:[A-Z_]*(?:STORAGE_KEY|STORE_KEY|USER_KEY|LS_KEY)|KALBOS_RAKTAS|PERZIURU_RAKTAS|KONTEKSTO_RAKTAS|PROTOKOLO_RAKTAS|RAKTAS)\s*[:=]\s*(['"])([a-z][\w.\-]{3,})\1/g;
+    const failai = kodoFailai().concat(["../PP-salygos/vidaus-riba.js", "../PP-carbon/esg-export.js"]), blogi = [];
+    let rasta = 0;
+    for (const f of failai) {
+      let t; try { t = await (await fetch(f + "?ci=" + Date.now())).text(); } catch (e) { continue; }
+      for (const re of [RE, RE2]) { re.lastIndex = 0; let m; while ((m = re.exec(t))) { rasta++; if (!GP_BACKUP.zinomas(m[2]) && m[2] !== "gprocure.salygos.visiKlausimai") blogi.push(f + ": " + m[2]); } }
+    }
+    tiesa(rasta >= 15, "rasta raktų: " + rasta);
+    lygu(blogi, [], "raktai ne ZENKLAI sąraše");
   });
 
   await testas("Failo vardas su data", async ()=>{
@@ -2054,6 +2085,20 @@ async function testaiSaugykla(){
       await lauk(30);
       tiesa(/perskaityti nepavyko/.test(el().textContent) && /„Planas“/.test(el().textContent), "po kalbos keitimo: " + el().textContent);
     } finally { f.remove(); }
+  });
+
+  // Saugumo auditas 2026-11-21 (G-02): JSON.parse raktą „__proto__“ padaro savybe, o Object.assign ar st[k] = ... su juo keičia prototipą
+  await testas("Saugumas: GP_SAUGYKLA.json ir skaityk() pašalina „__proto__“, „constructor“ ir „prototype“ raktus bet kuriame gylyje, kitos reikšmės nepakinta", async ()=>{
+    const t = '{"a":1,"__proto__":{"x":"<img>"},"b":{"constructor":{"prototype":{"y":1}},"c":[{"__proto__":{"z":1},"d":"constructor"}]},"prototype":2}';
+    const v = GP_SAUGYKLA.json(t);
+    lygu(JSON.stringify(v), '{"a":1,"b":{"c":[{"d":"constructor"}]}}', "išvalyta");
+    const tusti = [v, v.b, v.b.c[0]].every(o => !["__proto__", "constructor", "prototype"].some(k => Object.prototype.hasOwnProperty.call(o, k)));
+    tiesa(tusti, "nėra pavojingų savybių");
+    const st = netikraSaugykla({ k: t });
+    const r = GP_SAUGYKLA.skaityk("k", { saugykla: st });
+    lygu([r.busena, JSON.stringify(r.reiksme)], ["yra", '{"a":1,"b":{"c":[{"d":"constructor"}]}}'], "skaityk()");
+    lygu([Object.prototype.hasOwnProperty.call({}, "x"), ({}).x], [false, undefined], "prototipas neužterštas");
+    lygu([GP_SAUGYKLA.pavojingas("__proto__"), GP_SAUGYKLA.pavojingas("constructor"), GP_SAUGYKLA.pavojingas("prototype"), GP_SAUGYKLA.pavojingas("proto")], [true, true, true, false], "pavojingas()");
   });
 }
 
@@ -10162,18 +10207,19 @@ async function testaiKortelesPatikra1106(){
           "neperskaitomo įrašo kopija, tekstas ir geras JSON - priimami");
     lygu(B.patikrinti(JSON.stringify({ app: "G-Procure", version: 7, items: {} })), { ok: false, priezastis: "versija", versija: 7 }, "naujesnis formatas");
     const st = netikraSaugykla({ "gprocure.korteles": KS(["a", "b", "c"]), "litgrid_procurements_v2": JSON.stringify({ "VPP-1": { name: "X" }, "VPP-2": { name: "Y" } }),
-      "same": "1", "gprocure.sutikimas": '{"x":1}' });
+      "litgrid_cba": "1", "gprocure.sutikimas": '{"x":1}' });
+    // 2026-11-21: atkuriami tik G-Procure įrankių raktai (saugumo auditas) - todėl ir šiame teste tikri raktai
     const obj = { app: "G-Procure", version: 1, items: { "gprocure.korteles": KS(["a", "b"]), "litgrid_procurements_v2": JSON.stringify({ "VPP-1": { name: "X" } }),
-      "same": "1", "naujas": "z", "gprocure.sutikimas": '{"y":1}' } };
+      "litgrid_cba": "1", "epsog_mpp_v1": "z", "gprocure.sutikimas": '{"y":1}' } };
     const pal = B.palyginimas(obj, st), p = k => pal.find(x => x.raktas === k);
     // Kortelės sujungiamos pagal id (2026-11-06, naudotojo sprendimas): tik naršyklėje esanti „c“ lieka
     const j = p("gprocure.korteles").jungimas;
     lygu([p("gprocure.korteles").busena, p("gprocure.korteles").prarandami, j.lieka, j.pridedama, j.paliekama.map(x => x.id)], ["jungiama", [], [{ id: "c", pav: "Pirkimas c" }], [], ["a", "b"]], "kortelės");
     lygu(p("litgrid_procurements_v2").prarandami, [{ id: "VPP-2", pav: "Y" }], "objektas-žemėlapis - pagal raktą");
-    lygu([p("same").busena, p("naujas").busena, p("gprocure.sutikimas").busena], ["tas pats", "naujas", "praleidziamas"]);
+    lygu([p("litgrid_cba").busena, p("epsog_mpp_v1").busena, p("gprocure.sutikimas").busena], ["tas pats", "naujas", "praleidziamas"]);
     lygu([B.irasuSarasas('{"schema":1,"uztikrinimoRiba":5}'), B.irasuSarasas("tekstas"), B.irasuSarasas('[{"x":1}]')], [null, null, null], "ne įrašų sąrašai");
     const r = B.atkurti(obj, st);
-    lygu([r.ok, r.praleista, st.getItem("gprocure.sutikimas"), st.getItem("naujas")], [4, ["gprocure.sutikimas"], '{"x":1}', "z"], "sutikimas lieka šios naršyklės");
+    lygu([r.ok, r.praleista, st.getItem("gprocure.sutikimas"), st.getItem("epsog_mpp_v1")], [4, ["gprocure.sutikimas"], '{"x":1}', "z"], "sutikimas lieka šios naršyklės");
     lygu(JSON.parse(st.getItem("gprocure.korteles")).korteles.map(x => x.id), ["a", "b", "c"], "atkūrus - kortelė „c“ nedingo");
     // Sujungimas: vėliau keista versija lieka, tik faile esanti pridedama, nežinomos formos įrašai neprarandami, schema - didesnė
     const nar = JSON.stringify({ schema: 1, korteles: [{ id: "a", pavadinimas: "A naršyklė", atnaujinta: "2026-11-05T10:00:00Z" }, { id: "b", pavadinimas: "B naršyklė", atnaujinta: "2026-11-06T10:00:00Z" }, "nežinomas"] });

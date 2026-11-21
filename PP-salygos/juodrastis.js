@@ -107,7 +107,7 @@
   }
   function isFailo(tekstas) {
     var j;
-    try { j = JSON.parse(tekstas); } catch (e) { return { ok: false, klaida: "failas nėra JSON" }; }
+    try { j = global.GP_SAUGYKLA && global.GP_SAUGYKLA.json ? global.GP_SAUGYKLA.json(tekstas) : JSON.parse(tekstas); } catch (e) { return { ok: false, klaida: "failas nėra JSON" }; }
     if (!j || j.tipas !== TIPAS) return { ok: false, klaida: "tai ne pirkimo sąlygų juodraščio failas" };
     if (j.schema !== SCHEMA) return { ok: false, klaida: "failas parengtas kita įrankio versija (formatas " + esc(j.schema) + ")" };
     var t = tikrink(j.juodrastis);

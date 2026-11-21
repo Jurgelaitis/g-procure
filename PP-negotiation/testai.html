@@ -1684,6 +1684,34 @@ async function testaiPatikra1027(){
   });
 }
 
+/* Saugumo auditas 2026-11-21 (G-02): projekto JSON su raktu „__proto__“ per suNumatytosiomis užteršdavo Object.prototype,
+   o riskPill įrašydavo užteršto prototipo reikšmę į HTML - atvėrus failą buvo vykdomas svetimas kodas. */
+async function testaiSaugumas1121(){
+  grupe("Saugumas: kenkėjiškas projekto failas (2026-11-21)");
+  await testas("Projekto failas su „__proto__“ ir „constructor“ - prototipas neužterštas, kodas nevykdomas, nežinomi laukai neperkeliami", async () => {
+    await modulis();
+    const X = '<img src=x onerror="window.__xss=(window.__xss||0)+1">';
+    // JSON tekstas rašomas ranka: objekto literale „__proto__“ būtų prototipas, ne raktas
+    const t = '{"project":{"name":"Testas","__proto__":{"pavojus":1}},"suppliers":[{"id":"a","name":"Alfa"}],'
+      + '"__proto__":{"":["pill--neutral",' + JSON.stringify(X) + '],"pavojus":1},"constructor":{"prototype":{"pavojus":1}},"svetimas":{"x":1}}';
+    const ok = await new Promise(res => W.eval("storage").importJSON(new W.File([t], "projektas.json"), res));
+    tiesa(ok, "projektas neatidarytas");
+    W.eval("render.all()");
+    for (const v of ["dashboard", "suppliers", "strategy"]) { W.go(v); await lauk(120); }
+    lygu([W.Object.prototype.hasOwnProperty(""), W.Object.prototype.hasOwnProperty("pavojus"), W.__xss, D.querySelectorAll("img[onerror]").length],
+      [false, false, undefined, 0], "prototipas ir kodas");
+    const st = S();
+    lygu([Object.prototype.hasOwnProperty.call(st, "svetimas"), st.project.name, W.Object.getPrototypeOf(st.project) === W.Object.prototype], [false, "Testas", true], "būsena");
+  });
+  await testas("riskPill: užteršto prototipo reikšmė nenaudojama (antra gynybos linija)", async () => {
+    await modulis();
+    W.Object.prototype[""] = ["pill--neutral", "<b>x</b>"];
+    try { lygu(W.eval("riskPill('')").includes("<b>"), false, "žyma iš prototipo"); }
+    finally { delete W.Object.prototype[""]; }
+    tiesa(/pill--error/.test(W.eval("riskPill('high')")), "žinoma reikšmė");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1698,6 +1726,7 @@ async function testaiPatikra1027(){
     await testaiKalba();
     await testaiDiSkaitymas();
     await testaiPatikra1027();
+    await testaiSaugumas1121();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
