@@ -1634,6 +1634,10 @@ _AR_POROS = [
     ('word/people.xml', _re.compile(rb'<w15:presenceInfo\b[^>]*/>'), b''),
     ('docProps/core.xml', _re.compile(rb'<dc:creator>[^<]+</dc:creator>'), b'<dc:creator></dc:creator>'),
     ('docProps/core.xml', _re.compile(rb'<cp:lastModifiedBy>[^<]+</cp:lastModifiedBy>'), b'<cp:lastModifiedBy></cp:lastModifiedBy>'),
+    # 2026-11-21 (saugumo auditas): ND LT/EN SPS „Rengė / Prepared by:“ Word sąrašo laukas turėjo LITGRID darbuotojų vardus ir mobiliųjų
+    # telefonų numerius (w:listItem). Generatorius šį lauką iš dokumento pašalina, bet viešame šablono faile jie buvo - sąrašo įrašai su
+    # telefonu pašalinami (lieka „Choose an item.“); pastraipos tekstas ir formų rodyklė nepakinta.
+    ('word/document.xml', _re.compile(rb'<w:listItem\b[^>]*(?:tel\.|\+370)[^>]*/>'), b''),
 ]
 
 
