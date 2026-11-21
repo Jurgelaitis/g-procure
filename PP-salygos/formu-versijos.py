@@ -22,8 +22,8 @@ TPL = REPO / 'PP-salygos' / 'templates'
 OUT = REPO / 'PP-salygos' / 'zemelapiai' / 'formu-versijos.json'
 W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
 VERSIJOS = [
-    ('LITGRID 2026-08-07', 'ca25cd4', 'oficialios LITGRID formos (2026-08-07 įsakymas Nr. 26IS121) prieš modulio redakcinius taisymus'),
-    ('iki 2026-08-07', 'ca25cd4^', 'ankstesnės LITGRID formos (galiojo iki 2026-08-07)'),
+    ('LITGRID 2026-08-07', 'bfd750c', 'oficialios LITGRID formos (2026-08-07 įsakymas Nr. 26IS121) prieš modulio redakcinius taisymus'),
+    ('iki 2026-08-07', 'bfd750c^', 'ankstesnės LITGRID formos (galiojo iki 2026-08-07)'),
 ]
 
 def tekstai(b):

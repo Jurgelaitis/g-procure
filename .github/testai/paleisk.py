@@ -16,7 +16,7 @@ Rinkinio dalys (2026-10-23): testai.html su <meta name="gp-testu-dalys" content=
 su ?dalis=k/n - kiekviena dalis atskira švaria naršykle (shared/testu-dalys.js parenka jos grupes), rezultatas - eilutė dalies.
 Grupių trukmė (2026-11-07): rinkiniai su GP_TESTU_DALYS.vykdyk - žurnale lėčiausios grupės (eilutė „~“).
 GP_TESTU_LYGIAGRECIAI=<n> - vienu metu iki n dalių ar rinkinių (vietoje numatyta 1). GitHub Actions - 2 (2026-10-24: eilė priartėjo
-prie bendros 2400 s ribos ir 4cc3e44 paleidimas ją viršijo; vykdyklėje 4 branduoliai). 2026-11-03 - 3: su dviem 478a456 ir 4db1303 viršijo 2580 s (PP-salygos 3 dalis pradėta po 1120 s, viešos saugyklos vykdyklėje - 4 branduoliai). Rinkiniai iš VIENI kartu su kitais sulėtėja ar
+prie bendros 2400 s ribos ir 317775e paleidimas ją viršijo; vykdyklėje 4 branduoliai). 2026-11-03 - 3: su dviem fe39746 ir ed39401 viršijo 2580 s (PP-salygos 3 dalis pradėta po 1120 s, viešos saugyklos vykdyklėje - 4 branduoliai). Rinkiniai iš VIENI kartu su kitais sulėtėja ar
 užstringa (PP-tiekejams) - jie paleidžiami po kitų, po vieną.
 """
 import base64, concurrent.futures, http.server, json, os, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request
@@ -33,7 +33,7 @@ RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
 # 1300 s (2026-10-20): PP-salygos (458 testai, vietoje ~380 s) GitHub Actions viršijo 900 s; visas darbas buvo ~1500 s iš 2400
 # 1500 s (2026-10-26): privačios saugyklos vykdyklėje (2 branduoliai) PP-salygos dalis lygiagrečiai trunka iki ~1240 s
 # 2000 s (2026-11-03): trys PP-salygos dalys lygiagrečiai - viena gali trukti ilgiau; bendrą laiką saugo VISO_LAIKAS
-# 2300 s (2026-11-07): 0b10f49 PP-salygos 3 dalis truko 1958 s (vietoje 560 s, kitos dalys 473 ir 449 s) - dalys suvienodintos
+# 2300 s (2026-11-07): 86d6f69 PP-salygos 3 dalis truko 1958 s (vietoje 560 s, kitos dalys 473 ir 449 s) - dalys suvienodintos
 #   (testaiPaskelbti perkelta į 2 dalį), o riba pakelta, kad lėtesnė vykdyklė nekristų dėl vienos dalies; visą darbą vis tiek riboja VISO_LAIKAS
 LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "2300"))
 # 2580 s (2026-10-26): darbo riba - 45 min., paruošimas (checkout, Chrome) trunka ~10 s - lieka ~2 min. santraukai
@@ -210,7 +210,7 @@ def main():
     vienetai = [v for r in rinkiniai for v in dalys(r)]
     # Lygiagrečiai - ilgiausi pirmi (2026-10-26): rinkinių su dalimis dalys (PP-salygos 3, shared 2) pradedamos iš karto, trumpi rinkiniai
     # užpildo laisvą vykdyklę. Privačios saugyklos vykdyklėje (2 branduoliai) PP-salygos dalis trunka ~1200 s; anksčiau trečioji dalis
-    # pradėta po ~1700 s ir nespėdavo iki bendros ribos (954ea09 - du kartus iš eilės). Vietoje (po vieną) eilė nekinta.
+    # pradėta po ~1700 s ir nespėdavo iki bendros ribos (bf3742b - du kartus iš eilės). Vietoje (po vieną) eilė nekinta.
     if LYGIAGRECIAI > 1:
         kiek = {r: len(dalys(r)) for r in rinkiniai}
         vienetai.sort(key=lambda v: -kiek[v[0]])

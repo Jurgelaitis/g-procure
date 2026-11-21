@@ -4,7 +4,7 @@
 
 Naudotojas 2026-10-04 pritarė šešiems punktams (klasifikacija, priedų numerių siūlymas, „X“ vietos registre, numatytųjų
 reikšmių tvarka, 22 klausimų tekstai, registras modulyje ir paaiškinimas `shared/`). Toliau esantys 1-9 skyriai aprašo
-būseną PRIEŠ pakeitimus (tyrimas, commit 59cf088).
+būseną PRIEŠ pakeitimus (tyrimas, commit 640df57).
 
 | Kas | Kaip dabar |
 |---|---|
@@ -49,7 +49,7 @@ angliškame sakinyje „... no supporting documents are required[U+2014]submissi
 visus šablonus ir žemėlapius.
 
 
-Sudaryta 2026-10-03 iš tikro modulio (`PP-salygos/PP-SALYGOS.html`, commit 59cf088): 2 žingsnis atvertas visiems 24 pirkimo būdo ir kalbos deriniams (11 būdų x LT ir LT/EN, plius centralizuotas atviras konkursas x 2), su visomis sąlygų šakomis. Tai tyrimo dokumentas - modulio kodas nekeistas.
+Sudaryta 2026-10-03 iš tikro modulio (`PP-salygos/PP-SALYGOS.html`, commit 640df57): 2 žingsnis atvertas visiems 24 pirkimo būdo ir kalbos deriniams (11 būdų x LT ir LT/EN, plius centralizuotas atviras konkursas x 2), su visomis sąlygų šakomis. Tai tyrimo dokumentas - modulio kodas nekeistas.
 
 Pastaba dėl brūkšnių: lentelėse cituojamas LITGRID šablonų tekstas, todėl jame yra šablono „–“.
 
