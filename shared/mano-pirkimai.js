@@ -524,7 +524,7 @@
           vv.appendChild(c);
         }
         p.appendChild(vv);
-      } else if (cr.rusis === "nera") p.appendChild(el("span", null, fmt(t.cvpNera, { nr: cvpNr(k) })));
+      } else if (cr.rusis === "nera") p.appendChild(el("span", null, fmt(t.cvpNera, { nr: cvpNr(k) }) + (global.GP_VPT && GP_VPT.beSkelbimo ? " " + GP_VPT.beSkelbimo(kalba()) : "")));
       else p.appendChild(el("span", null, t.cvpKlaida));
       return p;
     }

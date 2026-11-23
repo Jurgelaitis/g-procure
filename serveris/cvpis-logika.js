@@ -156,6 +156,34 @@
     return true;
   }
 
+  // Su kuo lyginti naują sąrašą (2026-11-23): ankstesnio sąrašo įrašai tik tų procedūrų rūšių, kurios naujame sąraše yra. 2026-11-20 VPT
+  // iš eksporto pašalino pirkimus be skelbimo (Simplified, DPS Specific Contract, Specific Contract, neskelbiamos derybos ir kt.) - visos
+  // rūšys dingo sąmoningai, ir paslauga tris dienas laikė senus duomenis (kiekio saugiklis jas laikė nepilnu atsakymu). Nepilnas atsakymas
+  // (nutrūkę puslapiai) rūšių nepašalina, todėl saugiklis lieka; bet jei dingusių rūšių įrašų - daugiau kaip pusė ankstesnio sąrašo, atmetama.
+  // Grąžina { kiekis, dingoDalis, dingusiosRusys: [{ procedure, kiekis }] } (didžiausios pirmos).
+  function palyginamasSenas(senieji, naujieji) {
+    var yra = Object.create(null), dingo = Object.create(null), kiekis = 0, viso = 0;
+    (naujieji || []).forEach(function (o) { if (o) yra[o.procedure || ""] = true; });
+    (senieji || []).forEach(function (o) {
+      if (!o) return;
+      viso++;
+      var p = o.procedure || "";
+      if (yra[p]) kiekis++; else dingo[p] = (dingo[p] || 0) + 1;
+    });
+    var rusys = Object.keys(dingo).map(function (p) { return { procedure: p || null, kiekis: dingo[p] }; })
+      .sort(function (a, b) { return b.kiekis - a.kiekis; });
+    return { kiekis: kiekis, dingoDalis: viso ? (viso - kiekis) / viso : 0, dingusiosRusys: rusys };
+  }
+  // Laukimas po n-tos nesėkmės iš eilės (ms): 30 min., 1, 2, 4 val. ..., ne ilgiau nei įprastas atnaujinimo laikas (val.)
+  function kartojimoLaikas(n, val) {
+    var k = Math.max(1, Math.floor(n) || 1), lubos = Math.max(1, +val || 6) * 3600000;
+    return Math.min(30 * 60000 * Math.pow(2, Math.min(k - 1, 10)), lubos);
+  }
+  function priimtinasSarasas(naujieji, senieji) {
+    var pal = palyginamasSenas(senieji, naujieji);
+    return { ok: priimtinasKiekis((naujieji || []).length, pal.kiekis) && pal.dingoDalis <= 0.5, palyginta: pal };
+  }
+
   // Paieškai: mažosios raidės be diakritikų, tik raidės ir skaitmenys.
   function paieskosTekstas(s) {
     return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -531,6 +559,7 @@
     VERSIJA: VERSIJA, KILMES: KILMES, TEKSTAI: TEKSTAI, DATOS: DATOS, LOGINIAI: LOGINIAI, KLAIDOS: KLAIDOS,
     tekstas: tekstas, data: data, verte: verte, bvpz: bvpz, nuts: nuts, tedNuorodos: tedNuorodos,
     normalizuokIrasa: normalizuokIrasa, tikrinkPuslapi: tikrinkPuslapi, priimtinasKiekis: priimtinasKiekis,
+    palyginamasSenas: palyginamasSenas, priimtinasSarasas: priimtinasSarasas, kartojimoLaikas: kartojimoLaikas,
     paieskosTekstas: paieskosTekstas, sukurkIndeksa: sukurkIndeksa, atsakymas: atsakymas, kilmesAntraste: kilmesAntraste,
     filtrai: filtrai, statistika: statistika, kvantiliai: kvantiliai, dabarLT: dabarLT, PSL_DYDIS: PSL_DYDIS,
     DOK_MAX_BAITU: DOK_MAX_BAITU, DOK_KLAIDOS: DOK_KLAIDOS, dokumentuUzklausa: dokumentuUzklausa, dokumentuAdresai: dokumentuAdresai,

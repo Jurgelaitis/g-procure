@@ -135,6 +135,18 @@ async function testaiNormalizavimas(){
     lygu([L.priimtinasKiekis(999, 0), L.priimtinasKiekis(1000, 0), L.priimtinasKiekis(80000, 100000), L.priimtinasKiekis(79999, 100000), L.priimtinasKiekis(120000, 100000), L.priimtinasKiekis(NaN, 0)],
       [false, true, true, false, true, false]);
   });
+  await testas("Naujas sąrašas lyginamas tik su tų procedūrų rūšių ankstesniais įrašais, kurios liko (2026-11-23: VPT pašalino pirkimus be skelbimo); dingusių daugiau kaip pusė - atmetama; nutrūkęs sąrašas - atmetamas; kartojimas retinamas", () => {
+    const r = (procedure, n) => Array.from({ length: n }, () => ({ procedure }));
+    const seni = [...r("Open", 33000), ...r("Simplified", 13000), ...r("DPS Specific Contract", 8300), ...r("Preliminary Market Consultation", 13600), ...r("Negotiated without prior publication", 1300)];
+    const nauji = [...r("Open", 33100), ...r("Preliminary Market Consultation", 13700)];
+    const t = L.priimtinasSarasas(nauji, seni);
+    lygu([t.ok, t.palyginta.kiekis, t.palyginta.dingusiosRusys.map(x => x.procedure + ":" + x.kiekis)], [true, 46600, ["Simplified:13000", "DPS Specific Contract:8300", "Negotiated without prior publication:1300"]], "rūšys dingo sąmoningai - priimama");
+    lygu(L.priimtinasKiekis(nauji.length, seni.length), false, "be rūšių palyginimo būtų atmesta (taip buvo 2026-11-20 - 2026-11-23)");
+    lygu(L.priimtinasSarasas(nauji.slice(0, 30000), seni).ok, false, "nutrūkęs sąrašas tų pačių rūšių - atmetamas");
+    lygu(L.priimtinasSarasas([...r("Open", 33000)], seni).ok, false, "dingo daugiau kaip pusė - atmetama");
+    lygu([L.priimtinasSarasas(nauji, []).ok, L.priimtinasSarasas(r("Open", 999), []).ok, L.priimtinasSarasas([...nauji, ...r("Restricted", 100)], seni).palyginta.kiekis], [true, false, 46600], "be ankstesnio, per mažas, nauja rūšis");
+    lygu([1, 2, 3, 4, 5, 9].map(n => L.kartojimoLaikas(n, 6) / 60000), [30, 60, 120, 240, 360, 360], "kartojimas: 30 min., 1, 2, 4 val., ne ilgiau 6 val.");
+  });
 }
 
 async function testaiAtsakymai(){
@@ -397,7 +409,8 @@ async function testaiSargai(){
     tiesa(/listen\(PORTAS, "127\.0\.0\.1"\)/.test(srv), "127.0.0.1");
     tiesa(/vietinis && typeof req\.headers\["x-real-ip"\]/.test(srv), "X-Real-IP tik vietinei");
     tiesa(/requestTimeout = \d+/.test(srv) && /headersTimeout = \d+/.test(srv) && /RIBA_IP_MIN/.test(srv), "ribos");
-    tiesa(/priimtinasKiekis\(irasai\.length, IX \? IX\.kiekis : 0\)/.test(srv) && /renameSync\(laikinas, KOPIJA\)/.test(srv), "visas sąrašas ir atominis įrašas");
+    tiesa(/L\.priimtinasSarasas\(irasai, IX \? Array\.from\(IX\.pagalId\.values\(\)\) : \[\]\)/.test(srv) && /if \(!tikr\.ok\) throw new SaltinioKlaida\("netiketas-kiekis"/.test(srv) && /renameSync\(laikinas, KOPIJA\)/.test(srv), "visas sąrašas, rūšių palyginimas ir atominis įrašas");
+    tiesa(/L\.kartojimoLaikas\(nesekmes, ATNAUJINIMAS_VAL\)/.test(srv) && !/BUSENA\.klaida \? 30 \* 60000 :/.test(srv), "nesėkmės - retinamas kartojimas");
   });
   await testas("systemd: DynamicUser, LoadCredential, griežta izoliacija, be teisių; raktas ne Environment", () => {
     ["DynamicUser=yes", "LoadCredential=vpt_api_key:/etc/g-procure-cvpis/vpt_api_key", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",

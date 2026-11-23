@@ -14,8 +14,16 @@ Naudotojo sprendimas 2026-10-18: VPT CVP IS API naudoti per G-Procure serverį (
 - Išmatuota 2026-10-18: apie 80 400 pirkimų, iki 5 000 įrašų per puslapį (~7 MB, ~1 s), tvarka neapibrėžta. Nuo 2026-10-23 VPT
   leidžia ne daugiau kaip 1 000 įrašų puslapyje (didesnis - 400 „page size must not exceed 1000“): iki 2026-10-29 paslauga prašė
   5 000 ir sąrašas nuo spalio 23 d. nebeatsinaujino (rodyta paskutinė kopija ir jos laikas) - dabar `PUSLAPIS` 1000.
+- Nuo 2026-11-20 VPT eksportas nebeteikia pirkimų be skelbimo: neskelbiamų mažos vertės apklausų („Simplified“, ~13 000), konkrečių
+  pirkimų pagal DPS („DPS Specific Contract“, ~8 300), preliminariąją sutartį ar kvalifikacijos sistemą („Specific Contract“ ~2 400,
+  `cft.procedure.type.qs.specific.contract`) ir neskelbiamų derybų (~2 000) - iš viso ~25 900 įrašų (išmatuota 2026-11-23: 58 318 vietoj
+  84 093). Kiekio saugiklis (ne mažiau 80 % ankstesnio) tai laikė nepilnu atsakymu, todėl sąrašas tris dienas neatsinaujino, o kartojimas
+  kas 30 min. sukėlė VPT užklausų ribą (429). Nuo 2026-11-23 naujas sąrašas lyginamas tik su tų procedūrų rūšių ankstesniais įrašais,
+  kurios liko (`priimtinasSarasas`, `palyginamasSenas`; dingusių rūšių - ne daugiau kaip pusė, žurnale - įvykis `rusys-nebeteikiamos`
+  su rūšimis ir kiekiais), o nepavykus bandoma po 30 min., 1, 2, 4 val. - ne rečiau nei kas `ATNAUJINIMAS_VAL` (`kartojimoLaikas`).
+  Įrankiai prie „VPT sąraše nėra“ tai paaiškina (`GP_VPT.beSkelbimo`).
 
-Todėl paslauga kas 6 valandas (`ATNAUJINIMAS_VAL`) parsisiunčia visą sąrašą (~82 užklausos su 2 s pauzėmis), laiko jį
+Todėl paslauga kas 6 valandas (`ATNAUJINIMAS_VAL`) parsisiunčia visą sąrašą (~60 užklausų su 2 s pauzėmis; iki 2026-11-20 - ~85), laiko jį
 atmintyje ir disko kopijoje (`/var/lib/g-procure-cvpis/cvpis.ndjson.gz`) ir atsako iš jos. Saugomi tik **vieši pirkimų
 duomenys**; naudotojų duomenų paslauga nesaugo. Antrasis VPT API maršrutas (`cft-details-participants-info-export`) -
 dalyvių informacija - nenaudojamas (duomenų mažinimas).

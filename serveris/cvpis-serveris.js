@@ -146,7 +146,10 @@ async function atnaujink() {
       await miegok(PAUZE_MS);
     }
     const irasai = Array.from(pagalId.values());
-    if (!L.priimtinasKiekis(irasai.length, IX ? IX.kiekis : 0)) throw new SaltinioKlaida("netiketas-kiekis", false);
+    // Lyginama tik su tų procedūrų rūšių ankstesniais įrašais, kurios VPT sąraše liko (L.priimtinasSarasas, 2026-11-23)
+    const tikr = L.priimtinasSarasas(irasai, IX ? Array.from(IX.pagalId.values()) : []);
+    if (!tikr.ok) throw new SaltinioKlaida("netiketas-kiekis", false);
+    if (tikr.palyginta.dingusiosRusys.length) zurnalas("rusys-nebeteikiamos", { rusys: tikr.palyginta.dingusiosRusys.slice(0, 20).map(r => (r.procedure || "-") + ":" + r.kiekis).join(" ") });
     const atnaujinta = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
     await rasykKopija(irasai, atnaujinta);
     IX = L.sukurkIndeksa(irasai, atnaujinta);
@@ -161,14 +164,17 @@ async function atnaujink() {
   }
 }
 
+let nesekmes = 0;
 function planuok(ms) {
   clearTimeout(laikmatis);
   const kada = Date.now() + ms;
   BUSENA.kita = new Date(kada).toISOString().replace(/\.\d{3}Z$/, "Z");
   laikmatis = setTimeout(async () => {
     await atnaujink();
-    // Nepavykus - po 30 min., pavykus - po nustatyto laiko (su iki 10 min. atsitiktiniu poslinkiu)
-    planuok(BUSENA.klaida ? 30 * 60000 : ATNAUJINIMAS_VAL * 3600000 + Math.floor(Math.random() * 600000));
+    // Nepavykus - po 30 min., 1, 2, 4 val. ir t. t., bet ne rečiau nei nustatytas laikas (2026-11-23: iki tol kas 30 min. - per tris dienas
+    // ~140 pilnų atsisiuntimų sukėlė VPT užklausų ribą 429); pavykus - po nustatyto laiko (su iki 10 min. atsitiktiniu poslinkiu)
+    nesekmes = BUSENA.klaida ? nesekmes + 1 : 0;
+    planuok(BUSENA.klaida ? L.kartojimoLaikas(nesekmes, ATNAUJINIMAS_VAL) : ATNAUJINIMAS_VAL * 3600000 + Math.floor(Math.random() * 600000));
   }, ms);
 }
 

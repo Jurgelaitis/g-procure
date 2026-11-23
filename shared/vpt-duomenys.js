@@ -647,7 +647,16 @@
     return r;
   }
 
-  global.GP_VPT = { nutrauktas: nutrauktas, nutrauktaPavadinime: nutrauktaPavadinime, busena: busena, tolesnisEtapas: tolesnisEtapas, rinkosKonsultacija: rinkosKonsultacija, sistema: sistema,
+  // Pirkimai be skelbimo VPT duomenyse (2026-11-23): nuo 2026-11-20 VPT eksportas jų nebeteikia - neskelbiamos mažos vertės apklausos
+  // („Simplified“), konkretūs pirkimai pagal DPS, kvalifikacijos sistemą ar preliminariąją sutartį, neskelbiamos derybos (2026-11-20 - apie
+  // 25 900 įrašų). Pastaba rodoma prie „VPT sąraše nėra“, kad žmogus nemanytų, jog suklydo numeryje.
+  var BE_SKELBIMO = {
+    lt: "Nuo 2026-11-20 VPT duomenyse nebėra pirkimų be skelbimo (neskelbiamų mažos vertės apklausų, konkrečių pirkimų pagal DPS ar preliminariąją sutartį, neskelbiamų derybų) - tokio pirkimo duomenis žiūrėkite CVP IS.",
+    en: "Since 2026-11-20 the VPT data no longer include procurements without a notice (unpublished low-value surveys, specific contracts under a DPS or framework agreement, negotiations without publication) - see CVP IS for such a procurement."
+  };
+  function beSkelbimo(kalba) { return kalba === "en" ? BE_SKELBIMO.en : BE_SKELBIMO.lt; }
+
+  global.GP_VPT = { BE_SKELBIMO: BE_SKELBIMO, beSkelbimo: beSkelbimo, nutrauktas: nutrauktas, nutrauktaPavadinime: nutrauktaPavadinime, busena: busena, tolesnisEtapas: tolesnisEtapas, rinkosKonsultacija: rinkosKonsultacija, sistema: sistema,
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, trukmesInfo: trukmesInfo, trukmesAbejone: trukmesAbejone, ted: ted, atnaujinta: atnaujinta,
     PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai, dvikalbis: dvikalbis,
     paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas,
