@@ -8297,6 +8297,17 @@ async function testaiAiProxy(){
         [[1, []], [2, [1000]]], "klaidos tekstas: „generate“, „accurate“ - ne kartojimo priežastis (iki 2026-09-28 - 4 bandymai), rate limit - kartojama");
     });
 
+    await testas("Serverio DI kvota (2026-11-23, saugumo auditas G-01): 429 su kvota - priežastis iš serverio (iki 300 ženklų, HTML ne); dienos ir 10 min. kvota nekartojama, „per daug vienu metu“ - kartojama; 429 be kvotos - kaip iki tol", async ()=>{
+      const eiga = async (...a) => { serveris(...a); const r = await A.uzduotis("testai.bandymas", { tekstas: "U" }); return [r.ok, r.status, r.error, kvietimai.length, pauzes]; };
+      const dienos = '{"error":"Šiandienos G-Procure DI užklausų riba pasiekta. DI funkcijos vėl veiks rytoj (nuo 00:00 Lietuvos laiku).","kvota":"diena"}';
+      lygu(await eiga([429, dienos]), [false, 429, "Šiandienos G-Procure DI užklausų riba pasiekta. DI funkcijos vėl veiks rytoj (nuo 00:00 Lietuvos laiku).", 1, []], "dienos riba - be kartojimo");
+      lygu((await eiga([429, '{"error":"IP riba","kvota":"ipDiena"}'])).slice(2, 4), ["IP riba", 1], "IP dienos riba");
+      lygu((await eiga([429, '{"error":"10 min.","kvota":"per10Min"}'])).slice(2, 4), ["10 min.", 1], "10 min. riba");
+      lygu(await eiga([429, '{"error":"Vienu metu per daug","kvota":"vienuMetu"}'], [200, '{"content":[{"type":"text","text":"ok"}]}']), [true, 200, null, 2, [1000]], "vienu metu - kartojama");
+      lygu((await eiga([429, JSON.stringify({ error: "x".repeat(500), kvota: "diena" })]))[2].length, 300, "ilgis ribojamas");
+      lygu((await eiga([429, '{"error":{"type":"rate_limit_error"},"kvota":"diena"}']))[2], "Per daug užklausų iš eilės. Palaukite kelias sekundes ir bandykite dar kartą.", "kvota be teksto - bendra žinutė");
+    });
+
     await testas("extractText: Anthropic content[] blokai (tušti praleidžiami), content / completion / text / message eilutė, message.content; tuščias ar nežinomas - tuščia eilutė; numatytasis modelis yra PP-ts pasirinkiklyje ir pažymėtas", async ()=>{
       const X = A.extractText;
       lygu([X({ content: [{ type: "text", text: "a" }, null, "b", { type: "tool_use" }, { content: "c" }] }), X({ content: "d" }), X({ completion: "e" }), X({ text: "f" }),

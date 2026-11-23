@@ -168,6 +168,8 @@ router.post('/sanctions-assessment', assessmentLimiter, async (req, res) => {
     }
 
     const data = await aiRes.json();
+    // DI kvota (2026-11-23, serverio index.js diKvota): apskaičiuotos išlaidos įskaičiuojamos į dienos ribą; IP ir sumos neįrašomi
+    if (data && data.usage) res.locals.diUsage = { model: data.model || ANTHROPIC_MODEL, usage: data.usage };
     const text = (data.content && data.content[0] && data.content[0].text) || '';
 
     // Robustiškai ištraukiam JSON (modelis turėtų grąžinti gryną JSON); lietuvišką „ jis dažnai uždaro ASCII kabute - taisoma

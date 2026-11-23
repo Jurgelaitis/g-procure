@@ -64,6 +64,8 @@
       return "Failas per didelis - serveris jo nepriėmė. Didžiausias dokumento dydis apie " +
              mbTekstas(MAX_PDF_BAITU) + ". Pateikite mažesnės apimties failą.";
     }
+    // Serverio DI kvota (2026-11-23, saugumo auditas G-01): priežastis - iš serverio (dienos riba, per daug vienu metu ir pan.)
+    if (status === 429 && raw && raw.kvota && typeof raw.error === "string") return raw.error.slice(0, 300);
     if (status === 429) return "Per daug užklausų iš eilės. Palaukite kelias sekundes ir bandykite dar kartą.";
     if (status === 401 || status === 403) return "Serveris atmetė užklausą (" + status + "). Kreipkitės į G-Procure rengėją.";
     if (status >= 500) return "Serverio klaida (" + status + "). Pabandykite po kelių minučių.";
@@ -124,6 +126,8 @@
   var NUSTATYMAI = { ilgasBandymasMs: 60000 };
   function isRetryable(result, trukmeMs) {
     if (!result || result.ok) return false;
+    // serverio dienos ar 10 min. kvota - kartoti po kelių sekundžių beprasmiška (2026-11-23); vienu metu vykdomų užklausų riba - kartojama
+    if (result.status === 429 && result.raw && /^(diena|ipDiena|per10Min)$/.test(result.raw.kvota || "")) return false;
     if (result.status === 429) return true;      // per daug uzklausu
     if ((result.status === 502 || result.status === 504) && trukmeMs >= NUSTATYMAI.ilgasBandymasMs) return false;
     if (result.status >= 500) return true;       // 529 overloaded ir kitos laikinos serverio klaidos

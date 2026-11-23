@@ -42,6 +42,7 @@ užklausos ir sąrašų būsenos (nepasiektas sąrašas - „nepatikrinta“, ne
 <script src="sankcijos-logika.js"></script>
 <script src="di-uzduotys.js"></script>
 <script src="viesos-sutartys-logika.js"></script>
+<script src="di-kvota.js"></script>
 <script>
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
@@ -1151,6 +1152,56 @@ async function testaiViesosSutartys1119(){
   });
 }
 
+/* DI užduočių kvota (serveris/di-kvota.js, 2026-11-23, saugumo auditas G-01): vienu metu, per 10 min., dienos išlaidos vienam IP ir visos. */
+async function testaiDiKvota1123(){
+  grupe("DI užduočių kvota (2026-11-23)");
+  const Q = window.GP_DI_KVOTA;
+  // 2026-11-23 10:00 Lietuvos laiku (08:00 UTC)
+  const pradzia = Date.UTC(2026, 10, 23, 8, 0, 0);
+  await testas("Vienu metu: vienam IP ir visos - viršijus 429 „vienuMetu“, užbaigus atsilaisvina; baik() - vieną kartą", async () => {
+    let t = pradzia; const K = Q.sukurk({ ipVienuMetu: 2, visoVienuMetu: 3, dabar: () => t });
+    const a = K.pradek("1.1.1.1"), b = K.pradek("1.1.1.1"), c = K.pradek("1.1.1.1");
+    lygu([a.ok, b.ok, c.ok, c.status, c.kvota], [true, true, false, 429, "vienuMetu"], "vienam IP");
+    const d = K.pradek("2.2.2.2"), e = K.pradek("3.3.3.3");
+    lygu([d.ok, e.ok, e.kvota], [true, false, "vienuMetu"], "visos");
+    a.baik(); a.baik();
+    lygu([K.busena().vienuMetu, K.pradek("3.3.3.3").ok], [2, true], "užbaigus atsilaisvino (baik dukart - vieną kartą)");
+    tiesa(/Vienu metu/.test(c.klaida) && c.kartotiPo === 10, "priežastis ir Retry-After");
+  });
+  await testas("Per 10 min. vienam IP: viršijus - „per10Min“ su laukimu iki seniausios užklausos pabaigos, po 10 min. - vėl galima; kitas IP neribojamas", async () => {
+    let t = pradzia; const K = Q.sukurk({ ipPer10Min: 3, dabar: () => t });
+    for (let i = 0; i < 3; i++) { const r = K.pradek("1.1.1.1"); tiesa(r.ok, "užklausa " + i); r.baik(); t += 60 * 1000; }
+    const r = K.pradek("1.1.1.1");
+    lygu([r.ok, r.kvota, r.kartotiPo], [false, "per10Min", 7 * 60], "viršyta");
+    tiesa(K.pradek("2.2.2.2").ok, "kitas IP");
+    t = pradzia + 10 * 60 * 1000 + 1; tiesa(K.pradek("1.1.1.1").ok, "po 10 min.");
+  });
+  await testas("Dienos išlaidos: pagal Anthropic usage ir modelio kainą; vienam IP - „ipDiena“, visos - „diena“, Retry-After iki vidurnakčio Lietuvoje; kitą dieną - iš naujo", async () => {
+    lygu([Q.kaina("claude-sonnet-4-6", { input_tokens: 1e6, output_tokens: 0 }), Q.kaina("claude-sonnet-4-6", { input_tokens: 0, output_tokens: 1e6 }),
+      Q.kaina("claude-opus-4-6", { input_tokens: 1e6, output_tokens: 1e6 }), Q.kaina("nezinomas", { output_tokens: 1e6 }), Q.kaina("claude-haiku-4-5-20251001", null)],
+      [3, 15, 30, 25, 0], "kainos (nežinomas - brangiausio)");
+    tiesa(Math.abs(Q.kaina("claude-sonnet-4-6", { cache_creation_input_tokens: 1e6, cache_read_input_tokens: 1e6 }) - (3.75 + 0.3)) < 1e-9, "talpykla");
+    let t = pradzia; const K = Q.sukurk({ ipDienai: 1, visoDienai: 2, dabar: () => t });
+    let r = K.pradek("1.1.1.1"); r.pridek("claude-sonnet-4-6", { output_tokens: 70000 }); r.baik();   // 1,05 USD
+    r = K.pradek("1.1.1.1");
+    lygu([r.ok, r.kvota], [false, "ipDiena"], "vienam IP");
+    lygu(r.kartotiPo, 14 * 3600, "iki vidurnakčio Lietuvoje (10:00 -> 24:00)");
+    r = K.pradek("2.2.2.2"); r.pridek("claude-sonnet-4-6", { output_tokens: 70000 }); r.baik();
+    r = K.pradek("3.3.3.3"); lygu([r.ok, r.kvota], [false, "diena"], "visos");
+    tiesa(/rytoj/.test(r.klaida), "priežastis: " + r.klaida);
+    t = Date.UTC(2026, 10, 23, 22, 0, 1);   // 00:00:01 Lietuvos laiku, 11-24
+    lygu([K.pradek("1.1.1.1").ok, K.busena().diena], [true, "2026-11-24"], "kitą dieną");
+    lygu([Q.dienaLT(Date.UTC(2026, 10, 23, 21, 59)), Q.dienaLT(Date.UTC(2026, 10, 23, 22, 1)), Q.dienaLT(Date.UTC(2026, 6, 1, 21, 30))], ["2026-11-23", "2026-11-24", "2026-07-02"], "Lietuvos diena (žiemą ir vasarą)");
+  });
+  await testas("Sargai: index.js jungia kvotą /api/uzduotis ir ESG vertinimui, „null“ kilmė nepriimama, trust proxy - tik loopback; klientas rodo serverio priežastį ir dienos kvotos nekartoja", async () => {
+    const ap = await tekstas("../shared/ai-proxy.js");
+    tiesa(/raw\.kvota && typeof raw\.error === "string"/.test(ap), "ai-proxy.js - serverio priežastis");
+    tiesa(/\/\^\(diena\|ipDiena\|per10Min\)\$\/\.test\(result\.raw\.kvota/.test(ap), "ai-proxy.js - dienos ir 10 min. kvota nekartojama");
+    const src = await tekstas("di-kvota.js");
+    tiesa(!/console\.|fetch\(|require\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")), "kvota pati nieko nerašo ir nesiunčia");
+  });
+}
+
 (async function(){
   try {
     if (!L) throw new Error("cvpis-logika.js neįsikėlė");
@@ -1168,6 +1219,8 @@ async function testaiViesosSutartys1119(){
     await testaiDiUzduotys();
     if (!window.GP_VIESOS_SUTARTYS_API) throw new Error("viesos-sutartys-logika.js neįsikėlė");
     await testaiViesosSutartys1119();
+    if (!window.GP_DI_KVOTA) throw new Error("di-kvota.js neįsikėlė");
+    await testaiDiKvota1123();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

@@ -135,7 +135,8 @@ router.get('/', limiter, async (req, res) => {
     return res.status(503).json({ rodikliai: [], klaidos: [{ id: '*', priezastis: 'FRED_API_KEY nenustatytas serveryje' }] });
   }
   const prasomi = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
-  const ids = prasomi.length ? prasomi.filter(id => SERIJOS[id]) : Object.keys(SERIJOS);
+  // be pasikartojimų (2026-11-23, saugumo auditas G-07): ?ids=brent,brent,... kitaip sukeldavo tiek pat kreipinių į FRED
+  const ids = prasomi.length ? [...new Set(prasomi)].filter(id => SERIJOS[id]) : Object.keys(SERIJOS);
   const rodikliai = [], klaidos = [];
   await Promise.all(ids.map(async id => {
     try {

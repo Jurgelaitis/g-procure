@@ -255,3 +255,16 @@ Serveris pagal šabloną sudaro Anthropic užklausą ir grąžina Anthropic atsa
 Eiga: serveris PIRMA, tada moduliai po vieną (instrukcija iš modulio šalinama tik kai užduotis veikia serveryje); kai perkelti visi,
 `/api/analyze` nebepriims laisvo `system`. Visi moduliai perkelti 2026-11-08, `/api/analyze` ir nenaudotas `/api/price` uždaryti 2026-11-09 (410, naudotojo
 leidimas), `shared/ai-proxy.js` funkcijos `call()` nebėra. Jau paskelbtos instrukcijos lieka saugyklos istorijoje.
+
+### DI kvota (nuo 2026-11-23, įdiegta 2026-11-23; saugumo auditas G-01)
+
+`di-kvota.js` (`GP_DI_KVOTA`) - gryna logika be priklausomybių (Node ir naršyklė). DI serverio `index.js` ją taiko `POST /api/uzduotis` ir
+`POST /api/esg/sanctions-assessment` (tarpinė funkcija `diKvota`) ir riboja: vienu metu vykdomas užklausas (vienam IP ir visas), užklausas
+vienam IP per 10 min. ir apskaičiuotas DI išlaidas per Lietuvos kalendorinę dieną (vienam IP ir visas) - pagal Anthropic atsakymo `usage`
+(kainos - `KAINOS`, USD už milijoną žetonų; nežinomas modelis - brangiausio kaina; ESG maršrutas `usage` palieka `res.locals.diUsage`).
+Viršijus - 429 `{ error, kvota }` (`vienuMetu`, `per10Min`, `ipDiena`, `diena`) ir `Retry-After`; klientas (`shared/ai-proxy.js`) rodo serverio
+priežastį, o dienos ir 10 min. kvotos nekartoja. Būsena - tik atmintyje (perkrovus prasideda iš naujo), IP ir sumos niekur neįrašomi,
+žurnale - tik kvotos rūšis. Ribos nustatomos `index.js` (`sukurk({ ... })`); tikslią išlaidų sumą rodo Anthropic Console, paskutinė
+apsauga - paskyros mėnesio riba. Tikras lankytojo IP: nginx perrašo `X-Forwarded-For` (`$remote_addr`), Express `trust proxy` - `loopback`.
+Nuo tos pačios dienos DI maršrutai kilmės `null` (failas atvertas naršyklėje) nebepriima - tik g-procure.com, www ir vietinis tikrinimas.
+Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.html` „AI transportas“).
