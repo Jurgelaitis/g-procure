@@ -277,6 +277,11 @@ apsauga - paskyros mėnesio riba. Tikras lankytojo IP: nginx perrašo `X-Forward
 Nuo tos pačios dienos DI maršrutai kilmės `null` (failas atvertas naršyklėje) nebepriima - tik g-procure.com, www ir vietinis tikrinimas.
 Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.html` „AI transportas“).
 
+Laukimas ir kūno dydis pagal užduotį (2026-11-23, `di-uzduotys.js` `laukimas`, `kunoRiba`): Anthropic atsakymo laukiama pagal šablono `maxTokens`
+(40 s + 25 ms žetonui, ne mažiau 60 ir ne daugiau 290 s; Opus - 1,25 karto ilgiau) arba šablono `laikas` (10-290 s); pasibaigus - 504. Užklausos kūnas
+užduočiai be dokumento - ne didesnis už jos laukų ribas (× 3 + 64 KB), su dokumentu - dokumento riba + 1 MB, ne daugiau 10 MB; didesnis - 413 ir į DI
+nesiunčiama. Išmatuota su 29 tikrais šablonais: trumpos užduotys - 60-90 s ir iki 70 KB, ilgiausia (TS patikra) - 290 s.
+
 ### DI serveris per systemd (nuo 2026-11-23; saugumo auditas G-05)
 
 Pagrindinis DI serveris (`/var/www/g-procure/index.js`, 127.0.0.1:3000) nuo 2026-11-23 paleidžiamas `g-procure.service` (šis aplankas), ne pm2 kaip root:

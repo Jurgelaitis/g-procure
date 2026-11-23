@@ -6,10 +6,10 @@
  *   2. Privatūs šablonai (g-procure-privatu/serveris/uzduotys/*.js) -> /var/www/g-procure/uzduotys/ (scp).
  *   3. index.js, PO dotenv ir tikGProcure apibrėžimo:
  *        app.post('/api/uzduotis', tikGProcure, require('./routes/di-uzduotys-marsrutas')({
- *          katalogas: '/var/www/g-procure/uzduotys', siusk: kunas => axios.post('https://api.anthropic.com/v1/messages', kunas, {
+ *          katalogas: '/var/www/g-procure/uzduotys', siusk: (kunas, o) => axios.post('https://api.anthropic.com/v1/messages', kunas, {
  *            headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
- *            timeout: 290000 }).then(r => r.data) }));   // nuo 2026-11-11 (iki tol 180000); nginx /api/ - 300 s
- *   4. pm2 restart g-procure. Šablono klaida sustabdo paleidimą (geriau nei tyli užduotis) - žr. pm2 logs.
+ *            timeout: (o && o.laikas) || 290000 }).then(r => r.data) }));   // siusk(kunas, o): laukimas pagal užduotį (2026-11-23), ne daugiau 290 s
+ *   4. systemctl restart g-procure (iki 2026-11-23 - pm2). Šablono klaida sustabdo paleidimą (geriau nei tyli užduotis) - žr. journalctl -u g-procure.
  *
  * Saugumas: į žurnalą - tik užduoties pavadinimas ir klaidos rūšis (ne duomenys, ne atsakymas); atsakyme - tik
  * trumpa klaida žmogui ir lauko vardas, ne reikšmė; Anthropic klaidos objektas neperduodamas.
@@ -36,16 +36,22 @@ module.exports = function marsrutas({ katalogas, siusk }) {
   const reg = ikelkSablonus(katalogas);
   console.log("DI užduotys: " + Object.keys(reg).length + " šablonų (" + L.VERSIJA + ")");
   return async function (req, res) {
+    // Kūno dydis pagal užduotį (2026-11-23): Express jau perskaitė iki 10 MB, bet užduočiai be dokumento tokio kūno nereikia
+    const sab = req.body && typeof req.body.uzduotis === "string" ? reg[req.body.uzduotis] : null;
+    const ilgis = Number(req.headers && req.headers["content-length"]) || 0;
+    if (sab && ilgis > sab.kunoRiba) return res.status(413).json({ error: "Užklausa per didelė šiai DI užduočiai." });
     let r;
     try { r = L.sudaryk(req.body, reg); }
     catch (e) { console.error("DI užduotis: šablono klaida"); return res.status(500).json({ error: "Serverio klaida." }); }
     if (r.klaida) return res.status(r.status).json(r.laukas ? { error: r.klaida, laukas: r.laukas } : { error: r.klaida });
     try {
-      const atsakymas = await siusk(r.anthropic);
+      const atsakymas = await siusk(r.anthropic, { laikas: r.laikasMs });
       return res.json(atsakymas);
     } catch (e) {
       const st = e && e.response && e.response.status;
       console.error("DI užduotis " + r.sablonas + ": Anthropic " + (st || (e && e.code) || "klaida"));
+      // Laukimo riba pagal užduotį (2026-11-23) - 504, ne bendra klaida
+      if (!st && e && (e.code === "ECONNABORTED" || e.code === "ETIMEDOUT")) return res.status(504).json({ error: "DI paslauga neatsakė per nustatytą laiką." });
       if (st === 429 || st === 529) return res.status(429).json({ error: "DI paslauga šiuo metu perkrauta." });
       if (st >= 500) return res.status(502).json({ error: "DI paslaugos klaida." });
       return res.status(502).json({ error: "DI užklausa nepavyko." });

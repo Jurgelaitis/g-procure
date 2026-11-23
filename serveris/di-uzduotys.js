@@ -33,7 +33,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var VERSIJA = "2026-11-11";
+  var VERSIJA = "2026-11-23";
   // Modeliai - kaip serverio index.js (R5, 2026-10-05) ir shared/ai-proxy.js.
   var LEIDZIAMI_MODELIAI = ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"];
   // Atsakymo ilgio viršutinė riba šablonams (2026-11-11, naudotojo leidimas; iki tol 8000 - PP-ts pilnoji analizė nutrūkdavo).
@@ -46,6 +46,24 @@
   // Kūno riba - kaip nginx ir express (10 MB); dokumento base64 - kaip shared/ai-proxy.js MAX_BASE64.
   var MAX_BASE64 = 9 * 1024 * 1024;
   var MAX_TEKSTO = 400000;
+  // Laukimas ir kūno dydis pagal užduotį (2026-11-23, saugumo auditas G-01): trumpai užduočiai nereikia laikyti ryšio 290 s ir priimti 10 MB.
+  // Laukimas - šablono `laikas` (s, 10-290) arba pagal atsakymo ilgį: 40 s + 25 ms žetonui, ne mažiau 60 ir ne daugiau 290 s (išmatuota:
+  // 8 000 žetonų ~177 s, 12 000 ~250 s); Opus - 1,25 karto ilgiau. Kūnas - dokumentui jo riba + 1 MB, kitaip laukų ribos × 3 + 64 KB, ne daugiau 10 MB.
+  var LAIKAS_MIN = 60000, LAIKAS_MAX = 290000, MAX_KUNAS = 10 * 1024 * 1024;
+  function laukimas(s, modelis) {
+    var ms = s.laikas ? s.laikas * 1000 : Math.min(LAIKAS_MAX, Math.max(LAIKAS_MIN, 40000 + s.maxTokens * 25));
+    if (!s.laikas && /opus/.test(modelis || "")) ms = Math.min(LAIKAS_MAX, Math.round(ms * 1.25));
+    return ms;
+  }
+  function kunoRiba(s) {
+    if (s.dokumentas) return Math.min(MAX_KUNAS, s.dokumentas.maxBaitu + 1024 * 1024);
+    var simb = 0;
+    Object.keys(s.duomenys || {}).forEach(function (k) {
+      var x = s.duomenys[k];
+      simb += x.tipas === "tekstas" ? x.max : (x.tipas === "tekstai" || x.tipas === "zodynas") ? x.max * x.kiekis + 64 * x.kiekis : 64;
+    });
+    return Math.min(MAX_KUNAS, simb * 3 + 64 * 1024);
+  }
 
   var KLAIDOS = {
     kunas: "Netaisyklinga užklausa.",
@@ -96,8 +114,10 @@
         if (!(s.dokumentas.maxBaitu > 0 && s.dokumentas.maxBaitu <= MAX_BASE64)) throw new Error(s.id + ": dokumento maxBaitu 1-" + MAX_BASE64);
         if (s.dokumentas.privalomas !== undefined && typeof s.dokumentas.privalomas !== "boolean") throw new Error(s.id + ": dokumento privalomas - true ar false");
       }
-      reg[s.id] = { id: s.id, modeliai: modeliai, modelis: s.modelis || modeliai[0], maxTokens: s.maxTokens,
+      if (s.laikas !== undefined && !(Number.isInteger(s.laikas) && s.laikas >= 10 && s.laikas <= LAIKAS_MAX / 1000)) throw new Error(s.id + ": laikas 10-" + (LAIKAS_MAX / 1000) + " s");
+      reg[s.id] = { id: s.id, modeliai: modeliai, modelis: s.modelis || modeliai[0], maxTokens: s.maxTokens, laikas: s.laikas || null,
         duomenys: s.duomenys || {}, dokumentas: s.dokumentas || null, system: s.system, vartotojas: s.vartotojas };
+      reg[s.id].kunoRiba = kunoRiba(reg[s.id]);
     });
     return reg;
   }
@@ -188,12 +208,13 @@
     turinys.push({ type: "text", text: tekstas });
     var anthropic = { model: modelis, max_tokens: s.maxTokens, messages: [{ role: "user", content: turinys }] };
     if (sistema) anthropic.system = sistema;
-    return { anthropic: anthropic, sablonas: s.id };
+    return { anthropic: anthropic, sablonas: s.id, laikasMs: laukimas(s, modelis) };
   }
 
   return {
     VERSIJA: VERSIJA, LEIDZIAMI_MODELIAI: LEIDZIAMI_MODELIAI, MAX_TOKENS_RIBA: MAX_TOKENS_RIBA, ID_RE: ID_RE, TIPAI: TIPAI,
     DOK_TIPAI: DOK_TIPAI, MAX_BASE64: MAX_BASE64, KLAIDOS: KLAIDOS,
-    registruok: registruok, tikrinkDuomenis: tikrinkDuomenis, tikrinkDokumenta: tikrinkDokumenta, sudaryk: sudaryk, svarus: svarus
+    registruok: registruok, tikrinkDuomenis: tikrinkDuomenis, tikrinkDokumenta: tikrinkDokumenta, sudaryk: sudaryk, svarus: svarus,
+    laukimas: laukimas, kunoRiba: kunoRiba, LAIKAS_MIN: LAIKAS_MIN, LAIKAS_MAX: LAIKAS_MAX
   };
 });

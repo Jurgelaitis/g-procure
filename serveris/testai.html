@@ -865,6 +865,32 @@ async function testaiDiUzduotys(){
       let meta = false; try { await w.GP_AI_PROXY.uzduotis("../api/analyze", {}); } catch (e) { meta = true; } tiesa(meta, "netinkamas pavadinimas");
     } finally { f.remove(); }
   });
+  await testas("Laukimas ir kūno dydis pagal užduotį (2026-11-23, G-01): laukimas pagal atsakymo ilgį (60-290 s, Opus 1,25 karto) arba šablono laikas; kūno riba pagal laukus ar dokumentą; maršrutas - 413 per dideliam kūnui, laukimas perduodamas siuntimui, laikas baigėsi - 504", async () => {
+    const reg = D.registruok([sab(), sab({ id: "pp-bandymas.ilgas", maxTokens: 12000 }), sab({ id: "pp-bandymas.laikas", laikas: 30, maxTokens: 12000, modeliai: ["claude-sonnet-4-6", "claude-opus-4-6"] }),
+      sab({ id: "pp-bandymas.pdf", dokumentas: { tipai: ["application/pdf"], maxBaitu: 2 * 1024 * 1024 } })]);
+    const lk = (id, modelis) => D.sudaryk(Object.assign({ uzduotis: id, duomenys: { pavadinimas: "a" } }, modelis ? { modelis } : {}), reg).laikasMs;
+    lygu([lk("pp-bandymas.vertimas"), lk("pp-bandymas.ilgas"), lk("pp-bandymas.laikas"), lk("pp-bandymas.laikas", "claude-opus-4-6")], [60000, 290000, 30000, 30000], "laukimas: trumpa, ilga, šablono laikas (Opus jo nekeičia)");
+    lygu([D.laukimas({ maxTokens: 4000 }, "claude-sonnet-4-6"), D.laukimas({ maxTokens: 4000 }, "claude-opus-4-6"), D.laukimas({ maxTokens: 8000 }, "x")], [140000, 175000, 240000], "formulė 40 s + 25 ms žetonui, Opus 1,25");
+    for (const l of [5, 291, 30.5, "30"]) { let meta = false; try { D.registruok([sab({ laikas: l })]); } catch (e) { meta = true; } tiesa(meta, "netinkamas laikas priimtas: " + l); }
+    lygu([reg["pp-bandymas.vertimas"].kunoRiba, reg["pp-bandymas.pdf"].kunoRiba], [(50 + 64 + 64 + 64 + 20 * 3 + 64 * 3) * 3 + 64 * 1024, 3 * 1024 * 1024], "kūno ribos");
+    const m = await tekstas("di-uzduotys-marsrutas.js");
+    const mod = { exports: null };
+    const fs = { readdirSync: () => ["pp-bandymas.vertimas.js"] }, path = { join: (a, b) => a + "/" + b };
+    new Function("require", "module", "process", "__dirname", m)(x => x === "node:fs" ? fs : x === "node:path" ? path : x === "./di-uzduotys.js" ? D : sab(), mod, {}, "/");
+    const siusta = []; let klaida = null;
+    const handler = mod.exports({ katalogas: "/u", siusk: (k, o) => { siusta.push([k.model, o && o.laikas]); return klaida ? Promise.reject(klaida) : Promise.resolve({ content: [{ type: "text", text: "ok" }] }); } });
+    const kviesk = async (body, ilgis) => { const r = { st: 200, k: null, status(x) { this.st = x; return this; }, json(x) { this.k = x; return this; } };
+      await handler({ body, headers: { "content-length": String(ilgis) } }, r); return [r.st, r.k && (r.k.error || (r.k.content && r.k.content[0].text))]; };
+    const kunas = { uzduotis: "pp-bandymas.vertimas", duomenys: { pavadinimas: "a" } };
+    lygu(await kviesk(kunas, 120), [200, "ok"], "įprasta užklausa");
+    lygu(siusta, [["claude-sonnet-4-6", 60000]], "laukimas perduotas siuntimui");
+    lygu(await kviesk(kunas, reg["pp-bandymas.vertimas"].kunoRiba + 1), [413, "Užklausa per didelė šiai DI užduočiai."], "per didelis kūnas - 413, nesiunčiama");
+    lygu(siusta.length, 1, "413 atveju į DI nesiųsta");
+    klaida = Object.assign(new Error("timeout"), { code: "ECONNABORTED" });
+    lygu(await kviesk(kunas, 120), [504, "DI paslauga neatsakė per nustatytą laiką."], "laikas baigėsi - 504");
+    klaida = Object.assign(new Error("x"), { response: { status: 529 } });
+    lygu(await kviesk(kunas, 120), [429, "DI paslauga šiuo metu perkrauta."], "kitos klaidos - kaip iki tol");
+  });
 }
 
 /* ============ Viešų pirkimų sutarčių duomenų paslauga (2026-11-19) ============ */
