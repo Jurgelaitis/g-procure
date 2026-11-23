@@ -3293,7 +3293,7 @@ async function testaiSkelbimasDarbastalis(){
       lygu(K.gauk(id).pasiulymuTerminas, "2026-10-02T13:00", "neišsaugota, kol žmogus nepaspaudė „Išsaugoti kortelę“");
     } finally { fr.remove(); }
     const src = await (await fetch("../pirkimu-korteles.html?b=" + Date.now())).text();
-    tiesa(/atverkKortele\(decodeURIComponent\(h\.slice\(9\)\), \{ vpt: vptAuto[,} ]/.test(src) && /vptAuto = qs\.get\("vpt"\) === "1"/.test(src), "adreso #kortele= kelias naudoja atverkKortele su vpt");
+    tiesa(/kId = decodeURIComponent\(h\.slice\(9\)\)/.test(src) && /atverkKortele\(kId, \{ vpt: vptAuto[,} ]/.test(src) && /vptAuto = qs\.get\("vpt"\) === "1"/.test(src), "adreso #kortele= kelias naudoja atverkKortele su vpt");
   });
 
   await testas("Portalas: „Mano pirkimai“ tarp įžangos ir katalogo, pradžioje paslėptas, poraštėje - „Pirkimų kortelės“", async ()=>{
@@ -8583,21 +8583,26 @@ async function testaiSaugumas(){
     tiesa(/TURNSTILE_SECRET_KEY/.test(t) && /siteverify/.test(t), "tiekejams-proxy.js: Turnstile");
   });
 
-  await testas("CSP: kiekvienas puslapis iškart po <meta charset> turi Content-Security-Policy - object-src 'none', base-uri 'self', connect-src su leidžiamais adresais (paleidiklis krenta, jei vykdant testus CSP ką nors užblokuoja)", async ()=>{
+  await testas("CSP: kiekvienas puslapis iškart po <meta charset> turi Content-Security-Policy - default-src 'self', skriptai, stiliai, paveikslėliai, šriftai, darbininkai ir rėmeliai tik iš svetainės (Turnstile - tik EPD ir tiekėjams), form-action 'none', object-src 'none', base-uri 'self', connect-src su leidžiamais adresais (paleidiklis krenta, jei vykdant testus CSP ką nors užblokuoja)", async ()=>{
+    // 2026-11-24 (saugumo auditas G-09): pirmasis etapas. 'unsafe-inline' - puslapiuose daug įterptų skriptų ir onclick; 'unsafe-eval' - testai kviečia
+    // W.eval modulio rėmelyje (be jo nė vienas testų rinkinys neveiktų). Kitas etapas - įterptus skriptus perkelti į failus.
+    const PRADZIA = cf => "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'" + cf + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self'" + cf + "; form-action 'none'; ";
     // Naudojimosi statistikos adresas (PostHog ES) - tik puslapiuose, kurie jungia shared/analitika.js (vidiniai įrankiai jo neturi)
     const BAZE = "object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:";
     const BE_STATISTIKOS = "object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:";
-    // Papildomi adresai - tik ten, kur modulis į juos kreipiasi pats (EPD Worker'is ir Turnstile, OSP, PP-ts - bet koks dokumento adresas)
+    // Papildomi adresai - tik ten, kur modulis į juos kreipiasi pats (EPD Worker'is ir Turnstile, OSP). PP-ts „https:“ (bet koks dokumento adresas) - pašalintas 2026-11-24
     const PAPILDOMA = { "../PP-carbon/epd.html": " https://epd-api.g-procure.com https://challenges.cloudflare.com", "../PP-tiekejams/index.html": " https://challenges.cloudflare.com",
-      "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": " https://osp-rs.stat.gov.lt https://ec.europa.eu https://data-api.ecb.europa.eu", "../PP-ts/TS_Asistentas.html": " https:" };
-    const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)).concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-teise/admin.html", "../PP-salygos/kartografas.html", "../PP-salygos/E0-variklis.html"]))];
+      "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": " https://osp-rs.stat.gov.lt https://ec.europa.eu https://data-api.ecb.europa.eu" };
+    const TURNSTILE = ["../PP-carbon/epd.html", "../PP-tiekejams/index.html"];
+    const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)).concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-teise/admin.html", "../PP-salygos/kartografas.html", "../PP-salygos/E0-variklis.html",
+      "../PP-home/index.html", "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html"]))];
     const blogi = [];
     for (const m of puslapiai) {
       const src = await saltinis(m);
       const x = /<meta charset="?UTF-8"?\s*\/?>\s*<meta http-equiv="Content-Security-Policy" content="([^"]*)">/i.exec(src);
       if (!x) { blogi.push(m + ": nėra CSP žymos iškart po <meta charset>"); continue; }
       const suStatistika = /<script src="(?:\.\.\/)?shared\/analitika\.js"><\/script>/.test(src);
-      if (x[1] !== (suStatistika ? BAZE : BE_STATISTIKOS) + (PAPILDOMA[m] || "")) blogi.push(m + ": „" + x[1] + "“" + (suStatistika ? "" : " (be analitika.js - be PostHog adreso)"));
+      if (x[1] !== PRADZIA(TURNSTILE.includes(m) ? " https://challenges.cloudflare.com" : "") + (suStatistika ? BAZE : BE_STATISTIKOS) + (PAPILDOMA[m] || "")) blogi.push(m + ": „" + x[1] + "“" + (suStatistika ? "" : " (be analitika.js - be PostHog adreso)"));
       if ((src.match(/Content-Security-Policy/g) || []).length !== 1) blogi.push(m + ": CSP žyma ne viena");
     }
     tiesa(puslapiai.length >= 29, "puslapių tik " + puslapiai.length);
@@ -13365,6 +13370,47 @@ async function testaiPaieska1114(){
    ========================================================================== */
 /* Testų aplinka (saugumo auditas G-10, 2026-11-23): testų puslapiai svetainėje neskelbiami (_config.yml exclude), vykdomi tik vietoje
    (shared/testu-aplinka.js - pirmas <head> skriptas), testų parametrai gamybos kode priimami tik vietoje. */
+/* 2026-11-24 (saugumo auditas G-09, G-22): apsauga nuo įrėminimo kitoje svetainėje (shared/sutikimas.js) ir sugadintas kortelių puslapio adresas */
+async function testaiNarsykle1124(){
+  dabartine = grupe("Naršyklės apsauga: įrėminimas ir sugadintas adresas (2026-11-24)");
+  const remelis = (lang, kunas) => new Promise(res => {
+    const f = document.createElement("iframe"); f.style.cssText = "width:500px;height:300px";
+    f.srcdoc = '<!doctype html><html lang="' + lang + '"><head><meta charset="utf-8"></head><body><script src="sutikimas.js"><\/script>' + kunas + '</body></html>';
+    f.addEventListener("load", () => res(f), { once: true }); document.body.appendChild(f);
+  });
+  await testas("Tos pačios kilmės rėmelyje turinys rodomas; kitos kilmės rėmelyje (viršutinio lango dokumentas nepasiekiamas) - turinys paslepiamas, spausti negalima, rodoma nuoroda atverti atskirai (LT ir EN)", async () => {
+    let f = await remelis("lt", '<button id="mygt" style="margin:40px;width:200px;height:60px">Patvirtinti</button>');
+    try {
+      const w = f.contentWindow, d = f.contentDocument, S = w.GP_SUTIKIMAS;
+      lygu([S.REMAS, w.getComputedStyle(d.documentElement).visibility, !!d.getElementById("gpRemoApsauga")], [false, "visible", false], "tos pačios kilmės (srcdoc) - leidžiama");
+      const virs = {}; virs.top = virs;
+      const kita = { top: { get document() { throw new w.DOMException("Blocked a frame", "SecurityError"); } } };
+      lygu([S.svetimasRemas(virs), S.svetimasRemas({ top: { document: {} } }), S.svetimasRemas(kita)], [false, false, true], "kilmės nustatymas");
+      S.apsaugokNuoRemo(d);
+      const b = d.getElementById("mygt"), r = b.getBoundingClientRect(), box = d.getElementById("gpRemoApsauga");
+      lygu([w.getComputedStyle(d.documentElement).visibility, w.getComputedStyle(b).visibility, w.getComputedStyle(box).visibility], ["hidden", "hidden", "visible"], "matomumas");
+      tiesa(d.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) !== b, "paslėpto mygtuko paspausti negalima");
+      const a = box.querySelector("a");
+      tiesa(box.getAttribute("role") === "alert" && /įkeltas kitoje svetainėje/.test(box.textContent) && a.target === "_blank" && /noopener/.test(a.rel) && a.href === d.location.href, "pranešimas ir nuoroda: " + box.textContent);
+      S.apsaugokNuoRemo(d);
+      lygu(d.querySelectorAll("#gpRemoApsauga").length, 1, "antrą kartą nekartojama");
+    } finally { f.remove(); }
+    f = await remelis("en", "<p>x</p>");
+    try { f.contentWindow.GP_SUTIKIMAS.apsaugokNuoRemo(f.contentDocument); tiesa(/loaded inside another website/.test(f.contentDocument.getElementById("gpRemoApsauga").textContent), "EN"); } finally { f.remove(); }
+    const src = await (await fetch("sutikimas.js")).text();
+    tiesa(/var REMAS = svetimasRemas\(global\);\s*if \(REMAS\) apsaugokNuoRemo\(doc\);/.test(src), "paleidžiama įkeliant");
+  });
+  await testas("Kortelių puslapis: sugadintas adresas #kortele=%E0 nenutraukia paleidimo - pasakoma, kad kortelės nėra", async () => {
+    const f = await new Promise(res => { const x = document.createElement("iframe"); x.style.cssText = "width:1000px;height:600px";
+      x.addEventListener("load", () => res(x), { once: true }); x.src = "../pirkimu-korteles.html?saugykla=testine&b=" + Date.now() + "#kortele=%E0"; document.body.appendChild(x); });
+    try {
+      const d = f.contentDocument; let i = 0;
+      while (i++ < 40 && !/šioje naršyklėje nėra/.test((d.getElementById("busena") || {}).textContent || "")) await new Promise(r => setTimeout(r, 100));
+      tiesa(/Kortelės, kurią norėjote keisti, šioje naršyklėje nėra/.test(d.getElementById("busena").textContent), "būsena: " + d.getElementById("busena").textContent);
+    } finally { f.remove(); }
+  });
+}
+
 async function testaiTestuAplinka1123(){
   dabartine = grupe("Testų aplinka - tik vietoje (saugumo auditas G-10, 2026-11-23)");
   const TESTU_PUSLAPIAI = ["PP-carbon", "PP-cost-benefit", "PP-esg", "PP-graphs", "PP-market-KPI", "PP-negotiation", "PP-plan", "PP-protocol", "PP-qual",
@@ -13636,7 +13682,7 @@ async function testaiPilotas3Kortele1120(){
      testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
      testaiKalbuSutikrinimas, testaiNuoseklumas, testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
      testaiVendor, testaiKortelesPatikra1106, testaiPilotas1110, testaiSpecialistas, testaiPilotas1112, testaiVertinimas1113, testaiApie1114, testaiMiniaturos1114, testaiKryptis1114, testaiPaieska1114, testaiIstorija1114, testaiPoveikis1114, testaiByla1114, testaiTeisesPoveikis1115, testaiDiFunkcijos1115, testaiPrekes1119, testaiNzia1119, testaiViesosSutartys1119, testaiPilotas3Kortele1120, testaiKiberKortele1120, testaiNacsaugDi1123],
-    [testaiTelefonas, testaiPrieinamumas, testaiFokusas, testaiTestuAplinka1123]
+    [testaiTelefonas, testaiPrieinamumas, testaiFokusas, testaiTestuAplinka1123, testaiNarsykle1124]
   ]);
   await GP_TESTU_DALYS.vykdyk(GRUPES);
   document.getElementById("busena").textContent =

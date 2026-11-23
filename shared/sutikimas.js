@@ -46,6 +46,37 @@
   if (global.GP_SUTIKIMAS) return;
 
   var doc = global.document;
+
+  /* APSAUGA NUO ĮRĖMINIMO (2026-11-24, saugumo auditas G-09 / A-08). GitHub Pages HTTP antraščių nesiunčia, o frame-ancestors <meta>
+     žymoje neveikia, todėl tikrinama naršyklėje. Kai puslapis atvertas KITOS KILMĖS rėmelyje (kita svetainė galėtų paslėpti mūsų mygtukus
+     po savo turiniu ir išgauti paspaudimą), visas turinys paslepiamas (visibility - paslėptų elementų spausti negalima), o rodoma tik
+     nuoroda atverti puslapį atskirai. Tos pačios kilmės rėmeliai (BVPŽ paieška PP-plan, srcdoc, testai) - leidžiami: kitos kilmės
+     viršutinio lango dokumento pasiekti negalima, todėl būtent tai ir tikrinama (location.origin srcdoc rėmelyje - „null“, netinka).
+     Šis failas įkeliamas <body> pradžioje, todėl turinys nespėja pasirodyti. */
+  function svetimasRemas(w) {
+    try { if (w.top === w) return false; return !w.top.document; } catch (e) { return true; }
+  }
+  function apsaugokNuoRemo(d) {
+    var html = d.documentElement;
+    html.style.setProperty("visibility", "hidden", "important");
+    function rodyk() {
+      if (!d.body || d.getElementById("gpRemoApsauga")) return;
+      var en = String(html.lang || "").slice(0, 2) === "en";
+      var box = d.createElement("div"); box.id = "gpRemoApsauga"; box.setAttribute("role", "alert");
+      box.style.cssText = "visibility:visible;position:fixed;inset:0;z-index:2147483647;background:#fff;color:#2E3641;display:flex;flex-direction:column;" +
+        "align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;font:16px/1.5 system-ui,sans-serif";
+      var p = d.createElement("p"); p.style.margin = "0"; p.style.maxWidth = "36em";
+      p.textContent = en ? "This G-Procure page has been loaded inside another website, so its content is hidden (protection against deceptive clicks). Open it on its own:"
+        : "Šis G-Procure puslapis įkeltas kitoje svetainėje, todėl jo turinys paslėptas (apsauga nuo apgaulingų paspaudimų). Atverkite jį atskirai:";
+      var a = d.createElement("a"); a.href = d.location.href; a.target = "_blank"; a.rel = "noopener noreferrer"; a.style.color = "#007554"; a.style.fontWeight = "700";
+      a.textContent = en ? "Open the page at g-procure.com" : "Atverti puslapį g-procure.com";
+      box.appendChild(p); box.appendChild(a); d.body.appendChild(box);
+    }
+    if (d.readyState === "loading") d.addEventListener("DOMContentLoaded", rodyk, { once: true }); else rodyk();
+  }
+  var REMAS = svetimasRemas(global);
+  if (REMAS) apsaugokNuoRemo(doc);
+
   var RAKTAS = "gprocure.sutikimas";
   var VERSIJA = "2026-10-16-2";      // -2: nauja kategorija „statistika“ (iki tol - 2026-10-16)
   var GALIOJA_MEN = 12;
@@ -551,6 +582,7 @@
     leidzia: leidzia, kategorija: kategorija, busena: busena, nustatyk: nustatyk,
     rodyk: function (o) { return rodyk(o); }, slepk: slepk, atverk: function (atidare) { return atverk(atidare); }, uzdaryk: uzdaryk, kalba: kalba,
     raktai: raktaiKategorijos,
+    svetimasRemas: svetimasRemas, apsaugokNuoRemo: apsaugokNuoRemo, REMAS: REMAS,
     naudokSaugykla: function (s) { TESTINE = s || (testuPuslapis() ? atmintis() : null); ATMINTYJE = null; atnaujinkSasaja(); }
   };
   pradzia();

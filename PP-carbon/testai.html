@@ -169,11 +169,37 @@ async function testaiEpd(){
   dabartine = grupe("EPD įrankis (epd.html)");
 
   await testas("320 px ekrane patikros langelis kompaktiškas, puslapis neslenka į šoną", async ()=>{
-    const { f, d } = await puslapis("epd.html?lang=lt", 320);
+    const { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 320);
     lygu(d.querySelector(".cf-turnstile").getAttribute("data-size"), "compact", "Turnstile dydis");
+    f.contentWindow.krautiTurnstile();   // nuo 2026-11-24 Turnstile kraunamas tik pasirinkus PDF
     for (let i = 0; i < 20 && d.querySelector(".cf-turnstile").children.length === 0; i++) await laukti(250);   // langelis piešiamas iš tinklo
     tiesa(!slenka(d), "slenka į šoną (" + d.documentElement.scrollWidth + " > " + d.documentElement.clientWidth + ")");
     f.remove();
+  });
+
+  await testas("Turnstile (trečiosios šalies skriptas) kraunamas tik pasirinkus PDF, ne atvėrus puslapį; vieną kartą; vietoje - nekraunamas (2026-11-24, saugumo auditas G-09)", async ()=>{
+    const pdf = w => { const dt = new w.DataTransfer(); dt.items.add(new w.File(["%PDF-1.4"], "epd.pdf", { type: "application/pdf" })); return dt.files; };
+    const skriptai = d => [...d.querySelectorAll("script[src]")].filter(x => /challenges\.cloudflare\.com/.test(x.src)).length;
+    let { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 1280);
+    try {
+      const w = f.contentWindow;
+      lygu([skriptai(d), d.getElementById("patikraVeliau").hidden], [0, false], "atvėrus - nekraunama, pastaba matoma");
+      tiesa(/atsiras pasirinkus PDF/.test(d.getElementById("patikraVeliau").textContent), "pastaba");
+      d.getElementById("pdf").files = pdf(w); w.onFile();
+      lygu([skriptai(d), d.getElementById("patikraVeliau").hidden], [1, true], "pasirinkus PDF - kraunama");
+      d.getElementById("pdf").files = pdf(w); w.onFile();
+      lygu(skriptai(d), 1, "antrą kartą nekraunama");
+    } finally { f.remove(); }
+    ({ f, d } = await puslapis("epd.html?lang=lt", 1280));
+    try {
+      const w = f.contentWindow;
+      d.getElementById("pdf").files = pdf(w); w.onFile();
+      lygu([w.VIETINE, skriptai(d)], [true, 0], "vietoje - nekraunama");
+    } finally { f.remove(); }
+    ({ f, d } = await puslapis("epd.html?lang=en&epd=worker", 1280));
+    try { tiesa(/appears once you choose a PDF file/.test(d.getElementById("patikraVeliau").textContent), "EN"); } finally { f.remove(); }
+    const src = await (await fetch("epd.html")).text();
+    tiesa(!/<script[^>]*src="https:\/\/challenges\.cloudflare\.com/.test(src), "statinės Turnstile žymos nebėra");
   });
 
   await testas("Plačiame ekrane langelis įprasto dydžio (dydis nenustatomas)", async ()=>{
