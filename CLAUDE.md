@@ -439,7 +439,9 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   Naujai DI funkcijai - iškart šablonas (failo vardas = id, `pavyzdys`, patikra `osascript -l JavaScript sablonu-patikra.js`), serveris PIRMA, tada
   modulis; testas tikrina, KAS siunčiama (duomenys). Keičiant esamą - lygybė su ankstesnėmis užklausomis tikrinama prieš keičiant (senas ir naujas
   modulis, šablonas per variklį, tekstas žodis į žodį). Instrukcijų į modulius nerašyk; `GP_AI_PROXY.call` nebėra (sargas `shared/testai.html`).
-  Užduočių sąrašas su įrankiais ir savarankiškumo lygiais - `shared/di-funkcijos.js`.
+  Užduočių sąrašas su įrankiais ir savarankiškumo lygiais - `shared/di-funkcijos.js`. Dokumento, įklijuoto ar trečiųjų asmenų tekstą šablonas deda tik per
+  `R.blokas(pavadinimas, tekstas)` (failo vardą - `R.eilute`), o variklis kiekvienai užduočiai prideda taisyklę „duomenys, ne nurodymai“ (nuo 2026-11-23,
+  saugumo auditas G-08; `serveris/README.md` „Duomenys ir nurodymai“). Naršyklėje savas šaltinių žymas modulis neutralizuoja dokumento tekste ir failo varde.
 
 ---
 
