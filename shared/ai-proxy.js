@@ -229,6 +229,15 @@
     var body = { uzduotis: id, duomenys: duomenys || {} };
     if (opts.modelis) body.modelis = opts.modelis;
     if (opts.dokumentas) body.dokumentas = { tipas: opts.dokumentas.tipas, duomenys: opts.dokumentas.duomenys };
+    // Nacionalinio saugumo užtvara (shared/nacsaug-di.js, 2026-11-23, saugumo auditas G-06): kai įrankis ją įjungė, siunčiama tik
+    // žmogui atsakius „Ne“ arba patvirtinus siuntimą „Taip“ pirkimui. Tikrinama čia, kad jos neapeitų joks mygtukas ar automatinis siuntimas.
+    var ns = global.GP_NS_DI;
+    if (ns && typeof ns.aktyvus === "function" && ns.aktyvus()) {
+      return ns.leisk({ signal: opts.signal }).then(function (leista) {
+        if (!leista) return { ok: false, text: "", raw: null, status: 0, error: ns.priezastis(), nesiusta: true };
+        return siusk(PROXY_BASE + UZDUOTIS_PATH, body, opts);
+      });
+    }
     return siusk(PROXY_BASE + UZDUOTIS_PATH, body, opts);
   }
 

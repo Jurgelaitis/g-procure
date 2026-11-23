@@ -28,6 +28,15 @@ iframe{width:1px;height:1px;opacity:0;position:absolute}
 <iframe id="ramas" src="./index.html" title="PP-tiekejams"></iframe>
 <script src="../shared/testu-apsauga.js"></script>
 <script>
+/* Nacionalinio saugumo užtvara DI siuntimui (shared/nacsaug-di.js, saugumo auditas G-06, 2026-11-23): ankstesni testai tikrina DI kelius be
+   naudotojo lango, todėl kiekviename įkeltame modulio rėmelyje GP_NS_DI.leisk praleidžia; tikra užtvara - GP_NS_DI.__tikras (testaiNacsaugDi1123). */
+document.addEventListener("load", e => {
+  const f = e.target;
+  if (!f || f.tagName !== "IFRAME") return;
+  try { const N = f.contentWindow && f.contentWindow.GP_NS_DI; if (N && !N.__tikras) { N.__tikras = N.leisk; N.leisk = () => Promise.resolve(true); } } catch (x) {}
+}, true);
+</script>
+<script>
 /* Tikri naudotojo įrašai (paskutinis pirkimo ID, skaitikliai, kalba) įsimenami prieš įkeliant modulį ir
    atkuriami pabaigoje bei uždarant puslapį - testai viešu adresu naudoja tą pačią saugyklą. */
 const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k === "pp_tiekejams" || k === "pptiekejams.lang");
@@ -4235,9 +4244,44 @@ async function paleisk() {
       lygu(KK([SPS("Qualification is not checked.", "A manufacturer's authorisation must be submitted.")]).kvalifikacija, undefined, "EN be „kvalifikacija nėra tikrinama“ - ne");
     });
   }
+  /* Užtvara DI siuntimui (shared/nacsaug-di.js, saugumo auditas G-06, naudotojo sprendimas 2026-11-23): tik paties įkeltiems failams -
+     klausimas apie neviešai gautą informaciją; vieši CVP IS dokumentai - be klausimo. Tikra užtvara - GP_NS_DI.__tikras. */
+  async function testaiNacsaugDi1123() {
+    grupe("Užtvara DI: paties įkelti failai (2026-11-23)");
+    await testas("CVP IS dokumentai - be klausimo; paties įkeltas failas - klausimas, „Nesiųsti“ - tikėtinos vietos be DI su priežastimi, „Ne“ - siunčiama ir neklausiama; naujas paties failas - vėl klausiama; tekstas prie „Klausti“", async () => {
+      const f = document.createElement("iframe"); f.style.cssText = "width:1px;height:1px;opacity:0;position:absolute";
+      const w = await new Promise(res => { f.addEventListener("load", () => res(f.contentWindow), { once: true }); f.src = "./index.html?saugykla=" + Date.now(); document.body.appendChild(f); });
+      try {
+        await new Promise(r => setTimeout(r, 300));
+        const N = w.GP_NS_DI; N.leisk = N.__tikras || N.leisk;
+        const kv = []; w.GP_AI_PROXY.uzduotis = (u, d) => { kv.push(u); return Promise.resolve({ ok: true, text: "{}", raw: {} }); };
+        const prom = { uzduotis: "pp-tiekejams.atsakymas", duomenys: {} };
+        const failas = (v, t) => new w.File([t], v, { type: "text/plain" });
+        await w.onFiles([failas("SPS.txt", "Specialiosios pirkimo sąlygos. Pasiūlymas galioja 90 dienų.")], { isCvp: true });
+        tiesa(w.eval("S.docs").every(d => d.isCvp), "CVP IS dokumentai pažymėti");
+        let r = await w.kviestiAI("qa", prom, [], "Kiek galioja?");
+        lygu([r.ok, kv.length, !!N.langas()], [true, 1, false], "CVP IS dokumentai - be klausimo");
+        await w.onFiles([failas("Mano.txt", "Konfidencialus priedas. Kaina 1000 Eur.")]);
+        let p = w.kviestiAI("qa", prom, [], "Kiek galioja?");
+        tiesa(N.langas() && /neviešai gautos informacijos/.test(N.langas().textContent), "klausimas apie paties įkeltus failus");
+        N.langas().querySelector('[data-gpns="nesiusti"]').click(); r = await p;
+        lygu([r.ok, r.nesiusta, kv.length], [false, true, 1], "nesiųsta");
+        const html = w.renderBeAI("Kiek galioja?", [], "nesiusta", r.error);
+        tiesa(/Nesiųsta į DI: neatsakyta, ar įkeltuose failuose/.test(html), "priežastis vietoj DI atsakymo: " + html.slice(0, 200));
+        p = w.kviestiAI("qa", prom, [], "Kiek galioja?"); N.langas().querySelector('[data-gpns="ne"]').click(); r = await p;
+        lygu([r.ok, kv.length], [true, 2], "„Ne“ - išsiųsta");
+        r = await w.kviestiAI("qa", prom, [], "Kiek galioja?"); lygu([kv.length, !!N.langas()], [3, false], "antrą kartą neklausiama");
+        await w.onFiles([failas("Kitas.txt", "Dar vienas priedas.")]);
+        p = w.kviestiAI("qa", prom, [], "Kiek galioja?"); tiesa(!!N.langas(), "naujas paties failas - vėl klausiama");
+        N.langas().querySelector('[data-gpns="nesiusti"]').click(); await p;
+        tiesa(/paklausiama, ar juose yra neviešai gautos informacijos/.test(w.document.getElementById("diPranesimas").textContent), "tekstas prie „Klausti“");
+      } finally { f.remove(); }
+    });
+  }
   await testaiPilotas1110();
   await testaiPilotas1112();
   await testaiPilotas1120();
+  await testaiNacsaugDi1123();
 
   grazinkKalba();
   APSAUGA.atkurk();

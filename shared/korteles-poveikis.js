@@ -41,16 +41,16 @@
                "numeris", "dalys", "trukmeMen", "kriterijus", "kvalifikacija", "zaliasis", "esLesos", "organizatoriausKontaktai", "grafikas", "vertinimas", "nziaTaikymas",
                "kiberIrt", "kiberSkaitmeniniai", "kiberKritinis"] },
     "pp-ts": { lt: "TS asistentas", en: "TS assistant", kelias: "PP-ts/TS_Asistentas.html",
-      laukai: ["budas", "bvpz", "dalys", "kriterijus", "objektas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas", "zaliasis",
+      laukai: ["budas", "bvpz", "dalys", "kriterijus", "nacsaugumas", "objektas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas", "zaliasis",
                "kiberIrt", "kiberSkaitmeniniai", "kiberKritinis"] },
     "pp-qual": { lt: "Kvalifikaciniai reikalavimai", en: "Qualification requirements", kelias: "PP-qual/PP-QUAL.html",
-      laukai: ["dalys", "objektas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas", "zaliasis"] },
+      laukai: ["dalys", "nacsaugumas", "objektas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas", "zaliasis"] },
     "pp-report": { lt: "Tiekėjų apklausos pažyma", en: "Supplier survey report", kelias: "PP-report/PP-report.html",
       laukai: ["budas", "bvpz", "cpo", "cvpisNr", "dalys", "iniciatorius", "kriterijus", "kvalifikacija", "nacsaugumas", "numeris", "organizatorius", "pavadinimas", "rezimas", "verte", "vykdytojas"] },
     "pp-protocol": { lt: "Protokolų generatorius", en: "Protocol generator", kelias: "PP-protocol/LITGRID_Generatorius_v3.html",
       laukai: ["budas", "cpo", "cvpisNr", "dalys", "iniciatorius", "kriterijus", "kvalifikacija", "numeris", "objektas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas"] },
     "pp-negotiation": { lt: "Derybų pasirengimo įrankis", en: "Negotiation preparation tool", kelias: "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html",
-      laukai: ["budas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas"] }
+      laukai: ["budas", "nacsaugumas", "pavadinimas", "rezimas", "trukmeMen", "verte", "vykdytojas"] }
   };
 
   /* Rezultatai, susieti su kortele. laukai - kortelės laukai, nuo kurių rezultatas priklauso (ne visi, kuriuos įrankis skaito:

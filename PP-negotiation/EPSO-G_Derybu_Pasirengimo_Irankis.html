@@ -61,6 +61,7 @@
 <script src="../shared/pirkimo-kortele.js"></script>
 <!-- Tiekėjo pasiūlymo skaitymas su DI (C lygis, 2026-10-21): tik mygtuku prie konkretaus failo, per G-Procure serverį (ai-proxy.js) -->
 <script src="../shared/ai-proxy.js"></script>
+<script src="../shared/nacsaug-di.js"></script>
 <script src="../shared/di-zymejimas.js"></script>
 <script src="di-skaitymas.js"></script>
 
@@ -802,6 +803,8 @@ a:hover { text-decoration: underline; }
   <main class="content">
     <!-- Bendra pirkimo kortelė (A1) - virš visų vaizdų, kad matytųsi ir projekto vaizde -->
     <div id="kortelesVieta"></div>
+    <!-- Nacionalinis saugumas ir DI (saugumo auditas G-06, 2026-11-23): be atsakymo „Ne“ ar patvirtinimo pasiūlymai į DI nesiunčiami -->
+    <div id="nsDiJuosta" class="ns-di-juosta"></div>
 
     <!-- =============== VIEW: DASHBOARD =============== -->
     <section class="view active" data-view="dashboard">
@@ -1223,6 +1226,7 @@ const storage = {
         }
         APP.state = suNumatytosiomis(data);
         storage.save();
+        if (window.GP_NS_DI) GP_NS_DI.isvalyk();     // kitas pirkimas - nacionalinio saugumo atsakymas ir DI patvirtinimas iš naujo (G-06)
         if (window.KORTELE) KORTELE.skirtumai(true);   // atvertas projektas - žmogaus darbas: kortelė tik palyginama
         cb && cb(true);
       } catch (e) {
@@ -1235,6 +1239,7 @@ const storage = {
   reset() {
     APP.state = defaultState();
     localStorage.removeItem(APP.storageKey);
+    if (window.GP_NS_DI) GP_NS_DI.isvalyk();         // naujas pirkimas - nacionalinio saugumo atsakymas ir DI patvirtinimas iš naujo (G-06)
     if (window.KORTELE) KORTELE.atsiek();          // naujas projektas - be pirkimo kortelės
   }
 };
@@ -4957,6 +4962,9 @@ document.addEventListener('DOMContentLoaded', init);
    skelbiamos derybos) laikomos tuščiomis. Vertė kortelėje - be PVM: jei projekte vertė su PVM, ji neįrašoma.
    Juostos kalba - <html lang> (persijungia kartu su setLang); modulio priežastys - L(). */
 (function () {
+  /* Nacionalinio saugumo užtvara DI siuntimui (shared/nacsaug-di.js, saugumo auditas G-06, naudotojo sprendimai 2026-11-23): „Skaityti su DI“ -
+     tik atsakius „Ne“ arba, kai „Taip“, žmogui patvirtinus siuntimą šiam pirkimui. Atsakymą pildo ir pirkimo kortelė; jis neįrašomas į projektą. */
+  if (window.GP_NS_DI) { GP_NS_DI.ijunk({ variantas: 'pirkimas' }); GP_NS_DI.mount('#nsDiJuosta', { id: 'nsDi', klase: 'select' }); }
   if (!window.GP_KORTELE || typeof APP === 'undefined') return;   // APP - const, ne window savybė
   var ORG = { 'litgrid': 'AB „Litgrid"', 'amber-grid': 'AB „Amber Grid"', 'epso-g': 'UAB „EPSO-G"', 'energy-cells': 'UAB „Energy cells"' };
   var P = function () { return APP.state.project; };
@@ -4987,7 +4995,11 @@ document.addEventListener('DOMContentLoaded', init);
       { kortele: 'trukmeMen', gauk: function () { return P().contractTermMonths > 0 ? String(P().contractTermMonths) : ''; },
         i: function (v) { return String(v); }, is: function (s) { return parseInt(s, 10) > 0 ? parseInt(s, 10) : undefined; },
         numatyta: sviezias, dek: function (v) { dek('contractTermMonths', Number(v)); } },
-      { kortele: 'pavadinimas', gauk: function () { return P().name || ''; }, dek: function (v) { dek('name', v); } }
+      { kortele: 'pavadinimas', gauk: function () { return P().name || ''; }, dek: function (v) { dek('name', v); } },
+      // Nacionalinis saugumas (G-06, 2026-11-23): kortelės atsakymas -> DI užtvaros klausimas
+      { kortele: 'nacsaugumas', gauk: function () { return window.GP_NS_DI ? (GP_NS_DI.ats() || '') : ''; },
+        i: function (v) { return v === 'taip' || v === 'ne' ? v : null; }, is: function (s) { return s === 'taip' || s === 'ne' ? s : undefined; },
+        dek: function (v) { if (window.GP_NS_DI) GP_NS_DI.nustatyk(v, 'kortele'); } }
     ]
   });
 })();

@@ -1422,6 +1422,7 @@
 <script src="../shared/taisykles.js"></script>
 <script src="../shared/teise-stebesena.js"></script>
 <script src="../shared/ai-proxy.js"></script>
+<script src="../shared/nacsaug-di.js"></script>
 <script src="../shared/di-zymejimas.js"></script>
 <!-- Darbas saugomas juodraštyje šioje naršyklėje (juodrastis.js, 2026-10-15); jei išsaugoti nepavyko, uždarant naršyklė paklausia - GP_DARBAS -->
 <script src="../shared/neissaugotas-darbas.js"></script>
@@ -1742,8 +1743,12 @@ const derybosTaip = () => $('input[name=derybos]:checked')?.value === 'taip';
 // be numatytojo atsakymo (naujo darbuotojo patikra 2026-10-20: „Tik dėl kainos“ buvo pažymėta iš anksto) - kai derybos vykdomos, klausimas privalomas (z1Butini)
 const apimtis = () => derybosTaip() ? ($('input[name=apimtis]:checked')?.value || null) : null;
 const nacsaugTaip = () => $('input[name=nacsaug]:checked')?.value === 'taip';
-// neatsakyta (2026-10-20, numatytojo „Ne“ nebėra) - DI dokumentų automatiškai neskaito, „Toliau“ nepraleidžia (z1Butini)
-const nacsaugAtsakyta = () => !!$('input[name=nacsaug]:checked');
+// neatsakyta (2026-10-20, numatytojo „Ne“ nebėra) - DI dokumentų automatiškai neskaito, „Toliau“ nepraleidžia (z1Butini).
+// Saugumo auditas G-06 (2026-11-23): atsakymu laikomas tik žmogaus, pirkimo kortelės ar BVPŽ sąrašo taisyklės pasirinkimas - ne DI iš paraiškos.
+// DI šio klausimo nebepildo (pzTaikyk), o ankstesnio juodraščio DI „iš paraiškos“ atsakymas, kol jo nepatvirtinote, - kaip neatsakyta.
+// try - PZ_ZYMES_T ir NSB_ZYME deklaruojami žemiau (const), o ši funkcija gali būti kviečiama dar init metu.
+const nacsaugIsDi = () => { try { return PZ_ZYMES_T.has('nacsaug') && PZ_ZYMES_T.get('nacsaug') !== NSB_ZYME; } catch (e) { return false; } };
+const nacsaugAtsakyta = () => !!$('input[name=nacsaug]:checked') && !nacsaugIsDi();
 // Koordinavimo komisija - aktualu TIK nac. saugumo pirkimuose. Kai nacsaug=ne,
 // komisija visada 'ne' (turinys trinamas). Klausimas rodomas tik kai nacsaug=taip.
 const komisijaTaip = () => nacsaugTaip() && $('input[name=komisija]:checked')?.value === 'taip';
@@ -12106,6 +12111,9 @@ function pzTaikyk(map, pastabos, vardas){
   const R = { vardas: vardas || '', pastabos: pastabos || '', uzpildyta: [], konfliktai: [], nepavyko: [], grazinti: [] };
   (map.siulymai || []).forEach(s => {
     if (!s.ok){ R.nepavyko.push(s); return; }
+    // Saugumo auditas G-06 (2026-11-23): į klausimą apie nacionalinį saugumą DI neatsako - paraiškos reikšmė tik parodoma, atsako žmogus
+    // (iki tol DI „Ne“ būdavo pažymimas ir atrakindavo dokumentų siuntimą į DI)
+    if (s.id === 'nacsaug'){ R.nacsaug = s; return; }
     if (pzPerraso(s)){ R.konfliktai.push({ s, sprendimas: null, dabar: pzDabartineRodoma(s.id) }); return; }
     const b = pzBusena(s.id);
     if (pzIrasyk(s)){ R.uzpildyta.push(s); R.grazinti.push(b); }
@@ -12124,6 +12132,8 @@ function pzRodyk(map, pastabos){
   const rodoma = s => s.rodoma || s.reiksme;
   const cit = s => s.citata ? `<span class="pz-k"> · paraiškoje: „${esc(s.citata)}“</span>` : '';
   let h = '';
+  const ns = R.nacsaug ? `<div class="pz-ne" data-pz-nacsaug>Paraiškoje dėl nacionalinio saugumo nurodyta: <b>${esc(({ taip: 'Taip', ne: 'Ne' })[R.nacsaug.reiksme] || rodoma(R.nacsaug))}</b>${cit(R.nacsaug)}.
+      DI į šį klausimą neatsako - <a href="#nacsaug-ne" data-pz-nacsaug-eiti>atsakykite 1 žingsnyje patys</a>.</div>` : '';
   if (!(map.siulymai || []).length){
     h = '<div class="pz-ne">Paraiškoje neatpažinta nė vieno pildomo lauko. Užpildykite rankiniu būdu.</div>';
   } else {
@@ -12145,12 +12155,21 @@ function pzRodyk(map, pastabos){
   if ((map.info || []).length)
     h += `<div class="cite" style="margin-top:8px"><b>Kiti paraiškos duomenys</b> (įrankis jų neklausia, bet pravers rengiant):
       ${map.info.map(x => `${esc(x.laukas)}: <b>${esc(x.reiksme)}</b>`).join(' · ')}</div>`;
+  h += ns;
   if (pastabos) h += `<div class="cite">DI pastaba: ${esc(pastabos)}</div>`;
   const rez = $('#pzRez');
   rez.innerHTML = h;
   rez.style.display = '';
 }
 document.addEventListener('click', e => {
+  // paraiškos reikšmė dėl nacionalinio saugumo - tik nuoroda į 1 žingsnio klausimą (G-06): fokusas į pažymėtą ar pirmą atsakymą
+  const ei = e.target.closest && e.target.closest('[data-pz-nacsaug-eiti]');
+  if (ei){
+    e.preventDefault();
+    const r = $('input[name=nacsaug]:checked') || $('#nacsaug-ne');
+    if (r){ r.scrollIntoView({ block: 'center' }); r.focus(); }
+    return;
+  }
   const b = e.target.closest && e.target.closest('[data-pz-grazinti],[data-pz-konf]');
   if (!b || !PZ_REZ || !PZ_MAP) return;
   const R = PZ_REZ;
@@ -12671,7 +12690,8 @@ function diLeidimoHTML(vieta){
   if (!diYraKaSiusti()) return '';
   // su nacionaliniu saugumu susijęs - leidimo neklausiama; 1 žingsnio sąraše pasakoma kodėl (fokusas po atsakymo - čia, ne į formą toli žemiau)
   if (nacsaugTaip()) return vieta === 'dk' ? `<div class="di-leid di-leid--atsakyta" tabindex="-1" data-di-nacsaug-busena>Pirkimo objektas susijęs su nacionaliniu
-      saugumu (1 žingsnis) - šio pirkimo dokumentų DI automatiškai neskaito ir leidimo neklausiama. Jei reikia, DI galite paleisti mygtuku prie dokumento.</div>` : '';
+      saugumu (1 žingsnis) - šio pirkimo dokumentų DI automatiškai neskaito ir leidimo neklausiama. Jei reikia, DI galite paleisti mygtuku prie dokumento:
+      prieš pirmą siuntimą bus paprašyta patvirtinti, kad šio pirkimo duomenys keliaus į DI paslaugą.</div>` : '';
   // neatsakyta apie nacionalinį saugumą (2026-10-20): pirma šis klausimas - tik atsakius „Ne“ klausiama, ar leisti DI skaityti dokumentus.
   // Mygtukai pažymi tą patį 1 žingsnio formos atsakymą (vienas tiesos šaltinis).
   if (!nacsaugAtsakyta()) return `<div class="di-leid" role="group" aria-labelledby="diNs-${vieta}" data-di-nacsaug-klausimas>
@@ -12728,6 +12748,14 @@ document.addEventListener('click', e => {
   const vt = sf ? '#sfAiDiLeidimas' : '#dkDiLeidimas';
   const k = document.querySelector(vt + (r.value === 'ne' ? ' [data-di-leid-klausimas], ' + vt + ' [data-di-leid-busena]' : ' [data-di-nacsaug-busena]'));
   (k || r).focus();
+});
+/* Nacionalinio saugumo užtvara DI siuntimui (shared/nacsaug-di.js, saugumo auditas G-06, 2026-11-23): kiekvienas DI siuntimas (ir mygtukais) -
+   tik atsakius „Ne“ arba, kai „Taip“, žmogui patvirtinus siuntimą šiam pirkimui. Atsakymas - tas pats 1 žingsnio klausimas: lange pasirinktas
+   pažymimas kaip žmogaus (change įvykis nuima paraiškos žymę). Patvirtinimas - juodraštyje (diNs). */
+if (window.GP_NS_DI) GP_NS_DI.ijunk({
+  variantas: 'pirkimas',
+  ats: () => nacsaugTaip() ? 'taip' : nacsaugAtsakyta() ? 'ne' : null,
+  irasyk: v => { const r = v ? $('#nacsaug-' + v) : null; if (r && !r.checked || (r && nacsaugIsDi())){ r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }
 });
 /* Atsakius „Ne“ dėl nacionalinio saugumo, kai DI skaityti jau leista: dokumentai, sulaikyti tik dėl neatsakyto klausimo, siunčiami dabar */
 function diPaleiskSulaikytus(){
@@ -13310,7 +13338,7 @@ const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
     // BVPŽ sąrašo siūlymas (bvpzAtnaujink) neatsakyto klausimo neberanda ir jo nežymi.
     { kortele:'nacsaugumas', gauk: () => ($('input[name=nacsaug]:checked') || {}).value || '',
       i: v => v === 'taip' || v === 'ne' ? v : null, is: s => s === 'taip' || s === 'ne' ? s : undefined,
-      numatyta: () => nsbAuto('nacsaug'),
+      numatyta: () => nsbAuto('nacsaug') || nacsaugIsDi(),   // ankstesnio juodraščio DI atsakymas - ne žmogaus (G-06)
       dek: v => kortelesTaikoma(() => { const r = $('#nacsaug-' + v); if (r){ r.checked = true; r.dispatchEvent(new Event('change', { bubbles:true })); } }) },
     // NZIA 25 str. taikymas (2026-11-20): kortelės sprendimas -> 1 žingsnio klausimas (taikoma - Taip, netaikoma - Ne,
     // neįvertinta - „Neaišku - įvertins teisės specialistas“); klausimas rodomas tik tarptautiniam pirkimui
@@ -13878,6 +13906,7 @@ function surinkJuodrasti(){
     skyrius: SKYRIUS,
     legenda: $('#lkLegenda') ? $('#lkLegenda').open : true,   // būsenų paaiškinimas suskleistas - lieka suskleistas (1 etapas U6)
     di: DI_LEIDIMAS || null,            // leidimas DI skaityti šio pirkimo dokumentus (2026-10-19)
+    diNs: window.GP_NS_DI && GP_NS_DI.busena().patvirtinta ? 'patvirtinta' : null,   // DI siuntimas patvirtintas nacionalinio saugumo pirkimui (G-06)
     ikelta: jdIkeltaVisi()              // įkeltų failų vardai ir rūšys (ne failai; T4-V3)
   };
 }
@@ -13944,6 +13973,7 @@ async function atkurkJuodrasti(r){
     ? GP_PARAISKA.esIsAtsakymo({ es_lesos: { reiksme: es.reiksme, citata: es.citata }, projekto_nr: es.projektoNr || null, projekto_pavadinimas: es.projektoPav || null }) : null;
   if (PZ_ES) PZ_ES.failas = String(es.failas || '').slice(0, 300);
   DI_LEIDIMAS = D.di === 'taip' || D.di === 'ne' ? D.di : null;
+  if (window.GP_NS_DI) GP_NS_DI.atkurk({ patvirtinta: D.diNs === 'patvirtinta' });
   JD_IKELTA = Array.isArray(D.ikelta) ? D.ikelta.filter(x => x && typeof x.vardas === 'string' && x.vardas.trim() && Object.prototype.hasOwnProperty.call(DK_RUSYS, x.rusis))
     .slice(0, 60).map(x => ({ vardas: x.vardas.slice(0, 200), rusis: x.rusis })) : [];
   if (window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.atkurk) window.SUTARTIES_BLOKAS.atkurk(D.sb);

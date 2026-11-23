@@ -5657,6 +5657,13 @@ function tsKiberBusena(w, d){
   if (!d.querySelector("#genKiberSarasas details") || d.getElementById("genKiberKritVieta").classList.contains("hidden")) throw new Error("kibernetinio saugumo sąrašas nepasiektas");
   d.getElementById("genKiber").scrollIntoView();
 }
+/* Nacionalinio saugumo užtvara DI (2026-11-23, saugumo auditas G-06): atsakyta „Taip“, atvertas patvirtinimo langas (shared/nacsaug-di.js) */
+function nsDiBusena(w, d){
+  const N = w.GP_NS_DI;
+  if (!N || !N.aktyvus()) throw new Error("užtvara neįjungta");
+  N.nustatyk("taip", "zmogus"); N.leisk();
+  if (!N.langas() || N.langas().getAttribute("data-gpns-zingsnis") !== "patv") throw new Error("patvirtinimo langas neatvertas");
+}
 /* PP-salygos (2026-10-21): BVPŽ kodai palyginti su Vyriausybės sąrašu - pažymėta „Taip“, platesnis kodas, neatpažintas, antrasis klausimas */
 async function nsbBusena(w, d){
   d.getElementById("tabRengti").click(); w.rodyk(1);
@@ -5801,7 +5808,7 @@ function tsAnalizesBusena(w, d){ d.getElementById('specText').value = TS_ILGAS.r
 function tsAtaskaitosBusena(w, d){ tsAnalizesBusena(w, d); d.querySelector('.tab-btn[data-tab="report"]').click(); }
 const TS_BUSENOS = RK_BUSENOS.concat([["TS kūrimas: 3 žingsnis su CVP IS analogais (2026-10-27)", tsAnalogaiBusena], ["TS kūrimas: kibernetinio saugumo reikalavimai (2026-11-19)", tsKiberBusena],
   ["analizė su taisyklių pastabomis ir ilgu adresu (2026-10-27)", tsAnalizesBusena], ["ataskaita su ilgu adresu (2026-10-27)", tsAtaskaitosBusena],
-  ["rinkos konsultacija: galimi adresatai su pažymėtu (2026-11-19)", rkAdresatuBusena]]);
+  ["rinkos konsultacija: galimi adresatai su pažymėtu (2026-11-19)", rkAdresatuBusena], ["nacionalinio saugumo užtvara: patvirtinimo langas (2026-11-23)", nsDiBusena]]);
 /* Viešų pirkimų sutarčių duomenys (2026-11-19): sutarčių žemėlapis (PP-plan), rinkos pajėgumas (PP-qual) ir galimi rinkos konsultacijos
    adresatai (PP-ts) - su ilgais pavadinimais be tarpų. Serverio atsakymai imituojami (shared/viesos-sutartys.js funkcijos pakeičiamos). */
 const VS_ILGAS = "UAB_Labai_ilgas_tiekejo_pavadinimas_be_tarpu_kuris_gali_isplesti_puslapi_telefone_ir_planseteje";
@@ -9329,7 +9336,7 @@ async function testaiSutikimas(){
   await testas("Dydžių skalė (2026-10-17): perkelti moduliai (" + Object.keys(SKALES_PUSLAPIAI).map(k => k.split("/")[1]).join(", ") + ") ir bendri komponentai - tik 12, 13, 14, 16, 18, 20, 24, 32, 48 px, be clamp() ir vw (šaltiniuose ir ekrane 1280, 768 ir 375 px; išimtys - portalo antraštė 56 px ir modulio antraštės pavadinimas 19 px)", async () => {
     const SKALE = [12, 13, 14, 16, 18, 20, 24, 32, 48], blogi = [];
     const SKALEJE = Object.keys(SKALES_PUSLAPIAI).concat(["gprocure-info-panel.js", "portal-link.js", "teise-stebesena.js", "pirkimo-kortele.js", "busena.js",
-      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js", "dokumento-puslapis.css", "mano-pirkimai.js", "vpt-rinka.js", "vedlys.js", "paieska.js"]);
+      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js", "dokumento-puslapis.css", "mano-pirkimai.js", "vpt-rinka.js", "vedlys.js", "paieska.js", "nacsaug-di.js"]);
     for (const pg of SKALEJE) {
       const src = await saltinis(pg), kiti = new Set(); let m; const re = /font-size\s*:\s*([0-9.]+)px/g;
       while ((m = re.exec(src))) if (+m[1] !== 0 && !SKALE.includes(+m[1]) && !(SKALES_ISIMTYS[pg] || { px: [] }).px.includes(+m[1])) kiti.add(m[1] + " px");
@@ -12938,6 +12945,158 @@ async function testaiKiberKortele1120(){
     } finally { fr.remove(); }
   });
 }
+
+/* Nacionalinio saugumo užtvara DI siuntimui (shared/nacsaug-di.js, saugumo auditas G-06, naudotojo sprendimai 2026-11-23): „Taip“ - DI tik
+   patvirtinus vieną kartą pirkimui, DI į klausimą neatsako, PP-tiekejams - tik paties įkeltiems failams. Tikrinama per tikrą ai-proxy.js uzduotis(). */
+async function testaiNacsaugDi1123(){
+  dabartine = grupe("Nacionalinio saugumo užtvara DI (2026-11-23)");
+  const ramasNs = lang => ramas('<script src="ai-proxy.js"><\/script><script src="nacsaug-di.js"><\/script><div id="juosta"></div>', lang);
+  const serveris = (w, kv) => { w.fetch = () => { kv.push(1); return Promise.resolve(new w.Response('{"content":[{"type":"text","text":"ok"}]}', { status: 200 })); }; };
+  const spausk = (w, k) => { const b = w.GP_NS_DI.langas() && w.GP_NS_DI.langas().querySelector('[data-gpns="' + k + '"]'); if (!b) throw new Error("lange nėra mygtuko " + k); b.click(); };
+  const zingsnis = w => w.GP_NS_DI.langas() ? w.GP_NS_DI.langas().getAttribute("data-gpns-zingsnis") : null;
+
+  await testas("Pirkimas: be ijunk - siunčiama kaip iki tol; įjungus - be atsakymo langas, „Nesiųsti“ ir Esc - nesiunčiama (klaida su priežastimi), „Ne“ - siunčiama ir daugiau neklausiama; „Taip“ - patvirtinimas, be jo nesiunčiama, patvirtinus - vieną kartą pirkimui; naujas pirkimas (isvalyk) - klausiama iš naujo; pakeitus atsakymą patvirtinimas nebegalioja", async () => {
+    const r = await ramasNs(); const w = r.w, N = w.GP_NS_DI, A = w.GP_AI_PROXY, kv = [];
+    try {
+      serveris(w, kv);
+      let res = await A.uzduotis("testai.bandymas", { a: 1 });
+      lygu([res.ok, kv.length, !!N.langas()], [true, 1, false], "neįjungus - be lango");
+      N.ijunk({ variantas: "pirkimas" });
+      let p = A.uzduotis("testai.bandymas", {});
+      lygu([zingsnis(w), w.document.activeElement && w.document.activeElement.getAttribute("data-gpns")], ["klaus", "ne"], "langas su klausimu, fokusas - pirmas mygtukas");
+      tiesa(N.langas().open && /nacionaliniu saugumu/.test(N.langas().textContent), "langas atviras ir klausia apie nacionalinį saugumą");
+      spausk(w, "nesiusti"); res = await p;
+      lygu([res.ok, res.nesiusta, kv.length, !!N.langas(), N.ats()], [false, true, 1, false, null], "„Nesiųsti“");
+      tiesa(/neatsakyta/.test(res.error), "priežastis: " + res.error);
+      p = A.uzduotis("testai.bandymas", {}); N.langas().dispatchEvent(new w.Event("cancel", { cancelable: true })); res = await p;
+      lygu([res.ok, kv.length], [false, 1], "Esc");
+      p = A.uzduotis("testai.bandymas", {}); spausk(w, "ne"); res = await p;
+      lygu([res.ok, kv.length, N.ats(), N.busena().kilme], [true, 2, "ne", "zmogus"], "„Ne“ - išsiųsta");
+      res = await A.uzduotis("testai.bandymas", {});
+      lygu([res.ok, kv.length, !!N.langas()], [true, 3, false], "antrą kartą neklausiama");
+      N.isvalyk();
+      p = A.uzduotis("testai.bandymas", {}); lygu(zingsnis(w), "klaus", "naujas pirkimas - vėl klausiama");
+      spausk(w, "taip"); lygu([zingsnis(w), N.ats()], ["patv", "taip"], "„Taip“ - patvirtinimo žingsnis");
+      tiesa(/Anthropic, JAV/.test(N.langas().textContent) && /įslaptintos/.test(N.langas().textContent), "patvirtinime - kur siunčiama ir įspėjimas");
+      spausk(w, "nesiusti"); res = await p;
+      lygu([res.ok, kv.length], [false, 3], "nepatvirtinus - nesiųsta");
+      tiesa(/nepatvirtintas/.test(res.error), "priežastis: " + res.error);
+      p = A.uzduotis("testai.bandymas", {}); lygu(zingsnis(w), "patv", "„Taip“ jau atsakyta - iškart patvirtinimas");
+      spausk(w, "patvirtinu"); res = await p;
+      lygu([res.ok, kv.length, N.busena().patvirtinta], [true, 4, true], "patvirtinus - išsiųsta");
+      res = await A.uzduotis("testai.bandymas", {}); lygu([res.ok, kv.length, !!N.langas()], [true, 5, false], "patvirtinta - neklausiama");
+      N.nustatyk("ne", "zmogus"); N.nustatyk("taip", "kortele");
+      lygu([N.busena().patvirtinta, N.busena().kilme], [false, "kortele"], "pakeitus atsakymą - patvirtinimas nebegalioja");
+      p = A.uzduotis("testai.bandymas", {}); lygu(zingsnis(w), "patv", "kortelės „Taip“ - irgi tik patvirtinus");
+      spausk(w, "nesiusti"); await p;
+      lygu(kv.length, 5, "nieko neišsiųsta");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("Keli siuntimai vienu metu - vienas langas ir tas pats atsakymas; atšaukus (signal) - langas uždaromas ir nesiunčiama; DI atsakymas į klausimą neįrašomas niekur - užtvara neturi DI kelio", async () => {
+    const r = await ramasNs(); const w = r.w, N = w.GP_NS_DI, A = w.GP_AI_PROXY, kv = [];
+    try {
+      serveris(w, kv); N.ijunk({ variantas: "pirkimas" });
+      const p1 = A.uzduotis("testai.bandymas", {}), p2 = A.uzduotis("testai.bandymas", {});
+      lygu(w.document.querySelectorAll("[data-gpns-langas]").length, 1, "vienas langas");
+      spausk(w, "ne"); const [a, b] = await Promise.all([p1, p2]);
+      lygu([a.ok, b.ok, kv.length], [true, true, 2], "abu išsiųsti");
+      N.isvalyk();
+      const ctl = new w.AbortController(), p3 = A.uzduotis("testai.bandymas", {}, { signal: ctl.signal });
+      tiesa(!!N.langas(), "langas atviras"); ctl.abort(); const c = await p3;
+      lygu([c.ok, !!N.langas(), kv.length], [false, false, 2], "atšaukus");
+      const ctl2 = new w.AbortController(); ctl2.abort();
+      const d = await A.uzduotis("testai.bandymas", {}, { signal: ctl2.signal });
+      lygu([d.ok, !!N.langas()], [false, false], "jau atšaukta - be lango");
+      const src = await saltinis("nacsaug-di.js");
+      tiesa(!/uzduotis\(|fetch\(|localStorage|sessionStorage/.test(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")), "užtvara pati nieko nesiunčia ir nesaugo");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("Atsakymas įrankio lauke (PP-salygos 1 žingsnis): ats() skaito lauką, lango „Ne“ įrašoma per irasyk(); juodraščio atkūrimas grąžina patvirtinimą tik „Taip“ atsakymui", async () => {
+    const r = await ramasNs(); const w = r.w, N = w.GP_NS_DI, A = w.GP_AI_PROXY, kv = [];
+    try {
+      serveris(w, kv); let laukas = null; const irasyta = [];
+      N.ijunk({ variantas: "pirkimas", ats: () => laukas, irasyk: (v, k) => { irasyta.push([v, k]); laukas = v; } });
+      const p = A.uzduotis("testai.bandymas", {}); spausk(w, "ne"); await p;
+      lygu([irasyta, kv.length], [[["ne", "zmogus"]], 1], "lango atsakymas - į lauką");
+      laukas = "taip";
+      lygu([N.galima(), N.ats()], [false, "taip"], "lauke pakeista į „Taip“ - reikia patvirtinimo");
+      N.atkurk({ patvirtinta: true }); lygu([N.galima(), N.busena().patvirtinta], [true, true], "atkurtas patvirtinimas");
+      laukas = "ne"; N.atnaujink(); laukas = "taip"; lygu(N.galima(), false, "lauke pakeitus atsakymą - patvirtinimas nebegalioja");
+      laukas = null; N.atkurk({ patvirtinta: true }); lygu(N.busena().patvirtinta, false, "neatsakytam - patvirtinimas neatkuriamas");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("Tiekėjams: be paties įkeltų failų - neklausiama; su jais - klausimas apie neviešai gautą informaciją, „Taip“ - patvirtinimas; tekstai LT ir EN (EN - be lietuviškų raidžių), be ilgojo brūkšnio", async () => {
+    const r = await ramasNs(); const w = r.w, N = w.GP_NS_DI, A = w.GP_AI_PROXY, kv = [];
+    try {
+      serveris(w, kv); let savu = false;
+      N.ijunk({ variantas: "tiekejas", reikia: () => savu });
+      let res = await A.uzduotis("testai.bandymas", {}); lygu([res.ok, !!N.langas()], [true, false], "vieši dokumentai - be klausimo");
+      savu = true; let p = A.uzduotis("testai.bandymas", {});
+      tiesa(/neviešai gautos informacijos/.test(N.langas().textContent) && !/nacionaliniu saugumu/.test(N.langas().textContent), "tiekėjo klausimas");
+      spausk(w, "taip"); tiesa(/ištraukos iš jūsų įkeltų failų/.test(N.langas().textContent), "patvirtinimas apie ištraukas");
+      spausk(w, "patvirtinu"); res = await p; lygu([res.ok, kv.length], [true, 2], "patvirtinus - išsiųsta");
+    } finally { r.f.remove(); }
+    for (const v of ["pirkimas", "tiekejas"]) {
+      for (const lang of ["lt", "en"]) {
+        const r2 = await ramasNs(lang); const w2 = r2.w, N2 = w2.GP_NS_DI;
+        try {
+          N2.ijunk({ variantas: v }); const p = N2.leisk(); const t1 = N2.langas().textContent; spausk(w2, "taip"); const t2 = N2.langas().textContent; spausk(w2, "nesiusti"); await p;
+          N2.mount("#juosta"); const t3 = w2.document.getElementById("juosta").textContent + N2.priezastis();
+          const visi = t1 + t2 + t3;
+          tiesa(!/[–—]/.test(visi), v + " " + lang + ": ilgasis brūkšnys");
+          if (lang === "en") tiesa(!/[ąčęėįšųūžĄČĘĖĮŠŲŪŽ]/.test(visi), v + " EN: lietuviškos raidės: " + visi.slice(0, 120));
+          else tiesa(/[ąčęėįšųūž]/.test(visi), v + " LT: lietuviškas tekstas");
+        } finally { r2.f.remove(); }
+      }
+    }
+  });
+
+  await testas("Juosta įrankyje (mount): sąrašas rodo atsakymą ir kilmę, pasirinkus - žmogaus atsakymas, patvirtinus - „Atšaukti patvirtinimą“; pavadinimas susietas su sąrašu, spausdinant nerodoma", async () => {
+    const r = await ramasNs(); const w = r.w, N = w.GP_NS_DI, d = r.d;
+    try {
+      N.ijunk({ variantas: "pirkimas" }); N.mount("#juosta", { id: "nsT" });
+      const s = () => d.getElementById("nsT");
+      lygu([s().value, d.querySelector('label[for="nsT"]') !== null, s().getAttribute("aria-describedby")], ["", true, "nsTp"], "pradžia");
+      s().value = "taip"; s().dispatchEvent(new w.Event("change", { bubbles: true }));
+      lygu([N.ats(), N.busena().kilme, s().value], ["taip", "zmogus", "taip"], "pasirinkta sąraše");
+      tiesa(/bus paprašyta patvirtinti/.test(d.getElementById("nsTp").textContent), "būsena: bus paprašyta patvirtinti");
+      const p = N.leisk(); spausk(w, "patvirtinu"); await p;
+      const at = d.querySelector('#juosta [data-gpns-el="a"]');
+      tiesa(at && /patvirtintas/.test(d.getElementById("nsTp").textContent), "patvirtinta - būsena ir mygtukas");
+      at.click(); lygu([N.busena().patvirtinta, !!d.querySelector('#juosta [data-gpns-el="a"]')], [false, false], "atšaukus patvirtinimą");
+      N.nustatyk("ne", "kortele"); tiesa(/kortelės/.test(d.getElementById("juosta").textContent) && s().value === "ne", "kortelės atsakymas - su kilme");
+      tiesa(/@media print\{[^}]*\.gpns-juosta/.test(d.getElementById("gpns-stilius").textContent), "spausdinant nerodoma");
+      tiesa(!/font-size:(?!12px|13px|14px|16px|18px)\d/.test(d.getElementById("gpns-stilius").textContent), "šrifto dydžiai - iš skalės");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("Sargas: užtvarą tikrina pats siuntimas (ai-proxy.js uzduotis), o PP-ts, PP-qual, PP-negotiation, PP-salygos ir PP-tiekejams ją jungia ir įjungia prieš pirmą galimą grįžimą; kortelės nacsaugumas - PP-ts, PP-qual, PP-negotiation; PP-salygos DI iš paraiškos klausimo nepildo", async () => {
+    const ap = await saltinis("ai-proxy.js");
+    tiesa(/ns\.leisk\(/.test(ap) && /nesiusta: true/.test(ap), "ai-proxy.js - užtvara prieš siuntimą");
+    const M = { "../PP-ts/TS_Asistentas.html": "pirkimas", "../PP-qual/PP-QUAL.html": "pirkimas", "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html": "pirkimas",
+      "../PP-salygos/PP-SALYGOS.html": "pirkimas", "../PP-tiekejams/index.html": "tiekejas" };
+    for (const k of Object.keys(M)) {
+      const s = await saltinis(k);
+      tiesa(s.includes('<script src="../shared/nacsaug-di.js"><\/script>'), k + ": jungia nacsaug-di.js");
+      tiesa(new RegExp("GP_NS_DI\\.ijunk\\(\\{\\s*variantas:\\s*['\"]" + M[k] + "['\"]").test(s), k + ": ijunk " + M[k]);
+      const i = s.indexOf("GP_NS_DI.ijunk("), pries = s.slice(Math.max(0, i - 400), i);
+      tiesa(!/return;\s*$/.test(pries.trim()) && !/\)\s*return;\s*\n\s*$/.test(pries), k + ": ijunk ne po grįžimo");
+    }
+    for (const k of ["../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html"]) {
+      const s = await saltinis(k);
+      tiesa(/kortele:\s*'nacsaugumas'[\s\S]{0,400}GP_NS_DI\.nustatyk\(v,\s*'kortele'\)/.test(s), k + ": kortelės nacsaugumas -> GP_NS_DI");
+      tiesa(/GP_NS_DI\.isvalyk\(\)/.test(s), k + ": naujas pirkimas išvalo atsakymą");
+    }
+    const sal = await saltinis("../PP-salygos/PP-SALYGOS.html");
+    tiesa(/if \(s\.id === 'nacsaug'\)\{ R\.nacsaug = s; return; \}/.test(sal), "PP-salygos: pzTaikyk nacionalinio saugumo nepildo");
+    tiesa(/const nacsaugAtsakyta = \(\) => !!\$\('input\[name=nacsaug\]:checked'\) && !nacsaugIsDi\(\);/.test(sal), "PP-salygos: DI atsakymas - ne atsakymas");
+    const sw = await saltinis("../PP-tiekejams/sw.js");
+    tiesa(sw.includes('"../shared/nacsaug-di.js"'), "PP-tiekejams sw.js SAVI");
+  });
+}
 async function testaiPaieska1114(){
   dabartine = grupe("Portalo antraštė ir svetainės paieška (2026-11-14): be „Įrankiai“, „Tiekėjams“ - švarus mygtukas, paieška Ctrl / ⌘ K");
   const PUSLAPIAI3 = ["index.html", "G-Procure_Project.html", "kryptis.html"];
@@ -13368,7 +13527,7 @@ async function testaiPilotas3Kortele1120(){
      testaiDatos, testaiDalys, testaiBudai, testaiAiProxy, testaiDocxStiliai, testaiSkydelis, testaiAntraste, testaiLaukuBusena, testaiDarbas, testaiTeise,
      testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
      testaiKalbuSutikrinimas, testaiNuoseklumas, testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
-     testaiVendor, testaiKortelesPatikra1106, testaiPilotas1110, testaiSpecialistas, testaiPilotas1112, testaiVertinimas1113, testaiApie1114, testaiMiniaturos1114, testaiKryptis1114, testaiPaieska1114, testaiIstorija1114, testaiPoveikis1114, testaiByla1114, testaiTeisesPoveikis1115, testaiDiFunkcijos1115, testaiPrekes1119, testaiNzia1119, testaiViesosSutartys1119, testaiPilotas3Kortele1120, testaiKiberKortele1120],
+     testaiVendor, testaiKortelesPatikra1106, testaiPilotas1110, testaiSpecialistas, testaiPilotas1112, testaiVertinimas1113, testaiApie1114, testaiMiniaturos1114, testaiKryptis1114, testaiPaieska1114, testaiIstorija1114, testaiPoveikis1114, testaiByla1114, testaiTeisesPoveikis1115, testaiDiFunkcijos1115, testaiPrekes1119, testaiNzia1119, testaiViesosSutartys1119, testaiPilotas3Kortele1120, testaiKiberKortele1120, testaiNacsaugDi1123],
     [testaiTelefonas, testaiPrieinamumas, testaiFokusas]
   ]);
   await GP_TESTU_DALYS.vykdyk(GRUPES);
