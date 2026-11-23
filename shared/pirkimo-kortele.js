@@ -37,9 +37,10 @@
   var RAKTAS = "gprocure.korteles";
 
   /* Testams: ?saugykla=testine - kortelės laikomos tik atmintyje, tikri duomenys neliečiami
-     (kaip PP-teise). naudokSaugykla(s) - paduoti savo (netikrą) saugyklą. */
+     (kaip PP-teise). Tik vietoje (localhost, 127.0.0.1): svetainėje parametras nepaisomas, kad nuoroda
+     negalėtų priversti dirbti neišsaugant (saugumo auditas G-10, 2026-11-23). naudokSaugykla(s) - paduoti savo (netikrą) saugyklą. */
   var TESTINE = false;
-  try { TESTINE = /[?&]saugykla=testine(&|$)/.test(global.location.search); } catch (e) {}
+  try { TESTINE = /[?&]saugykla=testine(&|$)/.test(global.location.search) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(global.location.hostname); } catch (e) {}
   function atmintine() {
     var d = {};
     return {

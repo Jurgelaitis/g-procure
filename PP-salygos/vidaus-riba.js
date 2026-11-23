@@ -35,7 +35,8 @@
              setItem: function (k, v) { d[k] = String(v); }, removeItem: function (k) { delete d[k]; },
              key: function (i) { return Object.keys(d)[i] || null; }, get length() { return Object.keys(d).length; } };
   }
-  var SAUG = /[?&]saugykla=testine(&|$)/.test(global.location ? global.location.search : "") ? atmintis() : null;
+  var SAUG = /[?&]saugykla=testine(&|$)/.test(global.location ? global.location.search : "") &&
+    /^(localhost|127\.0\.0\.1|\[::1\])$/.test(global.location ? global.location.hostname : "") ? atmintis() : null;   // tik vietoje (G-10)
   function tikrink(v) {
     return v && v.schema === 1 && (v.uztikrinimoRiba == null || (typeof v.uztikrinimoRiba === "number" && isFinite(v.uztikrinimoRiba) && v.uztikrinimoRiba > 0))
       ? true : "netinkama nustatymų sandara";

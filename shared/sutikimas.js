@@ -155,6 +155,9 @@
              key: function (i) { return Object.keys(d)[i] || null; }, get length() { return Object.keys(d).length; } };
   }
   function testuPuslapis() {
+    /* Tik vietoje (localhost, 127.0.0.1) - testų puslapiai svetainėje neskelbiami, o ?saugykla=testine ten nepaisomas (G-10, 2026-11-23).
+       srcdoc rėmelio (testų) adresas - about:srcdoc be serverio vardo, todėl tada - viršutinio lango */
+    try { if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(global.location.hostname || global.top.location.hostname)) return false; } catch (e) { return false; }
     try {
       if (/[\/-]testai\.html$/.test(global.top.location.pathname)) return true;   // testai.html ir laikini „...-testai.html“
     } catch (e) { /* kitos kilmės viršutinis langas - ne mūsų testai */ }

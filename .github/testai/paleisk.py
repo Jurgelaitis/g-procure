@@ -198,6 +198,20 @@ LAUK = """(async () => {
 })()"""
 
 
+def aplinkos_klaida(r):
+    """Saugumo auditas G-10 (2026-11-23): pirmas testų puslapio <head> skriptas - shared/testu-aplinka.js (testai tik vietoje).
+    Naujas rinkinys be jo nepaleidžiamas - kitaip jis, kada nors paskelbtas svetainėje, rašytų į tikrų naudotojų saugyklą."""
+    try:
+        s = open(os.path.join(SAKNIS, r), encoding="utf-8").read()
+    except OSError as e:
+        return "neperskaitytas: %s" % e
+    galva = s.split("</head>", 1)[0]
+    m = re.search(r"<script\b[^>]*>", galva, re.I)
+    if not m or not re.search(r'src="(\.\./shared/|)testu-aplinka\.js"', m.group(0)):
+        return "pirmas <head> skriptas turi būti shared/testu-aplinka.js (testai tik vietoje, G-10)"
+    return None
+
+
 def anotacija(tekstas, pavadinimas=False):
     # GitHub darbo eigos komandos reikšmė: %, eilučių lūžiai (ir pavadinime - : bei ,) koduojami, kitaip komanda nutrūksta
     t = str(tekstas).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
@@ -230,7 +244,10 @@ def main():
         r, dalis = vienetas
         vardas = r + (" (%s dalis)" % dalis if dalis else "")
         liko = VISO_LAIKAS - (time.time() - pradzia)
-        if liko < 60:
+        ak = aplinkos_klaida(r)
+        if ak:
+            x = {"baigta": False, "busena": "nepaleista - " + ak, "gerai": False, "krito": [ak], "sek": 0}
+        elif liko < 60:
             x = {"baigta": False, "busena": "nepaleista - baigėsi bendras laikas (%d s)" % VISO_LAIKAS, "gerai": False, "krito": [], "sek": 0}
         else:
             pr = time.time(); ch = None

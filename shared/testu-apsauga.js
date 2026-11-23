@@ -17,11 +17,22 @@
  * (pagehide), jei testai nutrūko. Atkūrimas tikslus: testų sukurti raktai
  * (tarp jų „.sugadinta-“ kopijos) pašalinami, pakeisti ir ištrinti - grąžinami.
  * Kiti raktai neliečiami. Nieko nesiunčia.
+ *
+ * Nuo 2026-11-23 (saugumo auditas G-10) su tikra naršyklės saugykla pradek()
+ * veikia tik vietiniu adresu (localhost, 127.0.0.1, [::1]) - kitur meta klaidą, net
+ * jei testų puslapis kada nors vėl būtų paskelbtas svetainėje (žr. testu-aplinka.js).
  * ==========================================================================*/
 (function (global) {
   "use strict";
 
+  var VIETINIS = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+  function vietine() {
+    try { var l = global.location; return !l || ((l.protocol === "http:" || l.protocol === "https:") && VIETINIS.test(l.hostname)); }
+    catch (e) { return false; }
+  }
+
   function pradek(tinka, saugykla) {
+    if (!saugykla && !vietine()) throw new Error("Testai su tikra naršyklės saugykla vykdomi tik vietoje (localhost, 127.0.0.1) - čia G-Procure duomenys neliečiami.");
     var s = saugykla || (function () { try { return global.localStorage; } catch (e) { return null; } })();
     var kopija = {};
     function raktai() {
@@ -44,5 +55,5 @@
     return { atkurk: atkurk, kiek: Object.keys(kopija).length };
   }
 
-  global.GP_TESTU_APSAUGA = { pradek: pradek };
+  global.GP_TESTU_APSAUGA = { pradek: pradek, vietine: vietine };
 })(typeof window !== "undefined" ? window : this);

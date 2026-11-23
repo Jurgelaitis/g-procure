@@ -2,6 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
+<script src="testu-aplinka.js"></script>
 <meta name="gp-testu-dalys" content="2">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>shared/ regresijos testai</title>
@@ -8044,7 +8045,7 @@ async function testaiFokusas(){
   dabartine = grupe("Fokusas po vaizdų perjungimo (prieinamumas.js ir moduliai, 2026-11-05)");
   const A = GP_TESTU_APSAUGA.pradek(() => true);
   const tik = ms => new Promise(r => setTimeout(r, ms));
-  const atverk = url => new Promise(res => { localStorage.clear(); /* švari pradžia - tikri duomenys atkuriami A.atkurk() */ const f = document.createElement("iframe"); f.style.cssText = "width:1280px;height:800px"; f.addEventListener("load", () => { const w = f.contentWindow; w.confirm = () => true; w.alert = () => {}; res(f); }, { once: true }); f.src = url; document.body.appendChild(f); });
+  const atverk = url => new Promise(res => { /* švari pradžia: tik vietinėje kilmėje (paleidiklis - nauja kilmė ir švari naršyklė; G-10), kitur testų puslapis net nepasileidžia (testu-aplinka.js) */ if (!GP_TESTU_APLINKA.vietine) throw new Error("ne vietinė kilmė"); localStorage.clear(); const f = document.createElement("iframe"); f.style.cssText = "width:1280px;height:800px"; f.addEventListener("load", () => { const w = f.contentWindow; w.confirm = () => true; w.alert = () => {}; res(f); }, { once: true }); f.src = url; document.body.appendChild(f); });
   const spausk = async (f, el, ms) => { tiesa(el, "nėra valdiklio"); el.focus(); el.click(); await tik(ms || 200); return f.contentDocument.activeElement; };
   const kur = e => e ? e.tagName + " " + (e.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60) : "nieko";
   const pagalTeksta = (d, sel, re) => [...d.querySelectorAll(sel)].find(x => re.test(x.textContent));
@@ -8635,7 +8636,7 @@ async function testaiSaugumas(){
       tiesa(cfgAts.ok, "../_config.yml: HTTP " + cfgAts.status);
       const cfg = await cfgAts.text();
       tiesa(/^include:\s*\n\s*-\s*\.well-known\s*$/m.test(cfg), "_config.yml: include .well-known");
-      tiesa(!/^exclude:/m.test(cfg) && !/^(theme|remote_theme):/m.test(cfg), "_config.yml: tik include (be exclude ir temos)");
+      tiesa(!/^(theme|remote_theme):/m.test(cfg), "_config.yml: be temos (exclude - testų puslapiai, G-10: testaiTestuAplinka1123)");
     }
   });
 
@@ -13362,6 +13363,101 @@ async function testaiPaieska1114(){
    contractAwardedInLots, dvikalbis pavadinimas), eForms - užpildyti, bet nesusieti laukai, BT-05 aprašas, BT-21 dviem kalbomis;
    prekių duomenų reikalavimų paaiškinimas. Pirkimų numeriai, pavadinimai ir įmonės - išgalvoti.
    ========================================================================== */
+/* Testų aplinka (saugumo auditas G-10, 2026-11-23): testų puslapiai svetainėje neskelbiami (_config.yml exclude), vykdomi tik vietoje
+   (shared/testu-aplinka.js - pirmas <head> skriptas), testų parametrai gamybos kode priimami tik vietoje. */
+async function testaiTestuAplinka1123(){
+  dabartine = grupe("Testų aplinka - tik vietoje (saugumo auditas G-10, 2026-11-23)");
+  const TESTU_PUSLAPIAI = ["PP-carbon", "PP-cost-benefit", "PP-esg", "PP-graphs", "PP-market-KPI", "PP-negotiation", "PP-plan", "PP-protocol", "PP-qual",
+    "PP-report", "PP-salygos", "PP-teise", "PP-tiekejams", "PP-ts", "serveris", "shared"].map(m => m + "/testai.html");
+  const VR = "/^(localhost|127\\.0\\.0\\.1|\\[::1\\])$/";
+  const tekstas = async kelias => { const a = await fetch("../" + kelias + "?b=" + Date.now(), { cache: "no-store" }); tiesa(a.ok, kelias + ": HTTP " + a.status); return a.text(); };
+  /* srcdoc rėmelio adresas - about:srcdoc (ne vietinis), o reliatyvūs adresai sprendžiami pagal šį puslapį (shared/) */
+  const remelis = (galva, kunas) => new Promise(res => {
+    const f = document.createElement("iframe"); f.style.cssText = "width:400px;height:200px";
+    f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8">' + galva + '</head><body>' + kunas + '</body></html>';
+    document.body.appendChild(f);
+    const t = Date.now(), tikr = () => { const d = f.contentDocument; if ((d && d.documentElement && d.documentElement.getAttribute("data-busena")) || Date.now() - t > 3000) res(f); else setTimeout(tikr, 50); };
+    setTimeout(tikr, 50);
+  });
+
+  await testas("testu-aplinka.js: vietinis adresas - localhost, 127.0.0.1, [::1] (http ir https); kitur - ne; čia (paleidiklis) - vietinė", async () => {
+    const T = GP_TESTU_APLINKA.tikrink;
+    tiesa(GP_TESTU_APLINKA.vietine === true, "šis paleidimas - vietinėje kilmėje");
+    const l = (protocol, hostname) => ({ protocol, hostname });
+    lygu([T(l("http:", "localhost")), T(l("http:", "127.0.0.1")), T(l("https:", "localhost")), T(l("http:", "[::1]"))], [true, true, true, true], "vietiniai");
+    lygu([T(l("https:", "g-procure.com")), T(l("https:", "www.g-procure.com")), T(l("http:", "127.0.0.2")), T(l("http:", "localhost.example.com")),
+          T(l("file:", "")), T(l("about:", "")), T(null)], [false, false, false, false, false, false, GP_TESTU_APLINKA.vietine], "ne vietiniai");
+  });
+
+  await testas("Ne vietiniame adrese testų puslapis sustabdomas: likę skriptai nevykdomi, saugykla neliečiama, rodomas paaiškinimas", async () => {
+    const R = "gp-testu-aplinka-zondas"; localStorage.removeItem(R); window.__gpAplZondas = 0;
+    const f = await remelis('<script src="testu-aplinka.js"><\/script><script>parent.__gpAplZondas++; localStorage.setItem("' + R + '","1")<\/script>',
+      '<p>testai</p><script>parent.__gpAplZondas++; localStorage.setItem("' + R + '","1")<\/script>');
+    try {
+      const d = f.contentDocument;
+      lygu([d.documentElement.getAttribute("data-busena"), window.__gpAplZondas, localStorage.getItem(R)], ["stabdyta", 0, null], "sustabdyta");
+      tiesa(/tik vietoje/.test(d.body.textContent) && /nepaliestų/.test(d.body.textContent), d.body.textContent);
+      tiesa(f.contentWindow.GP_TESTU_APLINKA && f.contentWindow.GP_TESTU_APLINKA.vietine === false, "GP_TESTU_APLINKA.vietine");
+    } finally { f.remove(); localStorage.removeItem(R); delete window.__gpAplZondas; }
+  });
+
+  await testas("testu-apsauga.js: su tikra saugykla ne vietiniame adrese pradek() meta klaidą; su paduota (netikra) saugykla - veikia", async () => {
+    const f = await remelis('<script src="testu-apsauga.js"><\/script><script>try { GP_TESTU_APSAUGA.pradek(function () { return true; }); document.documentElement.setAttribute("data-busena", "be klaidos"); }'
+      + ' catch (e) { document.documentElement.setAttribute("data-busena", "klaida: " + e.message); }<\/script>', "");
+    try {
+      const b = f.contentDocument.documentElement.getAttribute("data-busena");
+      tiesa(/^klaida: .*tik vietoje/.test(b), b);
+      const m = {}, s = { get length() { return Object.keys(m).length; }, key: i => Object.keys(m)[i], getItem: k => k in m ? m[k] : null, setItem: (k, v) => { m[k] = v; }, removeItem: k => { delete m[k]; } };
+      const A = f.contentWindow.GP_TESTU_APSAUGA.pradek(() => true, s); s.setItem("x", "1"); A.atkurk(); lygu(Object.keys(m), [], "netikra saugykla atkurta");
+    } finally { f.remove(); }
+  });
+
+  await testas("Visi testų puslapiai: pirmas <head> skriptas - testu-aplinka.js (tą patį tikrina paleidiklis prieš paleisdamas)", async () => {
+    for (const k of TESTU_PUSLAPIAI) {
+      const t = await tekstas(k), m = /<script\b[^>]*>/i.exec(t.split("</head>")[0]);
+      tiesa(m && /src="(\.\.\/shared\/|)testu-aplinka\.js"/.test(m[0]), k + ": pirmas skriptas - " + (m && m[0]));
+    }
+    const pl = await tekstas(".github/testai/paleisk.py");
+    tiesa(/def aplinkos_klaida\(r\)/.test(pl) && /ak = aplinkos_klaida\(r\)/.test(pl), "paleidiklis tikrina kiekvieną rinkinį");
+  });
+
+  await testas("_config.yml: testų puslapiai, jų duomenys ir kūrėjų įrankiai neskelbiami; testu-aplinka.js ir .well-known - skelbiami", async () => {
+    const cfg = await tekstas("_config.yml");
+    const exc = (/^exclude:\s*\n((?:\s+-\s*.+\n?)+)/m.exec(cfg) || [, ""])[1].split("\n").map(x => x.replace(/^\s*-\s*/, "").replace(/^"|"$/g, "").trim()).filter(Boolean);
+    for (const x of ["*/testai.html", "PP-teise/testai-registras.json", "PP-teise/testai-registras-es.json", "PP-teise/es-saltiniai-testai.py",
+                     "shared/testu-apsauga.js", "shared/testu-dalys.js", "PP-salygos/kartografas.html", "PP-salygos/E0-variklis.html"])
+      tiesa(exc.includes(x), "exclude: " + x);
+    tiesa(!exc.some(x => /testu-aplinka|well-known|admin\.html/.test(x)), "neturi būti neskelbiami: " + exc.join(", "));
+    /* Jekyll: File.fnmatch be FNM_PATHNAME - „*“ apima ir „/“, todėl „*\/testai.html“ atitinka kiekvieno katalogo testų puslapį */
+    const fn = new RegExp("^" + "*/testai.html".replace(/[.]/g, "\\.").replace(/\*/g, ".*") + "$");
+    TESTU_PUSLAPIAI.forEach(k => tiesa(fn.test(k), "šablonas neapima " + k));
+    tiesa(!fn.test("PP-teise/index.html") && !fn.test("shared/testu-aplinka.js"), "šablonas per platus");
+  });
+
+  await testas("Testų parametrai (?saugykla=testine, ?registras=, ?registrasEs=) gamybos kode priimami tik vietoje", async () => {
+    const FAILAI = ["shared/pirkimo-kortele.js", "shared/sutikimas.js", "PP-salygos/sutarties-blokas.js", "PP-salygos/vidaus-riba.js", "PP-teise/index.html", "PP-teise/admin.html"];
+    for (const k of FAILAI) {
+      const t = await tekstas(k);
+      tiesa(t.includes(VR), k + ": nėra vietinio adreso patikros");
+    }
+    const kort = await tekstas("shared/pirkimo-kortele.js"); tiesa(/saugykla=testine\(&\|\$\)\/\.test\(global\.location\.search\) && \/\^\(localhost/.test(kort), "kortelės: parametras ir vietinis adresas kartu");
+    const sut = await tekstas("shared/sutikimas.js"); tiesa(/function testuPuslapis\(\) \{[\s\S]{0,500}if \(!\/\^\(localhost[^\n]*\.test\(global\.location\.hostname \|\| global\.top\.location\.hostname\)\) return false;/.test(sut), "sutikimas: vietinis - pirmiausia");
+    for (const k of ["PP-salygos/sutarties-blokas.js", "PP-salygos/vidaus-riba.js"]) {
+      const t = await tekstas(k); tiesa(/saugykla=testine\(&\|\$\)\/\.test\([^\n]*\) &&\s*\/\^\(localhost/.test(t), k + ": parametras ir vietinis adresas kartu");
+    }
+    const ti = await tekstas("PP-teise/index.html");
+    tiesa(/if \(!VIETINE \|\| new URLSearchParams\(location\.search\)\.get\("saugykla"\) !== "testine"\) return null;/.test(ti) && /if \(VIETINE && prasytas && /.test(ti), "PP-teise: saugykla ir registras - tik VIETINE");
+    const ad = await tekstas("PP-teise/admin.html");
+    tiesa(/if \(!VIETINE \|\| Q\.get\("saugykla"\) !== "testine"\) return window\.localStorage;/.test(ad) && /if \(VIETINE && prasytas && /.test(ad), "admin: saugykla ir registras - tik VIETINE");
+    /* Puslapiai, kurie tikrina testų parametrą patys, turi būti FAILAI sąraše */
+    for (const k of Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "").replace(/^\.\.\//, ""))) {
+      if (/(^|\/)testai\.html$/.test(k)) continue;
+      const t = await tekstas(k);
+      if (/saugykla=testine|get\("saugykla"\)|get\("registras/.test(t)) tiesa(FAILAI.includes(k), k + ": tikrina testų parametrą, bet nėra sąraše");
+    }
+  });
+}
+
 async function testaiPilotas3Kortele1120(){
   dabartine = grupe("Trečias pilotas: kortelė iš CVP IS duomenų, eForms ir prekių duomenų paaiškinimas (2026-11-20)");
   const VPT_FAILAI = '<script src="organizacijos.js"><\/script><script src="procurement-methods.js"><\/script><script src="vpt-duomenys.js"><\/script>';
@@ -13540,7 +13636,7 @@ async function testaiPilotas3Kortele1120(){
      testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
      testaiKalbuSutikrinimas, testaiNuoseklumas, testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
      testaiVendor, testaiKortelesPatikra1106, testaiPilotas1110, testaiSpecialistas, testaiPilotas1112, testaiVertinimas1113, testaiApie1114, testaiMiniaturos1114, testaiKryptis1114, testaiPaieska1114, testaiIstorija1114, testaiPoveikis1114, testaiByla1114, testaiTeisesPoveikis1115, testaiDiFunkcijos1115, testaiPrekes1119, testaiNzia1119, testaiViesosSutartys1119, testaiPilotas3Kortele1120, testaiKiberKortele1120, testaiNacsaugDi1123],
-    [testaiTelefonas, testaiPrieinamumas, testaiFokusas]
+    [testaiTelefonas, testaiPrieinamumas, testaiFokusas, testaiTestuAplinka1123]
   ]);
   await GP_TESTU_DALYS.vykdyk(GRUPES);
   document.getElementById("busena").textContent =

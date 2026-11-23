@@ -73,7 +73,8 @@
        laukia patikslinančio klausimo); null - neatsakyta (ar atsakymas nebegalioja pasikeitus duomenims) */
     function atsakymas() { return esmines(S.zmogaus) ? "ne" : S.taip ? "taip" : null; }
     var REG = { busena: "neikelta", sablonai: null, klaida: "", zem: {} };
-    var SAUG = /[?&]saugykla=testine(&|$)/.test(global.location ? global.location.search : "") ? atmintis() : null;
+    var SAUG = /[?&]saugykla=testine(&|$)/.test(global.location ? global.location.search : "") &&
+      /^(localhost|127\.0\.0\.1|\[::1\])$/.test(global.location ? global.location.hostname : "") ? atmintis() : null;   // tik vietoje (G-10)
     var Z = { busena: "nera", irasai: [], klaida: "" }, steb = { atvira: false, valyti: false };
 
     /* Tobulinimo įrašai naršyklėje */

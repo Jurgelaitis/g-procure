@@ -21,8 +21,9 @@ Modulis - statiniai failai, be build žingsnio, diegiami kartu su visa svetaine 
 | `index.html` (portalas) | Vienas viso pločio blokas „Pirkimų teisės stebėsena“ PO 12 įrankių katalogo, prieš tiekėjų dalį (iki trijų įrašų pagal redakcinį prioritetą, mygtukas „Atverti stebėseną“); atskiros katalogo kortelės modulis neturi |
 | `PP-qual/PP-QUAL.html`, `PP-salygos/PP-SALYGOS.html` | Kontekstiniai blokai su to modulio įrašais |
 
-Diegimo žingsniai: commit → push į `main` → GitHub Pages išdeda per ~1 min → atidaryti
-`https://g-procure.com/PP-teise/testai.html` ir įsitikinti, kad visi testai žali. Po registro ar
+Diegimo žingsniai: vietoje `python3 .github/testai/paleisk.py PP-teise` → commit → push į `main` → GitHub Actions paleidžia
+visus testus ir tik jiems praėjus išdeda svetainę. Testų puslapiai svetainėje neskelbiami ir vykdomi tik vietoje (nuo
+2026-11-23, saugumo auditas G-10). Po registro ar
 kodo pakeitimo **padidinti `sw.js` `VERSIJA`** - kitaip anksčiau apsilankę naudotojai be interneto
 matys seną rinkinį (su internetu jie visada gauna naujausią: savi failai - „tinklas pirmiausia“).
 
