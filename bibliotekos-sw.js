@@ -27,7 +27,7 @@ var BIBLIOTEKOS = [
   "shared/vendor/xlsx-0.20.3/xlsx.full.min.js",
   "shared/vendor/docx-8.5.0/index.umd.js",
   "shared/vendor/file-saver-2.0.5/FileSaver.min.js",
-  "shared/vendor/chartjs-4.4.1/chart.umd.min.js",
+  "shared/vendor/chartjs-4.4.1/chart.umd.js",
   "shared/vendor/jspdf-4.2.1/jspdf.umd.min.js",
   "shared/vendor/jspdf-autotable-5.0.8/jspdf.plugin.autotable.min.js",
   "shared/vendor/posthog-js-1.435.6/array.no-external.js"

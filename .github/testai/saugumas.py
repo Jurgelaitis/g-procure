@@ -13,6 +13,8 @@ Tikrina:
   2. Paslaptis saugykloje: API raktai, privatūs raktai, prieigos raktai; ir serverio IP adresas (paimamas iš DNS, ne įrašytas čia -
      serverio duomenys viešoje saugykloje nelaikomi). Rastos reikšmės nespausdinamos - tik failas, eilutė ir rūšis.
   3. /.well-known/security.txt galiojimą (RFC 9116 Expires): pasibaigęs - krenta, liko mažiau nei 30 dienų - įspėjimas.
+  4. SBOM (nuo 2026-11-24, saugumo auditas G-17): shared/sbom.cdx.json atitinka shared/vendor/bibliotekos.json (.github/testai/sbom.py;
+     be tinklo). Bibliotekų kilmė (failai = oficialūs paketai) - sbom.py --kilme, GitHub Actions kas savaitę (.github/workflows/saugumas.yml).
 Išėjimo kodas 1, jei bent viena patikra krito.
 """
 import base64, datetime, hashlib, json, os, re, socket, subprocess, sys, time, urllib.request
@@ -188,8 +190,11 @@ def patikrink():
     k1, i1, n = sca(visi, isimtys, dabar.strftime("%Y-%m-%d"))
     k2, i2, nt = paslaptys(sorted(visi), isimtys)
     k3, i3 = security_txt(visi, dabar)
-    krito, isp = k1 + k2 + k3, i1 + i2 + i3
-    busena = ("Saugumo patikra: %d bibliotekų versijos (OSV), paslaptys %d tekstiniuose failuose, security.txt - " % (n, nt)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import sbom
+    k4 = sbom.tikrink()
+    krito, isp = k1 + k2 + k3 + k4, i1 + i2 + i3
+    busena = ("Saugumo patikra: %d bibliotekų versijos (OSV), paslaptys %d tekstiniuose failuose, security.txt, SBOM - " % (n, nt)
               + ("praėjo" if not krito else "krito %d" % len(krito)) + (", įspėjimų %d" % len(isp) if isp else ""))
     return {"rinkinys": ".github/testai/saugumas.py", "baigta": True, "gerai": not krito, "busena": busena,
             "krito": krito, "ispejimai": isp, "sek": round(time.time() - pr)}
