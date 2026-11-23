@@ -231,10 +231,10 @@
     /* ---- ESG ir atitiktis ---- */
     f("pp-esg.sankcijos", "pp-esg", "L2", false,
       ["Preliminarus sankcijų rizikos vertinimas", "Preliminary sanctions risk assessment"],
-      ["Paspaudus „Įvertinti sankcijų riziką (DI)“", "On clicking the button that assesses sanctions risk with AI"],
+      ["Paspaudus „Įvertinti sankcijų riziką (DI)“; tik bendrovėms (individualių įmonių, mažųjų bendrijų, ūkininkų - nesiūloma, neaiškiai formai žmogus patvirtina, kad tai bendrovė)", "On clicking the button that assesses sanctions risk with AI; companies only (not offered for sole traders, small partnerships or farmers; for an unclear legal form the person confirms it is a company)"],
       ["Tiekėjo pavadinimas, šalis, kategorija ir įrašytas kontekstas", "The supplier name, country, category and the context entered"],
       ["Rizikos lygis - tik iš nustatyto sąrašo, kitaip klaida; sakiniai su teisės aktų numeriais ar teiginiu, kad tiekėjas yra sąraše, pašalinami ir suskaičiuojami", "The risk level - only known values, otherwise an error; sentences with legal act numbers or claims that the supplier is on a list are removed and counted"],
-      ["Rodoma su žyma „DI atsakymas“ ir pastaba, kad DI sąrašų netikrino; patikros rezultatą renkasi ir įrašo pats", "Shown as an AI response with a note that AI did not check the lists; the person chooses and records the check result"],
+      ["Rodoma su žyma „DI atsakymas“ ir pastaba, kad DI sąrašų netikrino; DI siūlomas rizikos lygis prie patikros išsaugomas tik su asmens sprendimu „Pritariu“ ar „Nepritariu“; patikros rezultatą renkasi ir įrašo pats", "Shown as an AI response with a note that AI did not check the lists; the risk level suggested by AI is saved with the check only with the person's decision to agree or disagree; the person chooses and records the check result"],
       "/api/esg/sanctions-assessment"),
     /* ---- G-Procure Tiekėjams ---- */
     f("pp-tiekejams.atsakymas", "pp-tiekejams", "L1", "pp-tiekejams.atsakymas",
