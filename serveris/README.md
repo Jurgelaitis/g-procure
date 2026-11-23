@@ -275,7 +275,20 @@ priežastį, o dienos ir 10 min. kvotos nekartoja. Būsena - tik atmintyje (perk
 žurnale - tik kvotos rūšis. Ribos nustatomos `index.js` (`sukurk({ ... })`); tikslią išlaidų sumą rodo Anthropic Console, paskutinė
 apsauga - paskyros mėnesio riba. Tikras lankytojo IP: nginx perrašo `X-Forwarded-For` (`$remote_addr`), Express `trust proxy` - `loopback`.
 Nuo tos pačios dienos DI maršrutai kilmės `null` (failas atvertas naršyklėje) nebepriima - tik g-procure.com, www ir vietinis tikrinimas.
+IPv6 adresai skaičiuojami pagal /64 tinklą (`ipRaktas`: vienas abonentas paprastai gauna visą /64, o adresų jame - milijardai), IPv4 ir
+`::ffff:` - pagal adresą. Vienam IP leidžiama tik nedidelė bendros dienos ribos dalis (`NUMATYTA.ipDienai`), todėl vienas lankytojas
+bendros ribos neišnaudoja. Vieša būsena be duomenų apie lankytojus - `GET /api/di/busena` (`viesaBusena()`: `{ diena, dienosRibaPasiekta }`),
+ją tikrina stebėsena (žemiau).
 Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.html` „AI transportas“).
+
+### Stebėsena (nuo 2026-11-23)
+
+`.github/workflows/stebesena.yml` kas valandą paleidžia `.github/stebesena/tikrink.py` (tik GET, tik Python standartinė biblioteka): svetainė,
+DI serveris, DI dienos riba (`/api/di/busena`), CVP IS duomenų kopija (krenta, kai senesnė nei 24 val. - 2026-11-20 - 2026-11-23 ji neatsinaujino
+ir niekas nepastebėjo), sankcijų sąrašai (krenta, kai nė vienas nepatikrintas; vienas pasenęs - įspėjimas), viešų sutarčių paslauga. Kiekviena
+patikra - du bandymai su 20 s pauze. Nepavykus GitHub atsiunčia laišką tam, kas paskutinis keitė failo tvarkaraštį (pranešimai - GitHub
+nustatymuose „Notifications > Actions“). Suplanuotas eigas GitHub sustabdo po 60 dienų be pakeitimų saugykloje - tada įjungti Actions skirtuke.
+Vietoje: `python3 .github/stebesena/tikrink.py`.
 
 Laukimas ir kūno dydis pagal užduotį (2026-11-23, `di-uzduotys.js` `laukimas`, `kunoRiba`): Anthropic atsakymo laukiama pagal šablono `maxTokens`
 (40 s + 25 ms žetonui, ne mažiau 60 ir ne daugiau 290 s; Opus - 1,25 karto ilgiau) arba šablono `laikas` (10-290 s); pasibaigus - 504. Užklausos kūnas

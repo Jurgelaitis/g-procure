@@ -12,7 +12,9 @@
  *
  *   const K = GP_DI_KVOTA.sukurk({ ipVienuMetu, visoVienuMetu, ipPer10Min, ipDienai, visoDienai, dabar })
  *   const r = K.pradek(ip)   -> { ok: true, pridek(modelis, usage), baik() } | { ok: false, status: 429, kvota, klaida, kartotiPo }
- *   K.busena()               -> { diena, viso, vienuMetu, ip, ribos } - testams
+ *   K.busena()               -> { diena, viso, vienuMetu, ip, ribos, dienosRibaPasiekta } - testams
+ *   K.viesaBusena()          -> { diena, dienosRibaPasiekta } - GET /api/di/busena (stebėsenai)
+ *   ipRaktas(ip)             - IPv6 - /64 tinklas, IPv4 - adresas
  *
  * Šis failas neturi priklausomybių ir veikia ir Node (serveris), ir naršyklėje (testai - serveris/testai.html).
  * ============================================================================ */
@@ -30,7 +32,7 @@
     "claude-opus-4-6": [5, 25]
   };
   var BRANGIAUSIA = [5, 25];
-  var NUMATYTA = { ipVienuMetu: 6, visoVienuMetu: 12, ipPer10Min: 150, ipDienai: 2.5, visoDienai: 4 };
+  var NUMATYTA = { ipVienuMetu: 6, visoVienuMetu: 12, ipPer10Min: 150, ipDienai: 1, visoDienai: 4 };   // ipDienai - $1 nuo 2026-11-23 (naudotojo sprendimas; iki tol 2,5)
   var DESIMT_MIN = 10 * 60 * 1000;
 
   var KLAIDOS = {
@@ -56,6 +58,23 @@
     t -= 3600 * 1000;
     while (dienaLT(t) === d) t += 60 * 1000;
     return Math.max(60, Math.round((t - ms) / 1000));
+  }
+
+  // Kvotos raktas pagal adresą (2026-11-23): IPv6 - visas /64 tinklas (vienas naudotojas paprastai gauna visą /64, todėl kitaip ribos
+  // apeinamos keičiant adresą), IPv4 ir IPv4 IPv6 pavidalu (::ffff:1.2.3.4) - pats adresas.
+  function ipRaktas(ip) {
+    var s = String(ip || "").trim().toLowerCase();
+    var m4 = /^(?:::ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/.exec(s);
+    if (m4) return m4[1];
+    if (s.indexOf(":") < 0) return s || "nezinomas";
+    s = s.replace(/%.*$/, "");
+    var dalys = s.split("::");
+    if (dalys.length > 2) return s;
+    var pr = dalys[0] ? dalys[0].split(":") : [], gal = dalys.length === 2 && dalys[1] ? dalys[1].split(":") : [];
+    if (gal.length && /\./.test(gal[gal.length - 1])) gal.splice(gal.length - 1, 1, "0", "0");   // įterptas IPv4 - du blokai
+    var visi = dalys.length === 2 ? pr.concat(new Array(Math.max(0, 8 - pr.length - gal.length)).fill("0"), gal) : pr;
+    if (visi.length !== 8 || !visi.every(function (h) { return /^[0-9a-f]{1,4}$/.test(h); })) return s;
+    return visi.slice(0, 4).map(function (h) { return parseInt(h, 16).toString(16); }).join(":") + "::/64";
   }
 
   function kaina(modelis, usage) {
@@ -92,7 +111,7 @@
     function pradek(ip) {
       var ms = dabar();
       naujaDiena(ms);
-      ip = String(ip || "nezinomas");
+      ip = ipRaktas(ip);
       var I = irasas(ip);
       I.laikai = I.laikai.filter(function (t) { return ms - t < DESIMT_MIN; });
       if (B.viso >= R.visoDienai) return atmesk("diena", ikiRytojaus(ms));
@@ -117,10 +136,16 @@
       };
     }
     function busena() {
-      return { diena: B.diena, viso: B.viso, vienuMetu: B.vienuMetu, ip: Object.keys(B.ip).length, ribos: R };
+      naujaDiena(dabar());
+      return { diena: B.diena, viso: B.viso, vienuMetu: B.vienuMetu, ip: Object.keys(B.ip).length, ribos: R, dienosRibaPasiekta: B.viso >= R.visoDienai };
     }
-    return { pradek: pradek, busena: busena };
+    // Viešai (stebėsenai, GET /api/di/busena) - tik ar pasiekta bendra dienos riba; sumos ir adresai neatskleidžiami
+    function viesaBusena() {
+      naujaDiena(dabar());
+      return { diena: B.diena, dienosRibaPasiekta: B.viso >= R.visoDienai };
+    }
+    return { pradek: pradek, busena: busena, viesaBusena: viesaBusena };
   }
 
-  return { VERSIJA: VERSIJA, KAINOS: KAINOS, NUMATYTA: NUMATYTA, KLAIDOS: KLAIDOS, sukurk: sukurk, kaina: kaina, dienaLT: dienaLT, ikiRytojaus: ikiRytojaus };
+  return { VERSIJA: VERSIJA, KAINOS: KAINOS, NUMATYTA: NUMATYTA, KLAIDOS: KLAIDOS, sukurk: sukurk, kaina: kaina, dienaLT: dienaLT, ikiRytojaus: ikiRytojaus, ipRaktas: ipRaktas };
 });

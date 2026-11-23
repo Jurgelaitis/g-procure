@@ -1256,6 +1256,23 @@ async function testaiDiKvota1123(){
     const src = await tekstas("di-kvota.js");
     tiesa(!/console\.|fetch\(|require\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")), "kvota pati nieko nerašo ir nesiunčia");
   });
+  await testas("IPv6 - visas /64 tinklas vienas raktas (adresų keitimu kvota neapeinama); IPv4 ir ::ffff: - adresas; numatyta vieno adreso dienos dalis - $1 (naudotojo sprendimas 2026-11-23); vieša būsena - tik ar pasiekta dienos riba", () => {
+    const R = Q.ipRaktas;
+    lygu([R("2001:db8:1:2:3:4:5:6"), R("2001:0db8:0001:0002:ffff::1"), R("2001:db8:1:2::"), R("2001:DB8:1:2::abcd%eth0"), R("::ffff:192.0.2.7"), R("192.0.2.7"), R("::1"), R("2001:db8::"), R("::ffff:1.2.3.4:5"), R(""), R("2001:db8:1:2::1.2.3.4")],
+      ["2001:db8:1:2::/64", "2001:db8:1:2::/64", "2001:db8:1:2::/64", "2001:db8:1:2::/64", "192.0.2.7", "192.0.2.7", "0:0:0:0::/64", "2001:db8:0:0::/64", "::ffff:1.2.3.4:5", "nezinomas", "2001:db8:1:2::/64"], "raktai");
+    let t = Date.UTC(2026, 10, 23, 8, 0, 0);
+    const K = Q.sukurk({ dabar: () => t });
+    lygu(K.busena().ribos.ipDienai, 1, "numatyta $1");
+    const a = K.pradek("2001:db8:1:2:aaaa::1"); a.pridek("claude-sonnet-4-6", { input_tokens: 100000, output_tokens: 50000 }); a.baik();   // $1,05
+    const b = K.pradek("2001:db8:1:2:bbbb::9");
+    lygu([b.ok, b.kvota], [false, "ipDiena"], "kitas to paties /64 adresas - ta pati kvota");
+    lygu(K.pradek("2001:db8:1:3::1").ok, true, "kitas /64 - atskira");
+    lygu(K.viesaBusena(), { diena: "2026-11-23", dienosRibaPasiekta: false }, "vieša būsena - be sumų ir adresų");
+    for (const ip of ["198.51.100.1", "198.51.100.2", "198.51.100.3"]) { const x = K.pradek(ip); x.pridek("claude-sonnet-4-6", { output_tokens: 70000 }); x.baik(); }   // po $1,05
+    lygu(K.viesaBusena().dienosRibaPasiekta, true, "bendra dienos riba pasiekta");
+    t += 24 * 3600 * 1000;
+    lygu(K.viesaBusena(), { diena: "2026-11-24", dienosRibaPasiekta: false }, "kitą dieną - iš naujo");
+  });
 }
 
 (async function(){
