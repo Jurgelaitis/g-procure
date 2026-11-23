@@ -246,7 +246,7 @@ Serveris pagal šabloną sudaro Anthropic užklausą ir grąžina Anthropic atsa
   leidžiamų, `maxTokens` <= 16000 (iki 2026-11-11 - 8000), duomenų schema - tekstas, skaičius, loginis, reikšmė iš sąrašo, tekstų sąrašas, dokumentas - PDF ar
   paveikslėlis base64), duomenų tikrinimas (tik šablono laukai, tipai ir ribos; klaidoje - lauko vardas, ne reikšmė; valdymo simboliai
   šalinami), užklausos sudarymas. Papildomi laukai (`system`, `messages`, `max_tokens`, `model`) atmetami - 400.
-- `di-uzduotys-marsrutas.js` - Express maršrutas DI serveriui (`index.js`, pm2): šablonai iš `/var/www/g-procure/uzduotys/` (failo
+- `di-uzduotys-marsrutas.js` - Express maršrutas DI serveriui (`index.js`, systemd `g-procure.service`; iki 2026-11-23 - pm2): šablonai iš `/var/www/g-procure/uzduotys/` (failo
   vardas = id, klaida šablone sustabdo paleidimą), į žurnalą - tik užduoties pavadinimas ir klaidos rūšis, Anthropic klaidos objektas
   neperduodamas. Diegimas - failo antraštėje.
 - Šablonai - NE šioje saugykloje (privačiame aplanke, kopijuojami į serverį kartu su naudotoju).
@@ -268,3 +268,13 @@ priežastį, o dienos ir 10 min. kvotos nekartoja. Būsena - tik atmintyje (perk
 apsauga - paskyros mėnesio riba. Tikras lankytojo IP: nginx perrašo `X-Forwarded-For` (`$remote_addr`), Express `trust proxy` - `loopback`.
 Nuo tos pačios dienos DI maršrutai kilmės `null` (failas atvertas naršyklėje) nebepriima - tik g-procure.com, www ir vietinis tikrinimas.
 Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.html` „AI transportas“).
+
+### DI serveris per systemd (nuo 2026-11-23; saugumo auditas G-05)
+
+Pagrindinis DI serveris (`/var/www/g-procure/index.js`, 127.0.0.1:3000) nuo 2026-11-23 paleidžiamas `g-procure.service` (šis aplankas), ne pm2 kaip root:
+`DynamicUser` ir ta pati izoliacija kaip kitų paslaugų, `.env` pateikiamas tik kaip `LoadCredential` kredencialas (`$CREDENTIALS_DIRECTORY/env`,
+`index.js` jį perskaito per dotenv - reikšmės nepatenka į aplinkos kintamuosius), DI užduočių šablonai (`uzduotys/`, root:`gp-uzduotys`, 750 / 640) -
+per `SupplementaryGroups=gp-uzduotys` (grupė ne paslaugos vardu: `DynamicUser` naudotojas vadinasi `g-procure`, ir tokio paties vardo grupė jo
+sukurti neleistų - klaida 217/USER). Visos keturios paslaugos - Node.js 24 LTS (NodeSource `node_24.x`, palaikoma iki 2028-04-30; iki 2026-11-23 -
+Node 20). Žurnalas - `journalctl -u g-procure` (paleidimas, kvotos rūšis, klaidų tipai). Diegimas: `index.js` ir šablonai į `/var/www/g-procure`,
+vienetas į `/etc/systemd/system/`, `systemctl daemon-reload`, `systemctl restart g-procure`. Testai - `testai.html` grupė `testaiDiServerioVienetas1123`.

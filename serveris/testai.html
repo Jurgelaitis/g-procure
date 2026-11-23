@@ -1152,6 +1152,23 @@ async function testaiViesosSutartys1119(){
   });
 }
 
+/* DI serverio systemd vienetas (serveris/g-procure.service, 2026-11-23, saugumo auditas G-05): vietoj pm2 (root) - DynamicUser,
+   izoliacija, .env - tik kaip LoadCredential, šablonų grupė, V8 riba žemiau systemd ribos. */
+async function testaiDiServerioVienetas1123(){
+  grupe("DI serverio systemd vienetas (2026-11-23)");
+  const v = await tekstas("g-procure.service");
+  await testas("DynamicUser ir izoliacija kaip kitų paslaugų; .env - tik LoadCredential (ne EnvironmentFile, ne Environment); grupė šablonams - ne paslaugos vardu; V8 riba žemiau systemd ribos; rakto reikšmių nėra", () => {
+    ["DynamicUser=yes", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "PrivateDevices=yes", "CapabilityBoundingSet=\n",
+     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX", "SystemCallFilter=@system-service", "MemoryMax=", "MemoryHigh=", "TasksMax=",
+     "LoadCredential=env:/var/www/g-procure/.env", "SupplementaryGroups=gp-uzduotys", "WorkingDirectory=/var/www/g-procure", "WantedBy=multi-user.target"].forEach(e => tiesa(v.indexOf(e) >= 0, "trūksta: " + e));
+    const be = v.replace(/^#.*$/gm, "");
+    tiesa(!/EnvironmentFile|^User=|^Group=|StateDirectory|API_KEY|sk-ant/im.test(be), "raktai aplinkoje, root ar rašomas katalogas");
+    tiesa(!/SupplementaryGroups=g-procure\b/.test(be), "grupė paslaugos vardu - DynamicUser jos nesukurtų (status 217/USER)");
+    const v8 = +(/--max-old-space-size=(\d+)/.exec(v) || [])[1], cg = +(/\nMemoryMax=(\d+)M/.exec(v) || [])[1];
+    tiesa(/\nExecStart=\/usr\/bin\/node --max-old-space-size=\d+ \/var\/www\/g-procure\/index\.js\n/.test(v) && v8 > 0 && v8 + 300 <= cg, "ExecStart ir V8 riba");
+  });
+}
+
 /* DI užduočių kvota (serveris/di-kvota.js, 2026-11-23, saugumo auditas G-01): vienu metu, per 10 min., dienos išlaidos vienam IP ir visos. */
 async function testaiDiKvota1123(){
   grupe("DI užduočių kvota (2026-11-23)");
@@ -1221,6 +1238,7 @@ async function testaiDiKvota1123(){
     await testaiViesosSutartys1119();
     if (!window.GP_DI_KVOTA) throw new Error("di-kvota.js neįsikėlė");
     await testaiDiKvota1123();
+    await testaiDiServerioVienetas1123();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
