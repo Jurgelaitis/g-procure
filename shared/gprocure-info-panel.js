@@ -50,6 +50,11 @@
  *                                   // o ne į dubliuojantį 2 lygio langą (Q4, 2026-09-26)
  *
  * Naudoja bendrus G-Procure CSS kintamuosius -> automatiškai dera prie modulio.
+ *
+ * Duomenų šaltiniai (2026-11-24, naudotojo pasiūlymas): įrankiams, kurie jungiasi prie išorinių duomenų bazių ar
+ * šaltinių, skiltyje rodomas suskleistas sąrašas „Duomenų šaltiniai: ...“ - kas tai, kokie duomenys ir kaip gaunami
+ * (tiesiai iš naršyklės ar per G-Procure serverį). Sąrašas - SALTINIAI ir IRANKIU_SALTINIAI žemiau; įrankiui pradėjus
+ * naudoti naują šaltinį (ar nustojus) - taisyti čia (sargas shared/testai.html lygina su įrankių kodu).
  * ==========================================================================*/
 (function (global) {
   "use strict";
@@ -61,11 +66,82 @@
   var lastFocus = null;      // elementas, į kurį grąžinamas focus uždarius
   var keyHandler = null;
 
+  /* Duomenų šaltiniai (2026-11-24). t - trumpas pavadinimas santraukos eilutei [lt, en]; kaip: "narsykle" - naršyklė kreipiasi į šaltinį pati, "serveris" - kreipiasi G-Procure serveris,
+     naršyklė gauna tik rezultatą. Tekstai - tik tai, ką įrankiai tikrai gauna (patikrinta pagal kodą 2026-11-24). */
+  var SALTINIAI = {
+    fred: { t: ["FRED", "FRED"], kaip: "serveris", nuoroda: "https://fred.stlouisfed.org/",
+      lt: ["FRED (Sent Luiso federalinis rezervų bankas)", "Naftos, gamtinių dujų ir metalų kainos (pirminiai šaltiniai - JAV Energetikos informacijos administracija (EIA) ir Tarptautinis valiutos fondas (TVF)), JAV gamintojų ir importo kainų indeksai (JAV darbo statistikos biuras)"],
+      en: ["FRED (Federal Reserve Bank of St. Louis)", "Oil, natural gas and metal prices (primary sources: U.S. Energy Information Administration (EIA) and International Monetary Fund (IMF)), U.S. producer and import price indices (U.S. Bureau of Labor Statistics)"] },
+    nyfed: { t: ["Niujorko FRB", "New York Fed"], kaip: "serveris", nuoroda: "https://www.newyorkfed.org/research/policy/gscpi",
+      lt: ["Niujorko federalinis rezervų bankas", "Pasaulinio tiekimo sutrikimų indeksas (GSCPI)"],
+      en: ["Federal Reserve Bank of New York", "Global Supply Chain Pressure Index (GSCPI)"] },
+    eurostat: { t: ["Eurostatas", "Eurostat"], kaip: "narsykle", nuoroda: "https://ec.europa.eu/eurostat",
+      lt: ["Eurostatas", "ES gamintojų kainų indeksas (plastikai pirminėmis formomis) ir vandens bei oro transporto paslaugų kainų indeksai"],
+      en: ["Eurostat", "EU producer price index (plastics in primary forms) and water and air transport services price indices"] },
+    comext: { t: ["Comext", "Comext"], kaip: "narsykle", nuoroda: "https://ec.europa.eu/eurostat/web/international-trade-in-goods/database",
+      lt: ["Eurostato Comext", "ES importas iš ne ES šalių pagal prekes ir kilmės šalis"],
+      en: ["Eurostat Comext", "EU imports from non-EU countries by product and country of origin"] },
+    ecb: { t: ["ECB", "ECB"], kaip: "narsykle", nuoroda: "https://data.ecb.europa.eu/",
+      lt: ["Europos Centrinis Bankas", "Euro orientacinis kursas JAV doleriui (dolerinėms kainoms perskaičiuoti eurais)"],
+      en: ["European Central Bank", "Euro reference exchange rate against the U.S. dollar (to convert dollar prices to euro)"] },
+    osp: { t: ["OSP", "OSP"], kaip: "narsykle", nuoroda: "https://osp.stat.gov.lt/",
+      lt: ["Oficialiosios statistikos portalas", "Lietuvos vartotojų, gamintojų ir statybos sąnaudų kainų indeksai, darbo užmokestis"],
+      en: ["Official Statistics Portal of Lithuania", "Lithuanian consumer, producer and construction cost price indices, wages"] },
+    vpt: { t: ["VPT CVP IS", "VPT CVP IS"], kaip: "serveris", nuoroda: "https://viesiejipirkimai.lt/",
+      lt: ["Viešųjų pirkimų tarnyba - CVP IS duomenys", "Paskelbti pirkimai: pavadinimai, pirkimo vykdytojai, būdai, terminai, būsenos, BVPŽ kodai, vertės (serverio kopija ne senesnė kaip 6 val.)"],
+      en: ["Public Procurement Office - CVP IS data", "Published procurements: titles, contracting authorities and entities, procedures, deadlines, statuses, CPV codes, values (server copy no older than 6 hours)"] },
+    cvpis_dok: { t: ["CVP IS dokumentai", "CVP IS documents"], kaip: "serveris", nuoroda: "https://viesiejipirkimai.lt/",
+      lt: ["CVP IS pirkimo dokumentai", "Vieši pasirinkto pirkimo dokumentai (ZIP); serveris juos perduoda ir neišsaugo"],
+      en: ["CVP IS procurement documents", "Public documents of the selected procurement (ZIP); the server passes them on and does not store them"] },
+    vda_sutartys: { t: ["data.gov.lt", "data.gov.lt"], kaip: "serveris", nuoroda: "https://data.gov.lt/",
+      lt: ["Valstybės duomenų agentūra (data.gov.lt) - viešųjų pirkimų sutartys", "CVP IS registruotos sutartys: pirkėjai, tiekėjai, vertės, datos (licencija CC BY 4.0)"],
+      en: ["State Data Agency (data.gov.lt) - public procurement contracts", "Contracts registered in CVP IS: buyers, suppliers, values, dates (licence CC BY 4.0)"] },
+    vda_pirkimai: { t: ["data.gov.lt", "data.gov.lt"], kaip: "serveris", nuoroda: "https://data.gov.lt/",
+      lt: ["Valstybės duomenų agentūra (data.gov.lt) - VPT pirkimų ataskaitų duomenys", "Pirkimo vykdytojo sudarytos sutartys ir jų tiekėjai (tiekėjams importuoti)"],
+      en: ["State Data Agency (data.gov.lt) - Public Procurement Office procurement report data", "Contracts concluded by the contracting authority or entity and their suppliers (to import suppliers)"] },
+    ted: { t: ["TED", "TED"], kaip: "serveris", nuoroda: "https://ted.europa.eu/",
+      lt: ["TED (Europos Sąjungos leidinių biuras)", "ES sutarčių sudarymo skelbimai: laimėtojai ir vertės"],
+      en: ["TED (Publications Office of the European Union)", "EU contract award notices: winners and values"] },
+    rc: { t: ["Registrų centras", "Centre of Registers"], kaip: "serveris", nuoroda: "https://data.gov.lt/",
+      lt: ["Registrų centras (data.gov.lt) - juridinių asmenų finansinės ataskaitos", "Pardavimo pajamos - tik suskaičiuoti, kiek įmonių atitiktų ribą (įmonių pavadinimai nerodomi)"],
+      en: ["Centre of Registers (data.gov.lt) - financial statements of legal entities", "Sales revenue - only to count how many companies would meet the threshold (company names are not shown)"] },
+    sank_es: { t: ["ES sankcijos", "EU sanctions"], kaip: "serveris", nuoroda: "https://webgate.ec.europa.eu/fsd/fsf",
+      lt: ["ES finansinių sankcijų sąrašas (Europos Komisija)", "Asmenys ir subjektai, kuriems taikomos ES sankcijos (serverio kopija; sąrašo data rodoma rezultate)"],
+      en: ["EU financial sanctions list (European Commission)", "Persons and entities subject to EU sanctions (server copy; the list date is shown in the result)"] },
+    sank_jt: { t: ["JT sankcijos", "UN sanctions"], kaip: "serveris", nuoroda: "https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list",
+      lt: ["JT Saugumo Tarybos konsoliduotas sankcijų sąrašas", "Asmenys ir subjektai, kuriems taikomos JT sankcijos (serverio kopija)"],
+      en: ["UN Security Council Consolidated List", "Persons and entities subject to UN sanctions (server copy)"] },
+    sank_ofac: { t: ["OFAC", "OFAC"], kaip: "serveris", nuoroda: "https://sanctionssearch.ofac.treas.gov/",
+      lt: ["JAV iždo departamento OFAC sąrašai", "SDN ir konsoliduotas sankcijų sąrašai (serverio kopija)"],
+      en: ["U.S. Treasury OFAC lists", "SDN and Consolidated sanctions lists (server copy)"] },
+    sank_jk: { t: ["JK sankcijos", "UK sanctions"], kaip: "serveris", nuoroda: "https://www.gov.uk/government/publications/the-uk-sanctions-list",
+      lt: ["Jungtinės Karalystės sankcijų sąrašas", "Asmenys ir subjektai, kuriems taikomos JK sankcijos (serverio kopija)"],
+      en: ["UK Sanctions List", "Persons and entities subject to UK sanctions (server copy)"] }
+  };
+  /* Kuris įrankis (informacinės skilties moduleId) prie kurių šaltinių jungiasi. Įrankiai be išorinių duomenų - be įrašo (sąrašas nerodomas). */
+  var IRANKIU_SALTINIAI = {
+    "pp-market-kpi": ["fred", "nyfed", "eurostat", "comext", "ecb", "osp"],
+    "pp-tiekejams": ["vpt", "cvpis_dok"],
+    "pirkimu-korteles": ["vpt"],
+    "pp-graphs": ["vpt"],
+    "pp-plan": ["vda_sutartys"],
+    "pp-qual": ["vda_sutartys", "ted", "rc"],
+    "pp-ts": ["vda_sutartys", "ted"],
+    "pp-esg": ["sank_es", "sank_jt", "sank_ofac", "sank_jk", "vda_pirkimai"]
+  };
+  function saltiniai(moduleId) {
+    return (IRANKIU_SALTINIAI[moduleId] || []).map(function (id) { return Object.assign({ id: id }, SALTINIAI[id]); }).filter(function (x) { return x.lt; });
+  }
+
   var UI = {
     lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Išsami instrukcija",
-          trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumo politika", cookies: "Slapukų nustatymai" },
+          trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumo politika", cookies: "Slapukų nustatymai",
+          src: "Duomenų šaltiniai:", srcBy: { narsykle: "gaunama tiesiai iš naršyklės", serveris: "gaunama per G-Procure serverį" },
+          srcNote: "„Per G-Procure serverį“ - į šaltinį kreipiasi serveris, o naršyklė gauna tik rezultatą; „tiesiai iš naršyklės“ - jūsų naršyklė kreipiasi į šaltinį pati. Ką įrankis siunčia - privatumo politikoje.", srcLink: "atverti šaltinį" },
     en: { collapse: "Collapse", expand: "Expand", more: "Learn more", close: "Close", aria: "Information panel", dialog: "Detailed guide",
-          trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy", cookies: "Cookie settings" }
+          trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy", cookies: "Cookie settings",
+          src: "Data sources:", srcBy: { narsykle: "fetched directly by your browser", serveris: "fetched via the G-Procure server" },
+          srcNote: "“Via the G-Procure server” - the server queries the source and your browser receives only the result; “directly by your browser” - your browser queries the source itself. What the tool sends is described in the privacy policy.", srcLink: "open source" }
   };
   /* Svetainės šaknis (2026-10-05): DI valdymo ir privatumo puslapiai - šaknyje, šis failas - shared/ kataloge. Moduliai - pakatalogiuose,
      šaknies puslapiai (pirkimu-korteles.html) - šaknyje, todėl adresas skaičiuojamas iš šio skripto adreso, ne iš puslapio. */
@@ -103,7 +179,7 @@
       "@media(max-width:640px){.gpi .gpi-head{padding:12px 16px}.gpi .gpi-inner{padding:0 16px 16px}}",
       ".gpi-chev{width:15px;height:15px;transition:transform 200ms ease}",
       ".gpi.collapsed .gpi-chev{transform:rotate(-90deg)}",
-      ".gpi-body{max-height:1400px;overflow:hidden;transition:max-height 260ms ease,opacity 200ms ease,padding 200ms ease;opacity:1}",
+      ".gpi-body{max-height:3000px;overflow:hidden;transition:max-height 260ms ease,opacity 200ms ease,padding 200ms ease;opacity:1}",
       ".gpi.collapsed .gpi-body{max-height:0;opacity:0;padding-top:0;padding-bottom:0}",
       ".gpi-inner{padding:0 var(--space-3,24px) var(--space-3,24px) calc(var(--space-3,24px) + 34px + var(--space-1,8px))}",
       ".gpi-steps-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--color-graphite-50-strong,#5B6470);margin:4px 0 10px}",
@@ -119,6 +195,21 @@
       ".gpi-trust{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:10px;font-size:13px;color:var(--color-graphite-50-strong,#5B6470)}",
       ".gpi-trust svg{width:15px;height:15px;flex-shrink:0;color:var(--color-emerald-strong,#007554)}",
       ".gpi-trust a{color:var(--color-emerald-strong,#007554);font-weight:700;text-decoration:underline;text-underline-offset:2px}",
+      /* Duomenų šaltiniai (2026-11-24): suskleistas sąrašas virš „Kaip G-Procure valdo DI ...“ */
+      ".gpi-src{margin-top:10px;font-size:13px;color:var(--color-graphite-50-strong,#5B6470)}",
+      ".gpi-src summary{cursor:pointer;display:flex;align-items:center;gap:6px;flex-wrap:wrap;list-style:none;width:fit-content;max-width:100%;border-radius:4px}",
+      ".gpi-src summary::-webkit-details-marker{display:none}",
+      ".gpi-src summary::after{content:'\\25B8';font-size:12px;transition:transform 150ms ease}",
+      ".gpi-src[open] summary::after{transform:rotate(90deg)}",
+      ".gpi-src summary svg{width:15px;height:15px;flex-shrink:0;color:var(--color-emerald-strong,#007554)}",
+      ".gpi-src-v{color:var(--color-emerald-strong,#007554);font-weight:700;text-decoration:underline;text-underline-offset:2px}",
+      ".gpi-src ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}",
+      "@media(min-width:760px){.gpi-src ul{grid-template-columns:1fr 1fr}}",
+      ".gpi-src li{border:1px solid var(--color-graphite-15,#E1E2E4);border-radius:var(--radius-sm,8px);padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}",
+      ".gpi-src li a{color:var(--color-emerald-strong,#007554);font-weight:700;overflow-wrap:anywhere}",
+      ".gpi-src-ka{color:var(--color-graphite,#2E3641);line-height:1.4}",
+      ".gpi-src-kaip{font-size:12px}",
+      ".gpi-src-pastaba{margin:8px 0 0;font-size:12px;line-height:1.4}",
       /* --- 2 lygis: modalinis langas --- */
       ".gpi-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:var(--space-3,24px);background:rgba(11,18,32,.55);backdrop-filter:blur(3px);overflow-y:auto}",
       ".gpi-overlay.open{display:flex}",
@@ -201,6 +292,7 @@
 
   var ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>';
   var ICON_CHEV = '<svg class="gpi-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+  var ICON_DB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>';
   var ICON_SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 7.7 8 10 4.6-2.3 8-5 8-10V6z"/></svg>';
   var ICON_BOOK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
   var ICON_FLOW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M8 6h8M6.5 8.5 10.5 15M17.5 8.5 13.5 15"/></svg>';
@@ -211,6 +303,19 @@
   /* ---------------------------------------------------------------- *
    *  1 LYGIS - trumpas blokas
    * ---------------------------------------------------------------- */
+  // Suskleistas duomenų šaltinių sąrašas (2026-11-24); be šaltinių - nieko
+  function saltiniuHtml(moduleId, lang, ui) {
+    var sar = saltiniai(moduleId);
+    if (!sar.length) return "";
+    var k = lang === "en" ? "en" : "lt";
+    var vardai = sar.map(function (x) { return x.t[k === "en" ? 1 : 0]; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    return '<details class="gpi-src"><summary>' + ICON_DB + '<span class="gpi-src-t">' + esc(ui.src) + '</span> <span class="gpi-src-v">' + esc(vardai.join(", ")) + '</span></summary>' +
+      '<ul>' + sar.map(function (x) {
+        return '<li><a href="' + esc(x.nuoroda) + '" target="_blank" rel="noopener noreferrer">' + esc(x[k][0]) + '</a>' +
+          '<span class="gpi-src-ka">' + esc(x[k][1]) + '</span><span class="gpi-src-kaip">' + esc(ui.srcBy[x.kaip]) + '</span></li>';
+      }).join("") + '</ul><p class="gpi-src-pastaba">' + esc(ui.srcNote) + '</p></details>';
+  }
+
   function render(cfg) {
     injectStyles();
     var lang = (cfg.getLang && cfg.getLang()) || "lt";
@@ -248,7 +353,7 @@
         '</div>' +
         '<div class="gpi-body"><div class="gpi-inner">' +
           (c.stepsTitle ? '<div class="gpi-steps-title">' + esc(c.stepsTitle) + '</div>' : "") +
-          '<div class="gpi-steps">' + steps + '</div>' + noteHtml +
+          '<div class="gpi-steps">' + steps + '</div>' + noteHtml + saltiniuHtml(cfg.moduleId, lang, ui) +
           '<div class="gpi-trust">' + ICON_SHIELD + '<span>' + esc(ui.trust) + '</span><a href="' +
             // ?irankis=<moduleId> (2026-11-15): DI valdymo puslapis atveria šio įrankio DI funkcijas su savarankiškumo lygiu (shared/di-funkcijos.js)
             esc(SAKNIS + "ai-valdymas.html" + (cfg.moduleId ? "?irankis=" + encodeURIComponent(cfg.moduleId) : "")) + '">' + esc(ui.ai) +
@@ -389,6 +494,8 @@
   var GProcureInfoPanel = {
     mount: function (cfg) { current = cfg; render(cfg); return this; },
     refresh: function () { if (current) render(current); },
+    // Duomenų šaltiniai (2026-11-24): sąrašas įrankiui ir visas registras (testams, kitiems puslapiams)
+    saltiniai: saltiniai, SALTINIAI: SALTINIAI, IRANKIU_SALTINIAI: IRANKIU_SALTINIAI,
     open: function () { if (current) { setOpen(current, true); render(current); } },
     collapse: function () { if (current) { setOpen(current, false); render(current); } },
     openDetails: function () { if (current) openDetails(current, null); },

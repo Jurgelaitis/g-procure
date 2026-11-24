@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="epso-g.css">
 <script src="backup.js"></script>
 <script src="docx-stiliai.js"></script>
+<script src="gprocure-info-panel.js"></script>
 <script src="teises-nuorodos.js"></script>
 <script src="saugykla.js"></script>
 <script src="testu-apsauga.js"></script>
@@ -649,6 +650,91 @@ async function testaiSkydelis(){
   await testas("Būsenos raktas nepakito (gprocure.infoPanel.[modulis]) - išsaugota būsena išlieka", async ()=>{
     const src = await (await fetch("gprocure-info-panel.js?b=" + Date.now())).text();
     tiesa(src.indexOf('var LS_PREFIX = "gprocure.infoPanel.";') !== -1, "pakeitus prefiksą naudotojų išsaugota skydelio būsena dingtų");
+  });
+
+  /* Duomenų šaltiniai (2026-11-24, naudotojo pasiūlymas): įrankiams su išorinėmis duomenų sąsajomis - suskleistas sąrašas skiltyje. */
+  await testas("Duomenų šaltiniai: įrankiui su sąsajomis - suskleistas sąrašas (santrauka, šaltinis su nuoroda, kokie duomenys ir kaip gaunami, LT ir EN), be sąsajų - nerodoma; tekstai ekranuojami", async ()=>{
+    const P = window.GProcureInfoPanel;
+    tiesa(P && typeof P.saltiniai === "function", "GProcureInfoPanel.saltiniai");
+    for (const lang of ["lt", "en"]) {
+      const f = document.createElement("iframe"); f.style.width = "1280px"; f.style.height = "900px";
+      f.srcdoc = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"></head><body><div id="m1"></div><div id="m2"></div>`
+        + `<script src="gprocure-info-panel.js"><\/script><script>GProcureInfoPanel.mount({ target: "#m1", moduleId: "pp-market-kpi", defaultOpen: true, getLang: function(){ return "${lang}"; }, content: ${JSON.stringify(SKYDELIO_TURINYS)} });`
+        + `<\/script></body></html>`;
+      await new Promise(r => { f.onload = r; document.body.appendChild(f); });
+      try {
+        const d = f.contentDocument;
+        for (let i = 0; i < 40 && !d.querySelector(".gpi-head"); i++) await new Promise(r => setTimeout(r, 25));
+        const det = d.querySelector("#m1 details.gpi-src");
+        tiesa(det && !det.open, lang + ": sąrašas yra ir suskleistas");
+        lygu(det.querySelector("summary").textContent.replace(/\s+/g, " ").trim(),
+          lang === "lt" ? "Duomenų šaltiniai: FRED, Niujorko FRB, Eurostatas, Comext, ECB, OSP" : "Data sources: FRED, New York Fed, Eurostat, Comext, ECB, OSP", lang + ": santrauka");
+        const li = [...det.querySelectorAll("li")];
+        lygu(li.length, 6, lang + ": šaltinių");
+        tiesa(li.every(x => /^https:\/\//.test(x.querySelector("a").getAttribute("href")) && x.querySelector("a").rel.includes("noopener") && x.querySelector(".gpi-src-ka").textContent.length > 15), lang + ": nuoroda, rel ir aprašas");
+        const kaip = li.map(x => x.querySelector(".gpi-src-kaip").textContent);
+        lygu(kaip.filter(k => lang === "lt" ? /per G-Procure serverį/.test(k) : /G-Procure server/.test(k)).length, 2, lang + ": per serverį - FRED ir Niujorko FRB");
+        det.open = true;
+        tiesa(det.querySelector(".gpi-src-pastaba").getBoundingClientRect().height > 0, lang + ": atvėrus matoma pastaba");
+        // Kontrastas: santraukos ir aprašų tekstas >= 4,5:1 (puslapio fonas baltas)
+        for (const el of [det.querySelector(".gpi-src-t"), det.querySelector(".gpi-src-v"), li[0].querySelector(".gpi-src-ka"), li[0].querySelector(".gpi-src-kaip")]) {
+          const k = kontrastas(getComputedStyle(el).color, "rgb(255, 255, 255)");
+          tiesa(k >= 4.5, lang + ": kontrastas " + k.toFixed(2) + " (" + el.className + ")");
+        }
+        // Įrankis be sąsajų - nerodoma
+        f.contentWindow.GProcureInfoPanel.mount({ target: "#m2", moduleId: "pp-report", defaultOpen: true, getLang: () => lang, content: SKYDELIO_TURINYS });
+        tiesa(!d.querySelector("#m2 .gpi-src"), lang + ": be sąsajų - sąrašo nėra");
+      } finally { f.remove(); }
+    }
+    // Ekranavimas: šaltinio tekstas su HTML nevirsta žyme
+    const S = P.SALTINIAI, sena = S.osp.lt[1];
+    try {
+      S.osp.lt[1] = '<img src=x onerror="window.__gpiSrc=1">';
+      const f = document.createElement("iframe");
+      f.srcdoc = `<!doctype html><html lang="lt"><head><meta charset="utf-8"></head><body><div id="m"></div><script src="gprocure-info-panel.js"><\/script></body></html>`;
+      await new Promise(r => { f.onload = r; document.body.appendChild(f); });
+      try {
+        const w = f.contentWindow; w.GProcureInfoPanel.SALTINIAI.osp.lt[1] = S.osp.lt[1];
+        w.GProcureInfoPanel.mount({ target: "#m", moduleId: "pp-market-kpi", defaultOpen: true, getLang: () => "lt", content: SKYDELIO_TURINYS });
+        tiesa(!f.contentDocument.querySelector(".gpi-src img") && /<img/.test(f.contentDocument.querySelector(".gpi-src").textContent), "HTML šaltinio tekste - tik tekstas");
+      } finally { f.remove(); }
+    } finally { S.osp.lt[1] = sena; }
+  });
+
+  await testas("Duomenų šaltinių sąrašas atitinka įrankių kodą: kiekvienas įrankis, kuris kreipiasi į duomenų paslaugą ar viešą duomenų bazę, ją nurodo, o nurodytas šaltinis tikrai naudojamas (abi kryptys)", async ()=>{
+    const P = window.GProcureInfoPanel, S = P.SALTINIAI, I = P.IRANKIU_SALTINIAI;
+    for (const [m, ids] of Object.entries(I)) for (const id of ids) tiesa(S[id] && S[id].lt && S[id].en && S[id].t && /^https:\/\//.test(S[id].nuoroda) && /^(narsykle|serveris)$/.test(S[id].kaip), m + ": šaltinis " + id);
+    // Kodo žymės -> šaltiniai (žr. shared/vpt-duomenys.js, viesos-sutartys.js, PP-market-KPI/rinka.js ir osp.js, PP-esg)
+    const ZYMES = [
+      [/GP_VPT\.(pirkimas|paieska|statistika)\(|GP_VPT_RINKA\.mount\(/, ["vpt"]],
+      [/GP_VPT\.dokumentai\(|\/api\/cvpis\/dokumentai\//, ["cvpis_dok"]],
+      // viešų sutarčių klientas (shared/viesos-sutartys.js) kviečiamas per kintamąjį (V.pirkejas) - žymė galioja tik jį įkėlusiam puslapiui (GP_SKELBIMAS.pirkejas - ne sąsaja)
+      [/\.pirkejas\(/, ["vda_sutartys"], /viesos-sutartys\.js/], [/\.rinka\(/, ["vda_sutartys", "ted"], /viesos-sutartys\.js/],
+      [/\.pajegumas\(/, ["vda_sutartys", "ted", "rc"], /viesos-sutartys\.js/], [/\/api\/vpt\?/, ["vda_sutartys"]],
+      [/api\.g-procure\.com\/api\/rinka/, ["fred", "nyfed"]], [/ec\.europa\.eu\/eurostat\/api\/dissemination\/statistics/, ["eurostat"]],
+      [/eurostat\/api\/comext/, ["comext"]], [/data-api\.ecb\.europa\.eu/, ["ecb"]], [/osp-rs\.stat\.gov\.lt/, ["osp"]],
+      [/\/api\/sankcijos\/tikrinti/, ["sank_es", "sank_jt", "sank_ofac", "sank_jk"]], [/\/api\/esg\/cvpis-suppliers/, ["vda_pirkimai"]]
+    ];
+    const puslapiai = [...new Set(kodoFailai().filter(x => /\.html$/.test(x)))];
+    const blogi = [], rasti = new Set();
+    for (const pg of puslapiai) {
+      const html = await saltinis(pg);
+      const mid = /moduleId:\s*["']([a-z0-9-]+)["']/.exec(html);
+      if (!mid) continue;
+      // Puslapis ir jo paties katalogo skriptai (bendri shared/ failai - ne įrankio sąsaja: jų kvietimai - puslapyje)
+      let tekstas = html;
+      const kat = pg.replace(/[^\/]*$/, "");
+      for (const x of html.matchAll(/<script src="([^"]+)"/g)) if (!/^(\.\.\/|shared\/|https?:)/.test(x[1])) tekstas += await saltinis(kat + x[1].replace(/^\.\//, ""));
+      const reikia = new Set();
+      for (const [re, ids, kai] of ZYMES) if (re.test(tekstas) && (!kai || kai.test(html))) ids.forEach(i => reikia.add(i));
+      const yra = new Set(I[mid[1]] || []);
+      rasti.add(mid[1]);
+      const truksta = [...reikia].filter(i => !yra.has(i)), nereikia = [...yra].filter(i => !reikia.has(i));
+      if (truksta.length) blogi.push(pg + " (" + mid[1] + "): kodas kreipiasi, bet sąraše nėra - " + truksta.join(", "));
+      if (nereikia.length) blogi.push(pg + " (" + mid[1] + "): sąraše yra, bet kodas nesikreipia - " + nereikia.join(", "));
+    }
+    tiesa(Object.keys(I).every(m => rasti.has(m)), "IRANKIU_SALTINIAI įrankis be puslapio: " + Object.keys(I).filter(m => !rasti.has(m)).join(", "));
+    tiesa(!blogi.length, blogi.join("\n  "));
   });
 }
 
