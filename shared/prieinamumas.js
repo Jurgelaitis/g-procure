@@ -7,7 +7,7 @@
  *  1) <label> be „for“ prieš lauką (div.fg, div.field, div.form-field ...) su lauku nesusieta, todėl ekrano
  *     skaitytuvas lauko pavadinimo neranda. Susiejama: „for“, kai laukas turi id, kitaip aria-labelledby.
  *  2) Laukas lentelės langelyje be etiketės - pavadinimas iš stulpelio antraštės ir eilutės pirmo langelio.
- *  3) Spaudžiami <div>, <span>, <a be href> su onclick - klaviatūra nepasiekiami. Gauna tabindex="0",
+ *  3) Spaudžiami <div>, <span>, <a be href> su onclick ar data-veiksmas - klaviatūra nepasiekiami. Gauna tabindex="0",
  *     vaidmenį (button, nuorodai - link), o Enter ir tarpas veikia kaip paspaudimas. Išimtys: onclick,
  *     kuris tik stabdo įvykį (lango turinys), ir fiksuoti uždengimai (modalo fonas - uždaromas mygtuku).
  *  4) Klausimas (<label> be „for“) prieš radijo mygtukų ar žymimųjų langelių grupę - grupės pavadinimas
@@ -107,9 +107,10 @@
 
   // 3. Spaudžiami elementai be klaviatūros
   function spaudziami(saknis) {
-    sarasas(saknis, "[onclick]").forEach(function (el) {
+    // [data-veiksmas] - įvykių delegavimas (shared/ivykiai.js, nuo 2026-11-24 vietoj onclick= griežtos CSP puslapiuose)
+    sarasas(saknis, "[onclick], [data-veiksmas]").forEach(function (el) {
       if (el.hasAttribute("data-gp-klaviatura") || el.matches(FOKUSUOJAMAS) || el === doc.body || el === doc.documentElement) return;
-      if (/^\s*(?:event|e)\.stopPropagation\(\)\s*;?\s*$/.test(el.getAttribute("onclick") || "")) return;
+      if (/^\s*(?:event|e)\.stopPropagation\(\)\s*;?\s*$/.test(el.getAttribute("onclick") || "") || el.getAttribute("data-veiksmas") === "sustabdyk") return;
       if (global.getComputedStyle(el).position === "fixed") return;
       el.setAttribute("tabindex", "0");
       if (!el.getAttribute("role") && !/^(TR|TD|TH|LI|TABLE|TBODY|THEAD)$/.test(el.tagName)) el.setAttribute("role", el.tagName === "A" ? "link" : "button");

@@ -6810,7 +6810,8 @@ function prieinamumoMatas(w, d){
     if (!v || !raide.test(v)) R.vardai.push(kelias(el) + (v ? " „" + v + "“" : "") + (el.placeholder ? " (tik užuomina „" + el.placeholder.slice(0, 30) + "“)" : ""));
   });
   // 3. Klaviatūra (išimtys kaip prieinamumas.js: modalo fonas - fiksuotas uždengimas, uždaromas mygtuku; onclick, kuris tik stabdo įvykį)
-  d.querySelectorAll("[onclick]").forEach(el => { if (!matomas(el) || el === d.body || gcs(el).position === "fixed" || /^\s*(?:event|e)\.stopPropagation\(\)\s*;?\s*$/.test(el.getAttribute("onclick"))) return;
+  // [data-veiksmas] - įvykių delegavimas griežtos CSP puslapiuose (shared/ivykiai.js, nuo 2026-11-24)
+  d.querySelectorAll("[onclick], [data-veiksmas]").forEach(el => { if (!matomas(el) || el === d.body || gcs(el).position === "fixed" || /^\s*(?:event|e)\.stopPropagation\(\)\s*;?\s*$/.test(el.getAttribute("onclick") || "") || el.getAttribute("data-veiksmas") === "sustabdyk") return;
     if (!el.matches("a[href], button, input, select, textarea, summary, label, [tabindex]:not([tabindex=\"-1\"]), [contenteditable=\"\"], [contenteditable=true]")) R.klaviatura.push(kelias(el)); });
   // 4. Radijo grupės be klausimo
   const gr = new Map();
@@ -7739,7 +7740,7 @@ function kodoFailai(){
     "../PP-salygos/variklis.js", "../PP-salygos/laukai.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
     "../PP-ts/ts_asistentas_modules.js", "palyginimas.js", "privalomi-elementai.js", "proporcingumas.js", "kvalifikacija.js", "../PP-salygos/tikrinimas.js",
     "../PP-salygos/sutartys.js", "../PP-salygos/sutarties-blokas.js", "../PP-salygos/sutarciu-generatorius.js", "../PP-salygos/sutarties-forma.js",
-    "../PP-salygos/kvalifikacijos-lentele.js", "sutikimas.js", "analitika.js", "../PP-salygos/juodrastis.js", "specialistas.js"]);
+    "../PP-salygos/kvalifikacijos-lentele.js", "sutikimas.js", "analitika.js", "../PP-salygos/juodrastis.js", "specialistas.js", "ivykiai.js"]);
 }
 
 async function testaiDatos(){
@@ -8049,6 +8050,61 @@ async function testaiDalys(){
   });
 }
 
+/* Įvykių delegavimas (2026-11-24, saugumo auditas G-09 CSP antras etapas): onclick= ir kiti įterpti atributai griežtos CSP puslapiuose nevykdomi,
+   todėl HTML žymi tik veiksmo vardą (data-veiksmas), o įrankis registruoja leidžiamus veiksmus (shared/ivykiai.js). */
+async function testaiIvykiai1124(){
+  dabartine = grupe("Įvykių delegavimas (ivykiai.js) ir griežta CSP");
+  await testas("data-veiksmas: veiksmai nuo vidinio į išorinį su this ir įvykiu, stopPropagation sustabdo išorinius, false - preventDefault, input ir change, error gaudant, bendri veiksmai (sustabdyk, nieko), nežinomas veiksmas nevykdomas; veikia griežtos CSP rėmelyje (onclick= ten užblokuotų - testų paleidiklis tai laiko klaida, todėl jo netikrinama, o griežtuose puslapiuose on*= draudžia CSP sargas ir csp.py)", async ()=>{
+    const f = document.createElement("iframe");
+    f.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; img-src 'self'">
+      <script src="ivykiai.js"><\/script></head><body>
+      <div id="isor" data-veiksmas="isorinis"><button id="vid" data-veiksmas="vidinis"><span id="vidTekstas">A</span></button><button id="st" data-veiksmas="stabdo">B</button>
+      <a id="nuor" href="#x" data-veiksmas="nieko">C</a><button id="sus" data-veiksmas="sustabdyk">D</button><button id="ret" data-veiksmas="grazinaFalse">G</button></div>
+      <input id="lauk" data-veiksmas-input="ivedimas" data-veiksmas-change="pakeitimas"><button id="nez" data-veiksmas="tokio-nera">E</button></body></html>`;
+    await new Promise(r => { f.onload = r; document.body.appendChild(f); });
+    try {
+      const w = f.contentWindow, d = f.contentDocument, ivyk = [];
+      tiesa(w.GP_IVYKIAI && w.GP_IVYKIAI.yra("sustabdyk") && w.GP_IVYKIAI.yra("nieko") && w.GP_IVYKIAI.yra("spausdinti"), "bendri veiksmai");
+      w.GP_IVYKIAI.veiksmai({
+        isorinis: () => ivyk.push("isor"),
+        vidinis: function (el, ev) { ivyk.push("vid:" + (this === el) + ":" + el.id + ":" + ev.type); },
+        stabdo: (el, ev) => { ivyk.push("st"); ev.stopPropagation(); },
+        grazinaFalse: () => { ivyk.push("ret"); return false; },
+        ivedimas: el => ivyk.push("in:" + el.value), pakeitimas: el => ivyk.push("ch:" + el.value), klaida: el => ivyk.push("err:" + el.className)
+      });
+      const spausk = id => d.getElementById(id).dispatchEvent(new w.MouseEvent("click", { bubbles: true, cancelable: true }));
+      spausk("vidTekstas"); lygu(ivyk.splice(0), ["vid:true:vid:click", "isor"], "vidinis, tada išorinis (paspaudus vidinį tekstą)");
+      spausk("st"); lygu(ivyk.splice(0), ["st"], "stopPropagation sustabdo išorinį");
+      lygu([spausk("nuor"), ivyk.splice(0)], [false, ["isor"]], "nieko - preventDefault, išorinis vykdomas");
+      spausk("sus"); lygu(ivyk.splice(0), [], "sustabdyk - išorinis nevykdomas");
+      lygu([spausk("ret"), ivyk.splice(0)], [false, ["ret", "isor"]], "grąžinus false - preventDefault");
+      const lauk = d.getElementById("lauk"); lauk.value = "abc";
+      lauk.dispatchEvent(new w.Event("input", { bubbles: true })); lauk.dispatchEvent(new w.Event("change", { bubbles: true }));
+      lygu(ivyk.splice(0), ["in:abc", "ch:abc"], "input ir change");
+      const sena = w.console.warn; w.console.warn = () => {};
+      try { spausk("nez"); } finally { w.console.warn = sena; }
+      tiesa(w.GP_IVYKIAI.nezinomi.includes("tokio-nera"), "nežinomas veiksmas įsimintas");
+      d.body.insertAdjacentHTML("beforeend", '<img class="nera" alt="" data-veiksmas-error="klaida" src="nera-' + Date.now() + '.png">');
+      for (let i = 0; i < 40 && !ivyk.length; i++) await new Promise(r => setTimeout(r, 50));
+      lygu(ivyk.splice(0), ["err:nera"], "error gaudant (neburbuliuoja)");
+    } finally { f.remove(); }
+  });
+  await testas("Prieinamumas: spaudžiamas div su data-veiksmas pasiekiamas klaviatūra (tabindex, role, Enter), sustabdyk - ne", async ()=>{
+    const { f, d, w } = await ramas(`<div class="v1" data-veiksmas="spaustas">Spausti</div><div class="v2" data-veiksmas="sustabdyk">Lango turinys</div>
+      <script src="ivykiai.js"><\/script><script src="prieinamumas.js"><\/script>`);
+    try {
+      let k = 0; w.GP_IVYKIAI.veiksmai({ spaustas: () => k++ });
+      for (let i = 0; i < 20 && !d.querySelector(".v1").hasAttribute("tabindex"); i++) await new Promise(r => setTimeout(r, 50));
+      const v1 = d.querySelector(".v1");
+      lygu([v1.getAttribute("tabindex"), v1.getAttribute("role")], ["0", "button"], "div su data-veiksmas");
+      tiesa(!d.querySelector(".v2").hasAttribute("tabindex"), "sustabdyk - ne veiksmas");
+      v1.focus(); v1.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      for (let i = 0; i < 10 && !k; i++) await new Promise(r => setTimeout(r, 30));
+      lygu(k, 1, "Enter suveikia kaip paspaudimas");
+    } finally { f.remove(); }
+  });
+}
+
 /* Fokusas po vaizdų perjungimo (2026-11-05, zondas: Enter kiekviename valdiklyje - 58 iš 573 iškrisdavo į puslapio pradžią). Bendro gelbėjimo nėra -
    kiekvienas modulis kviečia GP_PRIEINAMUMAS.jeiDingo savo vaizdo perjungime, todėl čia tikrinamas kiekvieno modulio kelias. */
 async function testaiFokusas(){
@@ -8066,7 +8122,7 @@ async function testaiFokusas(){
     ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - importas (langas)", (w, d) => d.querySelector('#warningCenter [onclick="atverkImporta()"], #sec-dashboard [onclick="atverkImporta()"]'), /^(DIV|INPUT|BUTTON|SELECT) .*(Vilkite Excel|Importuoti planą iš Excel|palikti nenustatytą)/],   // 2026-11-08: pirmas lango laukas - įmonė eilutėms be įmonės
     ["../PP-qual/PP-QUAL.html", "1 įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="info"]'), /^H2 1 žingsnis/],
     ["../PP-qual/PP-QUAL.html", "audito įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="check"]'), /^H2 Audito patikra/],
-    ["../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "nuoroda į skaičiuoklę", (w, d) => d.querySelector('.inline-link-btn[onclick*="calculator"]'), /^H2 .*trukmių/i],
+    ["../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "nuoroda į skaičiuoklę", (w, d) => d.querySelector('.inline-link-btn[data-veiksmas="vaizdas"][data-view="calculator"]'), /^H2 .*trukmių/i],
     ["../PP-report/PP-report.html", "formos pasirinkimas", (w, d) => d.querySelector(".form-card"), /^H3 /],
     ["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "apžvalgos mygtukas", (w, d) => d.querySelector('[data-go="project"]'), /^H2 /, 320],
     ["../PP-salygos/PP-SALYGOS.html", "„Keisti“ kontekste", (w, d) => { w.rodyk(2); return d.getElementById("ktKeisti"); }, /^H2 Pirkimo duomenys/]
@@ -8605,13 +8661,18 @@ async function testaiSaugumas(){
       "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": " https://osp-rs.stat.gov.lt https://ec.europa.eu https://data-api.ecb.europa.eu" };
     const TURNSTILE = ["../PP-carbon/epd.html", "../PP-tiekejams/index.html"];
     const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)).concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-teise/admin.html", "../PP-salygos/kartografas.html", "../PP-salygos/E0-variklis.html",
-      "../PP-home/index.html", "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html", "../skelbimo-parengtis.html"]))];
+      "../PP-home/index.html", "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html", "../skelbimo-parengtis.html",
+      "../docs/market-kpi/prototipas-pirkimo-rinkos-apzvalga.html"]))];
     // Antras etapas (2026-11-24): puslapiai be įterptų įvykių atributų - be 'unsafe-inline' ir 'unsafe-eval'; jų įterpti skriptai leidžiami
     // tik pagal SHA-256 maišą script-src sąraše (įrašo .github/testai/csp.py --rasyk). Testams 'unsafe-eval' prideda tik paleidiklio serveris.
     const GRIEZTI = ["../index.html", "../G-Procure_About.html", "../G-Procure_Project.html", "../kryptis.html", "../privatumas.html", "../saugumas.html",
       "../slapukai.html", "../ai-valdymas.html", "../atsargine-kopija.html", "../skelbimo-parengtis.html", "../pirkimu-korteles.html", "../PP-home/index.html",
       "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html", "../PP-cost-benefit/index.html", "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
-      "../PP-teise/index.html", "../PP-teise/admin.html", "../PP-salygos/E0-variklis.html"];
+      "../PP-teise/index.html", "../PP-teise/admin.html", "../PP-salygos/E0-variklis.html",
+      // pakeitus onclick į data-veiksmas (shared/ivykiai.js)
+      "../PP-plan/bvpz-kodai.html", "../PP-carbon/epd.html", "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-salygos/kartografas.html",
+      "../docs/market-kpi/prototipas-pirkimo-rinkos-apzvalga.html", "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html",
+      "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html"];
     const maisa = async t => "'sha256-" + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))))) + "'";
     const blogi = [];
     for (const m of puslapiai) {
@@ -13721,7 +13782,7 @@ async function testaiPilotas3Kortele1120(){
      testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
      testaiKalbuSutikrinimas, testaiNuoseklumas, testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
      testaiVendor, testaiKortelesPatikra1106, testaiPilotas1110, testaiSpecialistas, testaiPilotas1112, testaiVertinimas1113, testaiApie1114, testaiMiniaturos1114, testaiKryptis1114, testaiPaieska1114, testaiIstorija1114, testaiPoveikis1114, testaiByla1114, testaiTeisesPoveikis1115, testaiDiFunkcijos1115, testaiPrekes1119, testaiNzia1119, testaiViesosSutartys1119, testaiPilotas3Kortele1120, testaiKiberKortele1120, testaiNacsaugDi1123],
-    [testaiTelefonas, testaiPrieinamumas, testaiFokusas, testaiTestuAplinka1123, testaiNarsykle1124]
+    [testaiTelefonas, testaiPrieinamumas, testaiFokusas, testaiTestuAplinka1123, testaiNarsykle1124, testaiIvykiai1124]
   ]);
   await GP_TESTU_DALYS.vykdyk(GRUPES);
   document.getElementById("busena").textContent =
