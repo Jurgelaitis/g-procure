@@ -15,6 +15,8 @@ Tikrina:
   3. /.well-known/security.txt galiojimą (RFC 9116 Expires): pasibaigęs - krenta, liko mažiau nei 30 dienų - įspėjimas.
   4. SBOM (nuo 2026-11-24, saugumo auditas G-17): shared/sbom.cdx.json atitinka shared/vendor/bibliotekos.json (.github/testai/sbom.py;
      be tinklo). Bibliotekų kilmė (failai = oficialūs paketai) - sbom.py --kilme, GitHub Actions kas savaitę (.github/workflows/saugumas.yml).
+  5. CSP maišos (nuo 2026-11-24, saugumo auditas G-09 antras etapas): puslapiuose be 'unsafe-inline' kiekvieno įterpto skripto
+     SHA-256 maiša yra script-src sąraše, o įterptų įvykių atributų nėra (.github/testai/csp.py; taisoma csp.py --rasyk).
 Išėjimo kodas 1, jei bent viena patikra krito.
 """
 import base64, datetime, hashlib, json, os, re, socket, subprocess, sys, time, urllib.request
@@ -193,8 +195,12 @@ def patikrink():
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import sbom
     k4 = sbom.tikrink()
-    krito, isp = k1 + k2 + k3 + k4, i1 + i2 + i3
-    busena = ("Saugumo patikra: %d bibliotekų versijos (OSV), paslaptys %d tekstiniuose failuose, security.txt, SBOM - " % (n, nt)
+    import csp
+    k5 = []
+    for p in sorted(csp.puslapiai()):
+        k5 += csp.tvarkyk(p, False)[1]
+    krito, isp = k1 + k2 + k3 + k4 + k5, i1 + i2 + i3
+    busena = ("Saugumo patikra: %d bibliotekų versijos (OSV), paslaptys %d tekstiniuose failuose, security.txt, SBOM, CSP maišos - " % (n, nt)
               + ("praėjo" if not krito else "krito %d" % len(krito)) + (", įspėjimų %d" % len(isp) if isp else ""))
     return {"rinkinys": ".github/testai/saugumas.py", "baigta": True, "gerai": not krito, "busena": busena,
             "krito": krito, "ispejimai": isp, "sek": round(time.time() - pr)}

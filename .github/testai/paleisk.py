@@ -67,6 +67,29 @@ class Tylus(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=SAKNIS, **k)
 
+    # CSP antras etapas (2026-11-24, saugumo auditas G-09): griežti puslapiai neturi 'unsafe-eval', o testai kviečia W.eval modulio
+    # rėmelyje. Tik šis testų serveris jį prideda puslapio CSP žymoje (gamyboje jo nėra); visa kita CSP lieka, todėl įterptas skriptas
+    # be maišos ar onclick griežtame puslapyje testuose vis tiek užblokuojamas ir rinkinys krenta.
+    CSP_EVAL = re.compile(rb'(<meta http-equiv="Content-Security-Policy" content="[^"]*?script-src \'self\')(?![^";]*\'unsafe-eval\')')
+
+    def do_GET(self):
+        kelias = self.translate_path(self.path)
+        # Tik atveriamam puslapiui ar rėmeliui - testų fetch() (šaltinio tikrinimas, pvz. CSP sargas) gauna failą tokį, koks jis yra
+        atveriama = self.headers.get("Sec-Fetch-Dest", "document") in ("document", "iframe", "frame")
+        if atveriama and kelias.endswith(".html") and os.path.isfile(kelias):
+            with open(kelias, "rb") as f:
+                b = f.read()
+            nb = self.CSP_EVAL.sub(rb"\1 'unsafe-eval'", b, count=1)
+            if nb != b:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(nb)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(nb)
+                return
+        return super().do_GET()
+
     def log_message(self, *a):
         pass
 

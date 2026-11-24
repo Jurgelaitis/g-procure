@@ -357,8 +357,12 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self';
   form-action 'none';` (EPD ir PP-tiekejams - `script-src` ir `frame-src` dar `https://challenges.cloudflare.com`, Turnstile): išoriniai skriptai, paveikslėliai, rėmeliai ir
   formų siuntimas - tik iš svetainės (duomenų išnešimas per paveikslėlį ar formą užblokuotas); `'unsafe-inline'` - dėl įterptų skriptų ir `onclick`, `'unsafe-eval'` - testai kviečia
-  `W.eval` modulio rėmelyje. Naujam išteklių šaltiniui - ir CSP, ir sargas. Kitas etapas - įterptus skriptus ir `on*=` perkelti į failus ir atsisakyti `'unsafe-inline'` ir
-  `'unsafe-eval'`. GitHub Pages HTTP antraščių nustatyti neleidžia, todėl - tik `<meta>` (`frame-ancestors` meta žymoje neveikia - nuo 2026-11-24 įrėminimą kitoje svetainėje
+  `W.eval` modulio rėmelyje. Naujam išteklių šaltiniui - ir CSP, ir sargas. ANTRAS ETAPAS (nuo 2026-11-24): puslapiai be įterptų įvykių atributų - be `'unsafe-inline'` ir
+  `'unsafe-eval'` (`script-src 'self'` ir kiekvieno įterpto skripto `'sha256-…'` maiša; 19 puslapių: portalas, „Apie“, „Vizija“, informaciniai, kortelių puslapis,
+  skaičiuoklė, PP-teise, PP-home nukreipimai - sargo sąrašas `GRIEZTI`). Pakeitus įterptą skriptą griežtame puslapyje - `python3 .github/testai/csp.py --rasyk`
+  (kitaip skriptas neveiks, o testai, CSP sargas ir `saugumas.py` krenta). Griežtame puslapyje `onclick=` ir kitų `on*=` atributų nedėk (ir JS šablonuose) - tik
+  `addEventListener` ar įvykių delegavimas. Testams `'unsafe-eval'` prideda tik paleidiklio serveris (`paleisk.py`, atveriamiems puslapiams; gamyboje eval nenaudojamas -
+  bibliotekose `new Function` tik nenaudojamuose keliuose). Likę 13 įrankių puslapių (~990 `on*=`) pereina po vieną, pakeitus jų įvykių atributus. GitHub Pages HTTP antraščių nustatyti neleidžia, todėl - tik `<meta>` (`frame-ancestors` meta žymoje neveikia - nuo 2026-11-24 įrėminimą kitoje svetainėje
   stabdo `shared/sutikimas.js`, žr. 4 sk.).
 - **Be lookbehind (2026-09-28):** reguliariosiose išraiškose `(?<=` ir `(?<!` nenaudok - Safari iki 16.4 (iOS 15 telefonai) jų nepalaiko: literalas nebeįkelia viso failo (iki tol - `shared/dokumentai.js` ir PP-qual), `new RegExp` meta klaidą (PP-ts patikra).
   Ribai prieš žodį - grupė `(^|[^\p{L}\p{N}])`, skaidymui - `exec` ciklas; sargas `shared/testai.html` (ir testų puslapiuose - viršutinio lygio išraiška nepaleistų viso rinkinio).

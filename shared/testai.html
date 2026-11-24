@@ -8595,7 +8595,7 @@ async function testaiSaugumas(){
 
   await testas("CSP: kiekvienas puslapis iškart po <meta charset> turi Content-Security-Policy - default-src 'self', skriptai, stiliai, paveikslėliai, šriftai, darbininkai ir rėmeliai tik iš svetainės (Turnstile - tik EPD ir tiekėjams), form-action 'none', object-src 'none', base-uri 'self', connect-src su leidžiamais adresais (paleidiklis krenta, jei vykdant testus CSP ką nors užblokuoja)", async ()=>{
     // 2026-11-24 (saugumo auditas G-09): pirmasis etapas. 'unsafe-inline' - puslapiuose daug įterptų skriptų ir onclick; 'unsafe-eval' - testai kviečia
-    // W.eval modulio rėmelyje (be jo nė vienas testų rinkinys neveiktų). Kitas etapas - įterptus skriptus perkelti į failus.
+    // W.eval modulio rėmelyje. Antras etapas (tą pačią dieną) - žr. GRIEŽTI žemiau; likę puslapiai pereina, kai jų onclick pakeičiami.
     const PRADZIA = cf => "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'" + cf + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self'" + cf + "; form-action 'none'; ";
     // Naudojimosi statistikos adresas (PostHog ES) - tik puslapiuose, kurie jungia shared/analitika.js (vidiniai įrankiai jo neturi)
     const BAZE = "object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:";
@@ -8605,17 +8605,42 @@ async function testaiSaugumas(){
       "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": " https://osp-rs.stat.gov.lt https://ec.europa.eu https://data-api.ecb.europa.eu" };
     const TURNSTILE = ["../PP-carbon/epd.html", "../PP-tiekejams/index.html"];
     const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)).concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-teise/admin.html", "../PP-salygos/kartografas.html", "../PP-salygos/E0-variklis.html",
-      "../PP-home/index.html", "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html"]))];
+      "../PP-home/index.html", "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html", "../skelbimo-parengtis.html"]))];
+    // Antras etapas (2026-11-24): puslapiai be įterptų įvykių atributų - be 'unsafe-inline' ir 'unsafe-eval'; jų įterpti skriptai leidžiami
+    // tik pagal SHA-256 maišą script-src sąraše (įrašo .github/testai/csp.py --rasyk). Testams 'unsafe-eval' prideda tik paleidiklio serveris.
+    const GRIEZTI = ["../index.html", "../G-Procure_About.html", "../G-Procure_Project.html", "../kryptis.html", "../privatumas.html", "../saugumas.html",
+      "../slapukai.html", "../ai-valdymas.html", "../atsargine-kopija.html", "../skelbimo-parengtis.html", "../pirkimu-korteles.html", "../PP-home/index.html",
+      "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html", "../PP-cost-benefit/index.html", "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
+      "../PP-teise/index.html", "../PP-teise/admin.html", "../PP-salygos/E0-variklis.html"];
+    const maisa = async t => "'sha256-" + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))))) + "'";
     const blogi = [];
     for (const m of puslapiai) {
       const src = await saltinis(m);
       const x = /<meta charset="?UTF-8"?\s*\/?>\s*<meta http-equiv="Content-Security-Policy" content="([^"]*)">/i.exec(src);
       if (!x) { blogi.push(m + ": nėra CSP žymos iškart po <meta charset>"); continue; }
       const suStatistika = /<script src="(?:\.\.\/)?shared\/analitika\.js"><\/script>/.test(src);
-      if (x[1] !== PRADZIA(TURNSTILE.includes(m) ? " https://challenges.cloudflare.com" : "") + (suStatistika ? BAZE : BE_STATISTIKOS) + (PAPILDOMA[m] || "")) blogi.push(m + ": „" + x[1] + "“" + (suStatistika ? "" : " (be analitika.js - be PostHog adreso)"));
+      const cf = TURNSTILE.includes(m) ? " https://challenges.cloudflare.com" : "";
+      let csp = x[1];
+      const ss = /script-src ([^;]*)/.exec(csp)[1].split(" ");
+      if (GRIEZTI.includes(m)) {
+        if (ss.includes("'unsafe-inline'") || ss.includes("'unsafe-eval'")) { blogi.push(m + ": griežtame puslapyje grįžo 'unsafe-inline' ar 'unsafe-eval'"); continue; }
+        if (/\son[a-z]+\s*=\s*["']/i.test(src)) blogi.push(m + ": griežtame puslapyje yra įterptų įvykių atributų (onclick= ir pan.) - CSP juos užblokuotų");
+        const reikia = [];
+        for (const b of src.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+          if (/\bsrc\s*=/.test(b[1]) || /\btype\s*=\s*["']?(application\/(ld\+)?json|text\/template|text\/plain)/i.test(b[1])) continue;
+          reikia.push(await maisa(b[2]));
+        }
+        const yra = ss.filter(z => z.startsWith("'sha256-"));
+        if (JSON.stringify(yra) !== JSON.stringify(reikia)) blogi.push(m + ": CSP maišos nesutampa su įterptais skriptais (yra " + yra.length + ", reikia " + reikia.length + ") - paleiskite python3 .github/testai/csp.py --rasyk");
+        const kiti = ss.filter(z => !z.startsWith("'sha256-")).join(" ");
+        if (kiti !== "'self'" + cf) blogi.push(m + ": script-src „" + kiti + "“");
+        csp = csp.replace(/script-src [^;]*/, "script-src 'self' 'unsafe-inline' 'unsafe-eval'" + cf);
+      }
+      if (csp !== PRADZIA(cf) + (suStatistika ? BAZE : BE_STATISTIKOS) + (PAPILDOMA[m] || "")) blogi.push(m + ": „" + x[1] + "“" + (suStatistika ? "" : " (be analitika.js - be PostHog adreso)"));
       if ((src.match(/Content-Security-Policy/g) || []).length !== 1) blogi.push(m + ": CSP žyma ne viena");
     }
     tiesa(puslapiai.length >= 29, "puslapių tik " + puslapiai.length);
+    tiesa(GRIEZTI.every(m => puslapiai.includes(m)), "griežtų puslapių sąraše yra netikrinamas puslapis");
     tiesa(!blogi.length, blogi.join("\n  "));
     // PP-tiekejams Worker'is dar neįdiegtas (AI_ENDPOINT tuščias); įrašius adresą - jo kilmė turi būti CSP
     const tk = await saltinis("../PP-tiekejams/index.html"), ep = /const AI_ENDPOINT = "([^"]*)"/.exec(tk);
