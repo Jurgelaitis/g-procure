@@ -311,7 +311,9 @@ Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.
 
 `.github/workflows/stebesena.yml` kas valandą paleidžia `.github/stebesena/tikrink.py` (tik GET, tik Python standartinė biblioteka): svetainė,
 DI serveris, DI dienos riba (`/api/di/busena`), CVP IS duomenų kopija (krenta, kai senesnė nei 24 val. - 2026-11-20 - 2026-11-23 ji neatsinaujino
-ir niekas nepastebėjo), sankcijų sąrašai (krenta, kai nė vienas nepatikrintas; vienas pasenęs - įspėjimas), viešų sutarčių paslauga. Kiekviena
+ir niekas nepastebėjo), sankcijų sąrašai (krenta, kai nė vienas nepatikrintas; vienas pasenęs - įspėjimas), viešų sutarčių paslauga, o nuo 2026-11-24 -
+ir saugumo antraštės kiekviename API atsakyme (`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Referrer-Policy: no-referrer`,
+`X-Content-Type-Options: nosniff`, HSTS; DI serveriui jas prideda nginx, CVP IS, sankcijų ir sutarčių paslaugoms - jos pačios). Kiekviena
 patikra - du bandymai su 20 s pauze. Nepavykus GitHub atsiunčia laišką tam, kas paskutinis keitė failo tvarkaraštį (pranešimai - GitHub
 nustatymuose „Notifications > Actions“). Suplanuotas eigas GitHub sustabdo po 60 dienų be pakeitimų saugykloje - tada įjungti Actions skirtuke.
 Vietoje: `python3 .github/stebesena/tikrink.py`.
