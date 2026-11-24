@@ -16,7 +16,7 @@
  *
  *   skaityk(buf, vardas)        -> Promise<{ lenteles: [Modelis], zaliuju: [Modelis], zalieji, ispejimai }> (DOCX)
  *   skaitykXml(xml, numXml, v)  -> tas pats be ZIP (testams)
- *   skaitykPdf(buf, vardas)     -> Promise<tas pats> iš PDF (reikia pdfjsLib); pdfLenteles(puslapiai, vardas, { remeliai }) - be pdf.js
+ *   skaitykPdf(buf, vardas)     -> Promise<tas pats> iš PDF (reikia GP_PDF_DARBININKAS); pdfLenteles(puslapiai, vardas, { remeliai }) - be pdf.js
  *                                  (testams; remeliai - kiekvieno puslapio vertikalios rėmelių linijos [{ x, y0, y1 }])
  *     Nuo 2026-11-12 (antras pilotas su tikru pirkimu, SPS PDF): stulpelių ribos - tik iš lentelės eilučių; „... ne visa apimtimi“ - ir iš
  *     PDF, kai jos eilutė lentelės rėmelyje (rėmelių nėra - M.neVisaNepatikrinta, ne „nėra“); kitos SPS lentelės su tais pačiais stulpeliais
@@ -413,7 +413,7 @@
      viršuje - tos pačios lentelės tęsinys; žodis, kertantis stulpelio ribą, - grupės antraštė (trumpa) arba lentelės pabaiga. Formatavimo
      (pusjuodžio, kursyvo) PDF tekste nėra - perkeliamas tekstas, ir tai pasakoma. Modelis - toks pat kaip iš DOCX.
        pdfLenteles(puslapiai, vardas) - puslapiai: [[{ s, x, y, w, fs }]] (pdf.js elementai: x, y - kairysis apatinis taškas)
-       skaitykPdf(buf, vardas)        - per pdf.js (reikia pdfjsLib ir GP_PDF_DARBININKAS) */
+       skaitykPdf(buf, vardas)        - per pdf.js (reikia GP_PDF_DARBININKAS - jis įkelia pdf.js) */
   const PDF_ZYME_RE = /^((\d+\.)+\d*\.?\s|\d+\)\s|[a-zą-ž]\)\s|[•▪◦‣·●○■□–-]\s?)/i;
   const KULKA_RE = /^[•▪◦‣·●○■□]\s*/;
   const BRUKSNIS_RE = /^[–-]\s?/;
@@ -722,7 +722,9 @@
   const kvGrupe = t => grupe(t);
   /* Vertikalios rėmelių linijos puslapyje iš pdf.js piešimo operacijų (2026-11-12): siauri užpildyti stačiakampiai (Word PDF eksportas
      rėmelius piešia taip), brėžiamos linijos ir stačiakampių kraštai; koordinatės - per transformacijų steką, kaip teksto elementų. Iškirpimo
-     (clip) keliai - ne rėmeliai. */
+     (clip) keliai - ne rėmeliai. Nuo 2026-11-24 (pdf.js 6.5.438) kelias - viena operacija [piešimo op, [Float32Array], ribos]: 0 moveTo,
+     1 lineTo, 2 curveTo, 3 quadraticCurveTo, 4 closePath, stačiakampis - moveTo ir trys lineTo su closePath; senasis 3.x formatas
+     ([[op...], [koordinatės]] ir piešimo operacija po jo) skaitomas kaip iki tol. */
   async function pdfRemeliai(page){
     const O = root.pdfjsLib.OPS, ol = await page.getOperatorList();
     const V = [];
@@ -738,6 +740,31 @@
       if (f === O.save) stekas.push(ctm);
       else if (f === O.restore) ctm = stekas.pop() || [1, 0, 0, 1, 0, 0];
       else if (f === O.transform) ctm = daug(ctm, a);
+      else if (f === O.constructPath && !Array.isArray(a[0])){
+        // pdf.js 5+: piešimo operacija - pirmas argumentas, kelias - Float32Array
+        const uzpildo = PIESIA_F.has(a[0]), bresia = PIESIA_S.has(a[0]), d = a[1] && a[1][0];
+        if ((!uzpildo && !bresia) || !d) continue;
+        let k = 0, pradzia = null, dab = null, taskai = [], kreive = false;
+        // Užpildytas uždaras kontūras be kreivių, siauras ir aukštas - rėmelio linija (kaip senasis siauras stačiakampis)
+        const baik = () => {
+          if (uzpildo && !kreive && taskai.length >= 2){
+            let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+            for (const t of taskai){ x0 = Math.min(x0, t[0]); x1 = Math.max(x1, t[0]); y0 = Math.min(y0, t[1]); y1 = Math.max(y1, t[1]); }
+            if (x1 - x0 <= 2.5 && y1 - y0 >= 3) vert([(x0 + x1) / 2, y0], [(x0 + x1) / 2, y1]);
+          }
+          taskai = []; kreive = false;
+        };
+        while (k < d.length){
+          const op = d[k++];
+          if (op === 0){ baik(); dab = pradzia = tsk(d[k], d[k + 1]); k += 2; taskai.push(dab); }
+          else if (op === 1){ const t = tsk(d[k], d[k + 1]); k += 2; if (bresia && dab) vert(dab, t); dab = t; taskai.push(t); }
+          else if (op === 2){ dab = tsk(d[k + 4], d[k + 5]); k += 6; kreive = true; }
+          else if (op === 3){ dab = tsk(d[k + 2], d[k + 3]); k += 4; kreive = true; }
+          else if (op === 4){ if (bresia && dab && pradzia) vert(dab, pradzia); dab = pradzia; }
+          else break;
+        }
+        baik();
+      }
       else if (f === O.constructPath){
         const toliau = ol.fnArray[i + 1], uzpildo = PIESIA_F.has(toliau), bresia = PIESIA_S.has(toliau);
         if (!uzpildo && !bresia) continue;
@@ -760,9 +787,9 @@
     return V;
   }
   async function skaitykPdf(buf, vardas){
-    if (!root.pdfjsLib) throw new Error('PDF skaitymo biblioteka (pdf.js) neįsikėlė');
-    if (root.GP_PDF_DARBININKAS) await root.GP_PDF_DARBININKAS.nustatyk();
-    const pdf = await root.pdfjsLib.getDocument({ data: buf, isEvalSupported: false }).promise;
+    // pdf.js - tik per shared/pdf-darbininkas.js (įkelia biblioteką, nustato darbininką, perduoda buferio kopiją)
+    if (!root.GP_PDF_DARBININKAS) throw new Error('PDF skaitymo biblioteka (pdf.js) neįsikėlė');
+    const pdf = await root.GP_PDF_DARBININKAS.atidaryk(buf);
     const puslapiai = [];
     let beTeksto = 0;
     for (let pn = 1; pn <= pdf.numPages; pn++){

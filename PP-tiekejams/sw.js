@@ -23,7 +23,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppt-2026-11-24-1";
+var VERSIJA = "ppt-2026-11-24-2";
 
 var SAVI = [
   "./",
@@ -71,8 +71,8 @@ var SAVI = [
 /* Tos pačios bibliotekos kaip index.html (ir pdf.js darbininkas, kurį pdf.js kraus tik atidarius pirmą PDF -
    todėl jis išsaugomas iš anksto). Adresuose - versija (žr. ../shared/vendor/bibliotekos.json). */
 var BIBLIOTEKOS = [
-  "../shared/vendor/pdfjs-3.11.174/pdf.min.js",
-  "../shared/vendor/pdfjs-3.11.174/pdf.worker.min.js",
+  "../shared/vendor/pdfjs-6.5.438/pdf.min.mjs",
+  "../shared/vendor/pdfjs-6.5.438/pdf.worker.min.mjs",
   "../shared/vendor/mammoth-1.13.0/mammoth.browser.min.js",
   "../shared/vendor/xlsx-0.20.3/xlsx.full.min.js",
   "../shared/vendor/jszip-3.10.1/jszip.min.js"

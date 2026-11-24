@@ -20,8 +20,8 @@
 
 var TALPYKLA = "gp-bibliotekos-1";
 var BIBLIOTEKOS = [
-  "shared/vendor/pdfjs-3.11.174/pdf.min.js",
-  "shared/vendor/pdfjs-3.11.174/pdf.worker.min.js",
+  "shared/vendor/pdfjs-6.5.438/pdf.min.mjs",
+  "shared/vendor/pdfjs-6.5.438/pdf.worker.min.mjs",
   "shared/vendor/jszip-3.10.1/jszip.min.js",
   "shared/vendor/mammoth-1.13.0/mammoth.browser.min.js",
   "shared/vendor/xlsx-0.20.3/xlsx.full.min.js",
@@ -38,7 +38,7 @@ var KELIAI = BIBLIOTEKOS.map(function (f) { return SAKNIS + f; });
 // Failas, kurio biblioteka prireiks vėliau, - išsaugomas kartu: pdf.js darbininką pdf.js krauna tik atvėrus pirmą PDF,
 // todėl be šito PDF be interneto neatsivertų, nors pdf.js išsaugotas.
 var KARTU = {};
-KARTU[SAKNIS + "shared/vendor/pdfjs-3.11.174/pdf.min.js"] = SAKNIS + "shared/vendor/pdfjs-3.11.174/pdf.worker.min.js";
+KARTU[SAKNIS + "shared/vendor/pdfjs-6.5.438/pdf.min.mjs"] = SAKNIS + "shared/vendor/pdfjs-6.5.438/pdf.worker.min.mjs";
 
 function issaugok(c, kelias) {
   return c.match(kelias).then(function (m) {

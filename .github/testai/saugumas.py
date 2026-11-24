@@ -44,7 +44,7 @@ PASLAPTYS = {
     "Slack raktas": r"\bxox[abposr]-[A-Za-z0-9-]{10,}",
     "Privatus raktas": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
 }
-TEKSTO_PLETINIAI = (".html", ".js", ".json", ".md", ".py", ".yml", ".yaml", ".css", ".txt", ".xml", ".svg", ".toml", ".sh", ".gitignore")
+TEKSTO_PLETINIAI = (".html", ".js", ".mjs", ".json", ".md", ".py", ".yml", ".yaml", ".css", ".txt", ".xml", ".svg", ".toml", ".sh", ".gitignore")
 
 
 def failai():
@@ -117,7 +117,7 @@ def bibliotekos(visi):
             if gauta != maisa: nezinomos.add(f + " (sha384 nesutampa su sąrašu - failas pakeistas)"); continue
             rasta.setdefault((b["npm"], b["versija"]), set()).add(f)
     for f in visi:
-        if re.search(r"(^|/)vendor/.+\.js$", f) and f not in sarase and not f.startswith("docs/"):
+        if re.search(r"(^|/)vendor/.+\.m?js$", f) and f not in sarase and not f.startswith("docs/"):
             nezinomos.add(f + " (bibliotekos failas ne sąraše %s)" % VENDOR_SARASAS)
     return rasta, nezinomos
 

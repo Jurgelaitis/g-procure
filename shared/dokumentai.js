@@ -21,7 +21,7 @@
  *     niekada nevykdomi (žr. asistentas.js - sanitizacija ir sisteminė taisyklė).
  *
  * Bibliotekos (puslapis jas jungia iš shared/vendor/, žr. shared/vendor/bibliotekos.json):
- *   pdfjsLib (pdf.js 3.11.174), mammoth (1.13.0), XLSX (SheetJS 0.20.3), JSZip (3.10.1).
+ *   pdf.js (6.5.438, įkeliama per shared/pdf-darbininkas.js), mammoth (1.13.0), XLSX (SheetJS 0.20.3), JSZip (3.10.1).
  * Niekas nesaugoma serveryje. Viskas lieka naudotojo naršyklėje.
  * ==========================================================================*/
 ;(function (global) {
@@ -518,12 +518,10 @@
   }
 
   async function isPdf(buf, lang) {
-    reikia("pdfjsLib", "pdf.js (PDF)");
-    // isEvalSupported:false - gynyba gilyn (CVE-2024-4367 kelias per šriftus čia
-    // nevykdomas, nes kviečiamas tik getTextContent, bet užraktas nieko nekainuoja)
-    // Darbininkas - iš svetainės (shared/pdf-darbininkas.js); be jo pdf.js darbininko adreso neturėtų
-    if (global.GP_PDF_DARBININKAS) await global.GP_PDF_DARBININKAS.nustatyk();
-    var pdf = await global.pdfjsLib.getDocument({ data: buf, isEvalSupported: false }).promise;
+    // pdf.js - tik per shared/pdf-darbininkas.js: biblioteka įkeliama prireikus, darbininkas - iš svetainės, perduodama
+    // buferio kopija (pdf.js nuo 4.x duomenis perkelia darbininkui)
+    reikia("GP_PDF_DARBININKAS", "pdf.js (PDF)");
+    var pdf = await global.GP_PDF_DARBININKAS.atidaryk(buf);
     var puslapiai = [], warnings = [], tuscių = 0;
     for (var pn = 1; pn <= pdf.numPages; pn++) {
       var page = await pdf.getPage(pn);

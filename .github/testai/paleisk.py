@@ -61,6 +61,9 @@ class Serveris(http.server.ThreadingHTTPServer):
 
 
 class Tylus(http.server.SimpleHTTPRequestHandler):
+    # pdf.js nuo 6.x - ES modulis (.mjs): naršyklė jį priima tik su JavaScript tipu, o senesnis Python jo nežino
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".mjs": "text/javascript"}
+
     def __init__(self, *a, **k):
         super().__init__(*a, directory=SAKNIS, **k)
 

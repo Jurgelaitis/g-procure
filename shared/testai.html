@@ -2505,7 +2505,7 @@ async function testaiSkelbimasDarbastalis(){
       const p = w.GP_SKELBIMAS.atpazink(t, "skelbimas.pdf").pastabos.join("\n");
       lygu([p.includes("UAB „Bandymas $& $' $$“"), p.includes("Keistas būdas $& $$"), p.includes("Įrankiai $& $$")], [true, true, true], "pastabos: " + p);
     } finally { f.remove(); }
-    const k = await ramas('<script src="dokumentai.js"><\/script>');
+    const k = await ramas('<script src="pdf-darbininkas.js"><\/script><script src="dokumentai.js"><\/script>');
     try {
       k.w.pdfjsLib = { GlobalWorkerOptions: {}, getDocument: () => ({ promise: Promise.reject(new Error("sugadintas $& ir $$ failas")) }) };
       const r = await k.w.GP_DOK.apdorok([new k.w.File(["%PDF-1.4"], "a.pdf", { type: "application/pdf" })], null, "lt");
@@ -7861,32 +7861,42 @@ async function testaiDatos(){
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 
-  await testas("Sargas: pdf.js darbininkas tik per shared/pdf-darbininkas.js - joks puslapis nenustato workerSrc pats, kiekvienas pdf.js naudojantis jį jungia, o prieš kiekvieną getDocument - nustatyk()", async ()=>{
+  await testas("Sargas: pdf.js tik per shared/pdf-darbininkas.js (nuo 2026-11-24 - 6.x ES modulis, įkeliamas prireikus) - joks puslapis nenustato workerSrc pats, nekrauna pdf.js <script> žyma ir nekviečia getDocument, o PDF ar GP_DOK naudojantis puslapis jungia pdf-darbininkas.js", async ()=>{
     const blogi = [];
     for (const m of kodoFailai()) {
       const src = await saltinis(m);
-      if (m !== "pdf-darbininkas.js" && /workerSrc\s*=/.test(src)) blogi.push(m + ": workerSrc nustatomas ne per pdf-darbininkas.js");
-      if (/\.html$/.test(m) && /pdf(?:\.min)?\.js/.test(src.replace(/pdf-darbininkas\.js/g, "")) && /pdfjsLib|GP_DOK/.test(src) && !/<script src="(?:\.\.\/)?shared\/pdf-darbininkas\.js"><\/script>/.test(src)) blogi.push(m + ": pdf.js be shared/pdf-darbininkas.js");
-      // Be nustatyk() pdf.js darbininko adreso neturi - skaitymas lūžta
-      for (const x of src.matchAll(/getDocument\(/g))
-        if (!/GP_PDF_DARBININKAS\.nustatyk\(\)/.test(src.slice(Math.max(0, x.index - 400), x.index))) blogi.push(m + ": getDocument be GP_PDF_DARBININKAS.nustatyk() prieš jį");
+      if (m === "pdf-darbininkas.js") continue;
+      if (/workerSrc\s*=/.test(src)) blogi.push(m + ": workerSrc nustatomas ne per pdf-darbininkas.js");
+      if (/vendor\/pdfjs-/.test(src)) blogi.push(m + ": pdf.js failas nurodomas tiesiogiai (tik per pdf-darbininkas.js)");
+      if (/getDocument\(/.test(src)) blogi.push(m + ": getDocument ne per GP_PDF_DARBININKAS.atidaryk()");
+      if (/\.html$/.test(m) && /pdfjsLib|GP_DOK|GP_PDF_DARBININKAS/.test(src) && !/<script src="(?:\.\.\/)?shared\/pdf-darbininkas\.js"><\/script>/.test(src)) blogi.push(m + ": pdf.js be shared/pdf-darbininkas.js");
     }
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 
-  await testas("pdf.js darbininkas iš svetainės: nustatyk() - tos pačios kilmės shared/vendor/pdfjs-<versija>/pdf.worker.min.js (versija - kaip pdf.min.js), PDF perskaitomas; be pdf.js - klaida su priežastimi (iki 2026-10-16 darbininkas - iš cdnjs su SRI per blob:)", async ()=>{
-    const { f, w } = await ramas('<script src="vendor/pdfjs-3.11.174/pdf.min.js"><\/script><script src="bibliotekos.js"><\/script><script src="pdf-darbininkas.js"><\/script>');
+  await testas("pdf.js iš svetainės (nuo 2026-11-24 - 6.5.438, ES modulis): atidaryk() įkelia biblioteką tik prireikus, darbininkas - tos pačios kilmės shared/vendor/pdfjs-<versija>/pdf.worker.min.mjs, PDF perskaitomas, perduotas buferis lieka nepaliestas (pdf.js duomenis perkelia darbininkui); nepavykus įkelti - klaida su priežastimi", async ()=>{
+    const { f, w } = await ramas('<script src="bibliotekos.js"><\/script><script src="pdf-darbininkas.js"><\/script>');
     try {
-      tiesa(w.pdfjsLib && w.GP_PDF_DARBININKAS, "pdf.js ar pdf-darbininkas.js neįsikėlė");
-      const u = await w.GP_PDF_DARBININKAS.nustatyk();
-      const pdf = await w.pdfjsLib.getDocument({ data: pdfIsEiluciu(["Labas darbininke"]), isEvalSupported: false }).promise;
+      tiesa(w.GP_PDF_DARBININKAS && !w.pdfjsLib, "pdf.js įkelta iš anksto (turi būti tik prireikus)");
+      const duom = pdfIsEiluciu(["Labas darbininke"]), ilgis = duom.byteLength;
+      const pdf = await w.GP_PDF_DARBININKAS.atidaryk(duom);
       const t = (await (await pdf.getPage(1)).getTextContent()).items.map(x => x.str).join(" ");
-      lygu([new URL(u).origin === location.origin, new URL(u).pathname.endsWith("/shared/vendor/pdfjs-" + w.pdfjsLib.version + "/pdf.worker.min.js"),
-        w.pdfjsLib.GlobalWorkerOptions.workerSrc === u, /Labas darbininke/.test(t)], [true, true, true, true], "darbininkas " + u + " ir tekstas");
+      const u = w.pdfjsLib.GlobalWorkerOptions.workerSrc, v = w.pdfjsLib.version;
+      const mod = w.performance.getEntriesByType("resource").map(e => e.name).find(n => /\/pdf\.min\.mjs$/.test(n)) || "";
+      lygu([/^6\./.test(v), new URL(u).origin === location.origin, new URL(u).pathname.endsWith("/shared/vendor/pdfjs-" + v + "/pdf.worker.min.mjs"),
+        new URL(mod || "x:").origin === location.origin && new URL(mod).pathname.endsWith("/shared/vendor/pdfjs-" + v + "/pdf.min.mjs"),
+        /Labas darbininke/.test(t), duom.byteLength === ilgis, w.GP_PDF_DARBININKAS.KATALOGAS === "vendor/pdfjs-" + v + "/"],
+        [true, true, true, true, true, true, true], "versija " + v + ", darbininkas " + u + ", modulis " + mod + ", tekstas, buferis " + duom.byteLength);
+      lygu(await w.GP_PDF_DARBININKAS.nustatyk(), u, "nustatyk() - darbininko adresas");
+      // ArrayBuffer irgi lieka nepaliestas
+      const ab = pdfIsEiluciu(["Antras"]).buffer.slice(0), abIlgis = ab.byteLength;
+      await w.GP_PDF_DARBININKAS.atidaryk(ab);
+      tiesa(ab.byteLength === abIlgis, "ArrayBuffer perkeltas darbininkui (tuščias)");
     } finally { f.remove(); }
     const be = await ramas('<script src="bibliotekos.js"><\/script><script src="pdf-darbininkas.js"><\/script>');
     try {
-      let klaida = ""; try { await be.w.GP_PDF_DARBININKAS.nustatyk(); } catch (e) { klaida = e.message; }
+      be.w.GP_PDF_DARBININKAS.MODULIS = be.w.GP_PDF_DARBININKAS.MODULIS.replace(/pdf\.min\.mjs$/, "nera.mjs");
+      let klaida = ""; try { await be.w.GP_PDF_DARBININKAS.atidaryk(pdfIsEiluciu(["x"])); } catch (e) { klaida = e.message; }
       tiesa(/„pdf\.js \(PDF\)“/.test(klaida) && /neišsaugota darbui be interneto/.test(klaida), "be pdf.js: " + klaida);
     } finally { be.f.remove(); }
   });
@@ -7910,7 +7920,7 @@ async function testaiDatos(){
           let t = ""; try { t = String(await skaityk(w, f.contentDocument)); } catch (e) { blogi.push(m + ": " + e.message); continue; }
           if (!/Kabelis/.test(t)) blogi.push(m + ": tekstas neperskaitytas (" + t.slice(0, 100) + ")");
           const ws = w.pdfjsLib.GlobalWorkerOptions.workerSrc;
-          if (new URL(ws, w.location.href).origin !== location.origin || !/\/shared\/vendor\/pdfjs-[\d.]+\/pdf\.worker\.min\.js$/.test(ws)) blogi.push(m + ": darbininkas ne iš svetainės (" + ws + ")");
+          if (new URL(ws, w.location.href).origin !== location.origin || !/\/shared\/vendor\/pdfjs-[\d.]+\/pdf\.worker\.min\.mjs$/.test(ws)) blogi.push(m + ": darbininkas ne iš svetainės (" + ws + ")");
         } finally { f.remove(); }
       }
     } finally { A.atkurk(); }
@@ -8525,12 +8535,12 @@ async function testaiDi(){
 async function testaiSaugumas(){
   dabartine = grupe("Saugumas (pdf.js, SheetJS, Workeriai, security.txt)");
 
-  await testas("Sargas: kiekvienas pdf.js getDocument - su isEvalSupported: false (CVE-2024-4367: pdf.js 3.11.174 suklastotas PDF šriftas galėjo vykdyti kodą)", async ()=>{
+  await testas("Sargas: kiekvienas pdf.js getDocument - su isEvalSupported: false (CVE-2024-4367: pdf.js 3.11.174 suklastotas PDF šriftas galėjo vykdyti kodą; nuo 2026-11-24 6.x eval nebenaudoja, nuostata - apsauga)", async ()=>{
     const blogi = [];
     for (const m of kodoFailai().concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html"])) {
       const src = await saltinis(m);
       for (const x of src.matchAll(/getDocument\(/g)) {
-        const arg = src.slice(x.index, x.index + 200).split(")")[0];
+        const arg = src.slice(x.index, x.index + 200).split(".promise")[0];
         if (!/isEvalSupported\s*:\s*false/.test(arg)) blogi.push(m + ":" + src.slice(0, x.index).split("\n").length + " " + arg.replace(/\s+/g, " "));
       }
     }
@@ -9644,14 +9654,17 @@ async function testaiVendor(){
         if (VISI.indexOf("shared/vendor/" + x[1]) < 0) blogi.push(m + ": shared/vendor/" + x[1] + " - ne sąraše");
       }
     }
-    // pdf.js darbininką krauna pats pdf.js (adresas - pdf-darbininkas.js), todėl jis naudojamas, kai naudojamas pdf.min.js
-    VISI.filter(f => !naudojami.has(f) && !/pdf\.worker\.min\.js$/.test(f)).forEach(f => blogi.push(f + " - sąraše, bet niekur nenaudojamas"));
+    // pdf.js (nuo 2026-11-24 - ES modulis ir darbininkas) įkelia tik shared/pdf-darbininkas.js: jo katalogas turi būti sąrašo pdf.js katalogas
+    const pdfDarb = await saltinis("pdf-darbininkas.js"), pdfKat = (pdfDarb.match(/var KATALOGAS = "vendor\/([^"\/]+)\/"/) || [])[1];
+    const pdfIrasas = VISI.filter(f => /\/pdfjs-[\d.]+\//.test(f));
+    if (!pdfKat || !pdfIrasas.length || pdfIrasas.some(f => f.indexOf("shared/vendor/" + pdfKat + "/") !== 0)) blogi.push("pdf-darbininkas.js KATALOGAS (" + pdfKat + ") nesutampa su sąrašo pdf.js katalogu");
+    VISI.filter(f => !naudojami.has(f) && !/\/pdfjs-[\d.]+\//.test(f)).forEach(f => blogi.push(f + " - sąraše, bet niekur nenaudojamas"));
     const sw = await saltinis("../bibliotekos-sw.js");
     lygu((swSarasas(sw, "BIBLIOTEKOS") || []).slice().sort(), VISI.slice().sort(), "bibliotekos-sw.js BIBLIOTEKOS");
     const tsw = await saltinis("../PP-tiekejams/sw.js"), tp = await saltinis("../PP-tiekejams/index.html");
     const tbib = (swSarasas(tsw, "BIBLIOTEKOS") || []).map(u => u.replace(/^\.\.\//, ""));
     const tpusl = [...tp.matchAll(/<script src="\.\.\/(shared\/vendor\/[^"]+)"/g)].map(x => x[1]);
-    lygu(tbib.slice().sort(), tpusl.concat(["shared/vendor/pdfjs-3.11.174/pdf.worker.min.js"]).sort(), "PP-tiekejams/sw.js BIBLIOTEKOS");
+    lygu(tbib.slice().sort(), tpusl.concat(pdfIrasas).sort(), "PP-tiekejams/sw.js BIBLIOTEKOS (puslapio bibliotekos ir pdf.js)");
     tiesa(!/var CDN\b/.test(tsw), "PP-tiekejams/sw.js - nebėra CDN sąrašo");
     tiesa(!blogi.length, blogi.join("\n  "));
   });
@@ -9727,12 +9740,13 @@ async function testaiVendor(){
     try {
       lygu(await (await fetch(kelias + "?b=" + Date.now())).text(), "/* talpyklos įrašas */", "iš talpyklos");
     } finally { await c.put(kelias, new Response(tikras, { headers: { "Content-Type": "text/javascript" } })); }
-    // pdf.js darbininkas išsaugomas kartu su pdf.min.js (pdf.js jį krauna tik atvėrus PDF - be interneto jo kitaip nebūtų)
-    const darb = new URL("vendor/pdfjs-3.11.174/pdf.worker.min.js", location.href).pathname;
+    // pdf.js darbininkas išsaugomas kartu su pdf.min.mjs (pdf.js jį krauna tik atvėrus PDF - be interneto jo kitaip nebūtų)
+    const pdfKat = (await saltinis("pdf-darbininkas.js")).match(/var KATALOGAS = "(vendor\/[^"]+\/)"/)[1];
+    const darb = new URL(pdfKat + "pdf.worker.min.mjs", location.href).pathname;
     await c.delete(darb);
-    await fetch("vendor/pdfjs-3.11.174/pdf.min.js");
+    await fetch(pdfKat + "pdf.min.mjs");
     let d = null; for (let i = 0; i < 50 && !d; i++) { d = await c.match(darb); if (!d) await new Promise(r => setTimeout(r, 100)); }
-    tiesa(d && (await d.text()).length > 100000, "pdf.js darbininkas neišsaugotas kartu su pdf.min.js");
+    tiesa(d && (await d.text()).length > 100000, "pdf.js darbininkas neišsaugotas kartu su pdf.min.mjs");
     // Žinutė „issaugok“: tik sąrašo bibliotekos, tik ši kilmė (kitas adresas ir ne biblioteka - ignoruojami)
     const chA = new URL(kelias, location.href);
     await c.delete(kelias);
