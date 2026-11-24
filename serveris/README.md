@@ -278,6 +278,18 @@ fragmentas, suklastotas šaltinis, PDF su baltu 1 pt tekstu, EPD su paslėpta re
 pakeitimą, nei po jo; po jo - aiškiai įvardija ignoruotus nurodymus. Naujam šablonui, kuris deda dokumento tekstą, - `R.blokas` ir įrašas patikros
 `BLOKAI` sąraše. Testai - `testai.html` grupė „DI užduotys serveryje“.
 
+### Instrukcija - tik iš serverio duomenų (nuo 2026-11-24, įdiegta 2026-11-24; saugumo auditas G-01 3 darbas)
+
+Iki tol PP-ts, PP-qual ir PP-salygos siųsdavo pirkimo vykdytojo aprašą, įstatymo sąvokas ir teisės nuorodų žodynus tekstu, o šablonai juos dėdavo
+į sisteminę instrukciją; PP-tiekejams - pirkimo vykdytojo pavadinimą. Tiesiogine užklausa į instrukciją buvo galima įrašyti bet ką. Dabar naršyklė
+siunčia tik raktus: įmonės id (`litgrid`, `amber-grid`, `epso-g`, `energy-cells`), įstatymą (PĮ / VPĮ) ir IT požymį. Vykdytojo aprašą ir teisės nuorodas
+sudaro serveris iš tų pačių viešų failų kopijų (`shared/teises-nuorodos.js`, `shared/organizacijos.js`; privačioje patikroje tikrinama, kad kopijos
+sutampa su saugykla) - tekstai tie patys kaip moduliuose (432 užklausos su tikrais modulių duomenimis visoms įmonėms ir įstatymams - žodis į žodį).
+Senų klientų laukai priimami, bet jų tekstas nenaudojamas: įmonė atpažįstama tik pagal žinomų įmonių sąrašą, kita - iš serverio. PP-tiekejams
+instrukcijoje - tik žinomos įmonės pavadinimas iš sąrašo; kitas pirkimo vykdytojas lieka užklausoje kaip duomenys. Privati šablonų patikra
+kiekvieno šablono kiekvieno teksto lauko gale prideda žymeklį ir krenta, jei jis atsiduria sisteminėje instrukcijoje. Pakeitus `shared/teises-nuorodos.js`
+ar `shared/organizacijos.js` - kopijas įdiegti ir serveryje (kitaip DI instrukcijoje lieka senos nuorodos).
+
 ### DI kvota (nuo 2026-11-23, įdiegta 2026-11-23; saugumo auditas G-01)
 
 `di-kvota.js` (`GP_DI_KVOTA`) - gryna logika be priklausomybių (Node ir naršyklė). DI serverio `index.js` ją taiko `POST /api/uzduotis` ir

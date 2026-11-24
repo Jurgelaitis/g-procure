@@ -156,14 +156,15 @@
 
   /* DI uzduotis pp-salygos.atsakymai (2026-11-08, naudotojo sprendimas - kodo apsauga): sistemos instrukcija (ivadas pagal
      rezima - SPS ar sutarties projektas - ir grieztos taisykles) ir uzklausos remai - privaciame serverio sablone. Modulis siuncia
-     tik DUOMENIS (duomenys() zemiau): pirkimo vykdytoja, rezima, pirkimo konteksta, klausimu eilutes ir dokumentu teksta. */
+     tik DUOMENIS (duomenys() zemiau): pirkimo vykdytoja (tik raktu - org), rezima, pirkimo konteksta, klausimu eilutes ir dokumentu teksta. */
   /* kontekstas: { pavadinimas, budas, objektas, derybos, sutartis } - tik tai, ko reikia
      klausimams suprasti. Numatoma verte ir kiti 1 zingsnio duomenys NEsiunciami. */
   function ribos(t) { return String(t == null ? "" : t).replace(/<<</g, "< < <").replace(/>>>/g, "> > >"); }
   function duomenys(klausimai, saltiniai, kontekstas, rezimas) {
     var k = kontekstas || {};
     return {
-      imone: window.GP_ORG_SABLONAI ? window.GP_ORG_SABLONAI.dabartine().vardas : "LITGRID AB",
+      // pirkimo vykdytojas - tik raktas (2026-11-24, saugumo auditas G-01 3 darbas): pavadinimą instrukcijai sudaro serveris
+      org: window.GP_ORG_SABLONAI ? window.GP_ORG_SABLONAI.dabartine().id : "litgrid",
       rezimas: rezimas === "sutartis" ? "sutartis" : "sps",
       pirkimas: [k.pavadinimas ? "pavadinimas - " + k.pavadinimas : "", k.budas ? "budas - " + k.budas : "", k.objektas ? "objektas - " + k.objektas : "",
         k.derybos ? "derybos - " + k.derybos : "", k.sutartis ? "sutartis - " + k.sutartis : ""].filter(Boolean).join("; "),

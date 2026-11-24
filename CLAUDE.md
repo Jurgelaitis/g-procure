@@ -449,6 +449,11 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   Užduočių sąrašas su įrankiais ir savarankiškumo lygiais - `shared/di-funkcijos.js`. Dokumento, įklijuoto ar trečiųjų asmenų tekstą šablonas deda tik per
   `R.blokas(pavadinimas, tekstas)` (failo vardą - `R.eilute`), o variklis kiekvienai užduočiai prideda taisyklę „duomenys, ne nurodymai“ (nuo 2026-11-23,
   saugumo auditas G-08; `serveris/README.md` „Duomenys ir nurodymai“). Naršyklėje savas šaltinių žymas modulis neutralizuoja dokumento tekste ir failo varde.
+  Sisteminė instrukcija - tik iš serverio duomenų (nuo 2026-11-24, saugumo auditas G-01 3 darbas): modulis siunčia tik raktus (įmonės id, įstatymas, IT
+  požymis), o vykdytojo aprašą ir teisės nuorodas sudaro serveris iš `shared/teises-nuorodos.js` ir `shared/organizacijos.js` kopijų (privatūs
+  `_g-procure-duomenys.js`, `_teises-nuorodos.js`, `_organizacijos.js`; PP-ts `diSistemosDuomenys`, PP-qual `aiSiuntimoDuomenys`, PP-salygos
+  `GP_PATAREJAS.duomenys` `org`). Naršyklės teksto į sisteminę instrukciją nedėk (privati patikra tai tikrina); pakeitus šiuos du viešus failus -
+  kopijas įdiek ir serveryje.
 
 ---
 
