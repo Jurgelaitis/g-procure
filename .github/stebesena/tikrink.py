@@ -5,10 +5,12 @@
 #   - pasiekta bendra DI užklausų dienos riba (DI funkcijos neveiks iki vidurnakčio Lietuvos laiku);
 #   - CVP IS duomenų kopija senesnė nei 24 val. (2026-11-20 - 2026-11-23 ji neatsinaujino ir niekas nepastebėjo);
 #   - nė vienas sankcijų sąrašas nepatikrintas;
-#   - API atsakyme trūksta saugumo antraščių (nuo 2026-11-24, saugumo auditas G-09: CSP, Referrer-Policy, nosniff, HSTS).
+#   - API atsakyme trūksta saugumo antraščių (nuo 2026-11-24, saugumo auditas G-09: CSP, Referrer-Policy, nosniff, HSTS);
+#   - DI serverio teisės nuorodų ir organizacijų sąrašo kopijos (iš jų sudaromos DI instrukcijos) nesutampa su saugykla ilgiau nei
+#     KOPIJU_LAUKIMAS_VAL nuo failo pakeitimo (nuo 2026-11-25; anksčiau - įspėjimas: kopija serveryje diegiama ranka po pakeitimo).
 # Vienas pasenęs sankcijų sąrašas - tik įspėjimas (ES sąrašo šaltinis kartais neveikia dienas, pataisyti negalime).
 # Tik Python standartinė biblioteka, tik GET užklausos, jokių duomenų nesiunčia. Vietoje: python3 .github/stebesena/tikrink.py
-import json, os, sys, time, urllib.request, urllib.error
+import hashlib, json, os, subprocess, sys, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 
 SVETAINE = "https://g-procure.com/"
@@ -16,6 +18,10 @@ API = "https://api.g-procure.com"
 ANTRASTES = {"Origin": "https://g-procure.com", "User-Agent": "G-Procure stebesena (https://g-procure.com/saugumas.html)",
              "Accept": "application/json"}
 CVPIS_MAX_VAL = 24
+# Viešų failų kopijos DI serveryje (šablonų aplanke _teises-nuorodos.js, _organizacijos.js): GET /api/di/busena -> kopijos { kelias: sha256 }
+KOPIJOS = ["shared/teises-nuorodos.js", "shared/organizacijos.js"]
+KOPIJU_LAUKIMAS_VAL = 6
+SAKNIS = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 klaidos, ispejimai, eilutes = [], [], []
 GAUTOS_ANTRASTES = {}  # url -> atsakymo antraštės (mažosiomis raidėmis)
@@ -72,6 +78,7 @@ def tikrink():
         klaidos.append("Pasiekta bendra DI užklausų dienos riba (%s) - DI funkcijos neveiks iki vidurnakčio Lietuvos laiku. "
                        "Patikrinkite, ar tai ne piktnaudžiavimas (journalctl -u g-procure: „DI kvota“)." % d.get("diena"))
     else: eilutes.append("DI dienos riba - nepasiekta")
+    if not k and isinstance(d, dict): tikrink_kopijas(d.get("kopijos"))
 
     d, k = gauk(API + "/api/cvpis/busena")
     if k or not isinstance(d, dict): klaidos.append("CVP IS duomenų paslauga neatsako: " + (k or "netinkamas atsakymas"))
@@ -99,6 +106,46 @@ def tikrink():
     else: eilutes.append("Viešų sutarčių paslauga - veikia")
 
     tikrink_antrastes()
+
+
+def paskutinis_pakeitimas(kelias):
+    """Paskutinio commit'o, keitusio failą, laikas (unix) arba None (be git istorijos ar git)."""
+    try:
+        r = subprocess.run(["git", "-C", SAKNIS, "log", "-1", "--format=%ct", "--", kelias], capture_output=True, text=True, timeout=60)
+        return int(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
+    except Exception:
+        return None
+
+
+def tikrink_kopijas(kopijos, dabar=None):
+    """Serverio kopijų SHA-256 prieš saugyklos failus. Ką tik pakeistas failas - įspėjimas (kopija dar diegiama), vėliau - klaida."""
+    if not isinstance(kopijos, dict):
+        klaidos.append("DI serveris nerodo teisės nuorodų kopijų kontrolinių sumų (/api/di/busena be „kopijos“) - "
+                       "ar serverio index.js ir routes/di-uzduotys-marsrutas.js - 2026-11-25 ar vėlesnės versijos?")
+        return
+    dabar = dabar or time.time()
+    gerai = 0
+    for kelias in KOPIJOS:
+        try:
+            with open(os.path.join(SAKNIS, kelias), "rb") as f: vietoje = hashlib.sha256(f.read()).hexdigest()
+        except OSError:
+            klaidos.append("Saugykloje nėra %s - stebėsenos KOPIJOS sąrašas pasenęs" % kelias)
+            continue
+        serveryje = kopijos.get(kelias)
+        if serveryje == vietoje:
+            gerai += 1
+            continue
+        nuo = paskutinis_pakeitimas(kelias)
+        val = (dabar - nuo) / 3600 if nuo else None
+        kas = ("serveryje kopijos nėra ar ji neperskaitoma" if not serveryje else "serverio kopija nesutampa su saugykla")
+        tekstas = ("DI instrukcijų šaltinis %s: %s. DI gauna ankstesnes teisės nuorodas ar organizacijų duomenis - nukopijuokite failą į "
+                   "g-procure-privatu/serveris/uzduotys/_%s, patikrinkite (sablonu-patikra.js), įdiekite serveryje ir paleiskite g-procure iš naujo"
+                   % (kelias, kas, kelias.split("/")[-1]))
+        if val is not None and val < KOPIJU_LAUKIMAS_VAL:
+            ispejimai.append(tekstas + " (failas pakeistas prieš %.1f val.)" % val)
+        else:
+            klaidos.append(tekstas + ("" if val is None else " (failas pakeistas prieš %.0f val.)" % val))
+    if gerai == len(KOPIJOS): eilutes.append("DI instrukcijų šaltinių kopijos serveryje - sutampa su saugykla (%d)" % gerai)
 
 
 def tikrink_antrastes():

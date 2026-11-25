@@ -897,10 +897,15 @@ async function testaiDiUzduotys(){
     lygu([reg["pp-bandymas.vertimas"].kunoRiba, reg["pp-bandymas.pdf"].kunoRiba], [(50 + 64 + 64 + 64 + 20 * 3 + 64 * 3) * 3 + 64 * 1024, 3 * 1024 * 1024], "kūno ribos");
     const m = await tekstas("di-uzduotys-marsrutas.js");
     const mod = { exports: null };
-    const fs = { readdirSync: () => ["pp-bandymas.vertimas.js"] }, path = { join: (a, b) => a + "/" + b };
-    new Function("require", "module", "process", "__dirname", m)(x => x === "node:fs" ? fs : x === "node:path" ? path : x === "./di-uzduotys.js" ? D : sab(), mod, {}, "/");
+    const fs = { readdirSync: () => ["pp-bandymas.vertimas.js"], readFileSync: p => { if (/_organizacijos\.js$/.test(p)) throw new Error("ENOENT"); return "turinys:" + p; } };
+    const path = { join: (a, b) => a + "/" + b };
+    const crypto = { createHash: alg => { let s = alg + "|"; return { update(x) { s += x; return this; }, digest(f) { return f + ":" + s; } }; } };
+    new Function("require", "module", "process", "__dirname", m)(x => x === "node:fs" ? fs : x === "node:path" ? path : x === "node:crypto" ? crypto : x === "./di-uzduotys.js" ? D : sab(), mod, {}, "/");
     const siusta = []; let klaida = null;
     const handler = mod.exports({ katalogas: "/u", siusk: (k, o) => { siusta.push([k.model, o && o.laikas]); return klaida ? Promise.reject(klaida) : Promise.resolve({ content: [{ type: "text", text: "ok" }] }); } });
+    // Kopijų kontrolinės sumos (2026-11-25): įkeliant šablonus, sha256 hex; neperskaitoma kopija - null; rodo GET /api/di/busena
+    lygu(handler.kopijos, { "shared/teises-nuorodos.js": "hex:sha256|turinys:/u/_teises-nuorodos.js", "shared/organizacijos.js": null }, "kopijų sumos");
+    tiesa(Object.isFrozen(handler.kopijos) && mod.exports.kopijuMaisos === mod.exports.kopijuMaisos && Object.keys(mod.exports.KOPIJOS).length === 2, "kopijos - nekeičiamos, eksportuojamos");
     const kviesk = async (body, ilgis) => { const r = { st: 200, k: null, status(x) { this.st = x; return this; }, json(x) { this.k = x; return this; } };
       await handler({ body, headers: { "content-length": String(ilgis) } }, r); return [r.st, r.k && (r.k.error || (r.k.content && r.k.content[0].text))]; };
     const kunas = { uzduotis: "pp-bandymas.vertimas", duomenys: { pavadinimas: "a" } };

@@ -339,7 +339,8 @@ router.get('/cvpis-suppliers', cvpisLimiter, async (req, res) => {
     return res.json(payload);
   } catch (err) {
     console.error('cvpis-suppliers failure:', err.message);
-    return res.status(502).json({ error: 'Nepavyko gauti CVP IS duomenų / Could not fetch CVP IS data.', detail: err.message });
+    // Be klaidos teksto atsakyme (2026-11-25, saugumo auditas G-21): vidinė informacija naudotojui nereikalinga, klientas jos nenaudoja
+    return res.status(502).json({ error: 'Nepavyko gauti CVP IS duomenų / Could not fetch CVP IS data.' });
   }
 });
 function cvpisMeta(from, minValue, authCode, count) {

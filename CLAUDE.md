@@ -458,7 +458,8 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   požymis), o vykdytojo aprašą ir teisės nuorodas sudaro serveris iš `shared/teises-nuorodos.js` ir `shared/organizacijos.js` kopijų (privatūs
   `_g-procure-duomenys.js`, `_teises-nuorodos.js`, `_organizacijos.js`; PP-ts `diSistemosDuomenys`, PP-qual `aiSiuntimoDuomenys`, PP-salygos
   `GP_PATAREJAS.duomenys` `org`). Naršyklės teksto į sisteminę instrukciją nedėk (privati patikra tai tikrina); pakeitus šiuos du viešus failus -
-  kopijas įdiek ir serveryje.
+  kopijas įdiek ir serveryje: nuo 2026-11-25 valandinė stebėsena palygina serverio kopijų SHA-256 (`/api/di/busena` `kopijos`) su saugykla ir,
+  nesutapus ilgiau nei 6 val. nuo failo pakeitimo, siunčia laišką. Pereinamuoju laikotarpiu priimti seni laukai pašalinti 2026-11-25 (dabar - 400).
 
 ---
 
@@ -547,7 +548,7 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   Python, GitHub Actions; po kiekvieno push'o į `main` ir kas savaitę). Pirma analizė - 37 radiniai: 19 testų failuose („Used in tests“) ir 6 klaidingi
   („False positive“) uždaryti su priežastimi komentare, 12 ištaisyta kode (tarp jų tikra klaida - `shared/skelbimas.js` pakeitimo priežastis). Radinius mato
   tik prisijungęs savininkas (Security > Code scanning; filtras `path:**/testai.html` - testų failai). Naujas radinys - pirma taisyk; uždaryk tik su priežastimi. 2026-11-21 - 52 atviri radiniai (2026-10-11 - 2026-11-19): ištaisyti 4 (PP-salygos 1 žingsnio įžangoje pirkimo pavadinimas pasekmėje „Tęsti galima“ buvo įrašomas be ekranavimo; lentelių nuorodų išraiškos `LN_LT` ir `LN_EN` - skyriklis po skaičiaus be dviprasmybės, nes „\d+\s*(?:\s+ir\s+...)“ tikrino eksponentiškai ilgai; `shared/busena.js` nenaudojama parinktis `html` pašalinta), 9 klaidingi ir 39 testų failuose uždaryti su priežastimi (testai - `PP-salygos` ir `shared` grupėse `testaiSaugumas1121`, `testaiBusena`; trys mutacijos pagaunamos). Reguliariojoje išraiškoje kartojamos grupės skyriklio nepradėk `\s*`, kai alternatyvos pačios prasideda `\s+`.
-- Stebėsena (nuo 2026-11-23, naudotojo sprendimas po saugumo audito): `.github/workflows/stebesena.yml` kas valandą tikrina svetainę ir serverio paslaugas (`.github/stebesena/tikrink.py`, aprašas - `serveris/README.md` „Stebėsena“); nepavykus GitHub atsiunčia laišką. Nauja serverio paslauga su būsenos keliu - įrašyk ją ir ten.
+- Stebėsena (nuo 2026-11-23, naudotojo sprendimas po saugumo audito; nuo 2026-11-25 - ir DI instrukcijų šaltinių kopijos serveryje): `.github/workflows/stebesena.yml` kas valandą tikrina svetainę ir serverio paslaugas (`.github/stebesena/tikrink.py`, aprašas - `serveris/README.md` „Stebėsena“); nepavykus GitHub atsiunčia laišką. Nauja serverio paslauga su būsenos keliu - įrašyk ją ir ten.
 - Po darbo - commit ir push į vieną `g-procure` repo. Jokio rankinio failų kėlimo.
 - Modulių `PROJECT_CONTEXT.md` (seni konteksto failai naujoms Claude paskyroms; PP-cost-benefit, PP-market-KPI, PP-negotiation, PP-protocol, PP-report, PP-ts) - nuo 2026-10-27
   privačiame aplanke `~/Documents/g-procure-privatu/<modulis>/PROJECT_CONTEXT.md` (naudotojo sprendimas: tai seni, nebeatnaujinami darbo užrašai - PP-negotiation faile

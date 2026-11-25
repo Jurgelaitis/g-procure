@@ -303,8 +303,9 @@ apsauga - paskyros mėnesio riba. Tikras lankytojo IP: nginx perrašo `X-Forward
 Nuo tos pačios dienos DI maršrutai kilmės `null` (failas atvertas naršyklėje) nebepriima - tik g-procure.com, www ir vietinis tikrinimas.
 IPv6 adresai skaičiuojami pagal /64 tinklą (`ipRaktas`: vienas abonentas paprastai gauna visą /64, o adresų jame - milijardai), IPv4 ir
 `::ffff:` - pagal adresą. Vienam IP leidžiama tik nedidelė bendros dienos ribos dalis (`NUMATYTA.ipDienai`), todėl vienas lankytojas
-bendros ribos neišnaudoja. Vieša būsena be duomenų apie lankytojus - `GET /api/di/busena` (`viesaBusena()`: `{ diena, dienosRibaPasiekta }`),
-ją tikrina stebėsena (žemiau).
+bendros ribos neišnaudoja. Vieša būsena be duomenų apie lankytojus - `GET /api/di/busena` (`viesaBusena()`: `{ diena, dienosRibaPasiekta }`;
+nuo 2026-11-25 - ir `kopijos`: viešų failų kopijų šablonų aplanke, iš kurių sudaromos DI instrukcijos, SHA-256 - `di-uzduotys-marsrutas.js`
+`kopijuMaisos`, apskaičiuota įkeliant šablonus), ją tikrina stebėsena (žemiau).
 Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.html` „AI transportas“).
 
 ### Stebėsena (nuo 2026-11-23)
@@ -313,7 +314,10 @@ Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.
 DI serveris, DI dienos riba (`/api/di/busena`), CVP IS duomenų kopija (krenta, kai senesnė nei 24 val. - 2026-11-20 - 2026-11-23 ji neatsinaujino
 ir niekas nepastebėjo), sankcijų sąrašai (krenta, kai nė vienas nepatikrintas; vienas pasenęs - įspėjimas), viešų sutarčių paslauga, o nuo 2026-11-24 -
 ir saugumo antraštės kiekviename API atsakyme (`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Referrer-Policy: no-referrer`,
-`X-Content-Type-Options: nosniff`, HSTS; DI serveriui jas prideda nginx, CVP IS, sankcijų ir sutarčių paslaugoms - jos pačios). Kiekviena
+`X-Content-Type-Options: nosniff`, HSTS; DI serveriui jas prideda nginx, CVP IS, sankcijų ir sutarčių paslaugoms - jos pačios), o nuo 2026-11-25 -
+ir DI instrukcijų šaltinių kopijos: serverio `_teises-nuorodos.js` ir `_organizacijos.js` SHA-256 (`/api/di/busena` `kopijos`) lyginamos su
+`shared/teises-nuorodos.js` ir `shared/organizacijos.js` saugykloje; nesutampa - įspėjimas, o praėjus 6 val. nuo failo paskutinio commit'o
+(`git log`; workflow parsisiunčia istoriją be failų turinio) - klaida ir laiškas. Kiekviena
 patikra - du bandymai su 20 s pauze. Nepavykus GitHub atsiunčia laišką tam, kas paskutinis keitė failo tvarkaraštį (pranešimai - GitHub
 nustatymuose „Notifications > Actions“). Suplanuotas eigas GitHub sustabdo po 60 dienų be pakeitimų saugykloje - tada įjungti Actions skirtuke.
 Vietoje: `python3 .github/stebesena/tikrink.py`.

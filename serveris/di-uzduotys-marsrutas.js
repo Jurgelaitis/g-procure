@@ -13,10 +13,18 @@
  *
  * Saugumas: į žurnalą - tik užduoties pavadinimas ir klaidos rūšis (ne duomenys, ne atsakymas); atsakyme - tik
  * trumpa klaida žmogui ir lauko vardas, ne reikšmė; Anthropic klaidos objektas neperduodamas.
+ *
+ * Kopijų kontrolinės sumos (2026-11-25): sisteminę instrukciją šablonai sudaro iš viešų failų kopijų tame pačiame aplanke
+ * (_teises-nuorodos.js = shared/teises-nuorodos.js, _organizacijos.js = shared/organizacijos.js). Pakeitus failą saugykloje, o serveryje
+ * kopijos neatnaujinus, DI gautų senas teisės nuorodas ir niekas to nepastebėtų. Todėl įkeliant šablonus apskaičiuojama kopijų SHA-256
+ * (tai, kas tikrai įkelta į atmintį: nauja kopija be paleidimo iš naujo nesiskaito) - grąžinamos funkcijos savybė `kopijos`
+ * ({ "shared/teises-nuorodos.js": "<sha256>" | null }); index.js ją rodo GET /api/di/busena, o stebėsena (.github/stebesena/tikrink.py)
+ * palygina su saugykla.
  * ============================================================================ */
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const L = require("./di-uzduotys.js");
 
 const FAILO_RE = /^[a-z0-9-]{2,40}\.[a-z0-9-]{2,60}\.js$/;
@@ -31,11 +39,25 @@ function ikelkSablonus(katalogas) {
   return L.registruok(sablonai);
 }
 
+// Viešų failų kopijos šablonų aplanke (failo vardas -> kelias saugykloje). Failai su „_“ šablonais neįkeliami (FAILO_RE).
+const KOPIJOS = { "_teises-nuorodos.js": "shared/teises-nuorodos.js", "_organizacijos.js": "shared/organizacijos.js" };
+
+function kopijuMaisos(katalogas) {
+  const out = {};
+  Object.keys(KOPIJOS).forEach(f => {
+    let h = null;
+    try { h = crypto.createHash("sha256").update(fs.readFileSync(path.join(katalogas, f))).digest("hex"); } catch (e) { h = null; }
+    out[KOPIJOS[f]] = h;
+  });
+  return Object.freeze(out);
+}
+
 module.exports = function marsrutas({ katalogas, siusk }) {
   if (typeof siusk !== "function") throw new Error("di-uzduotys: reikia siusk(kunas)");
   const reg = ikelkSablonus(katalogas);
+  const kopijos = kopijuMaisos(katalogas);
   console.log("DI užduotys: " + Object.keys(reg).length + " šablonų (" + L.VERSIJA + ")");
-  return async function (req, res) {
+  const tvarkytojas = async function (req, res) {
     // Kūno dydis pagal užduotį (2026-11-23): Express jau perskaitė iki 10 MB, bet užduočiai be dokumento tokio kūno nereikia
     const sab = req.body && typeof req.body.uzduotis === "string" ? reg[req.body.uzduotis] : null;
     const ilgis = Number(req.headers && req.headers["content-length"]) || 0;
@@ -57,5 +79,9 @@ module.exports = function marsrutas({ katalogas, siusk }) {
       return res.status(502).json({ error: "DI užklausa nepavyko." });
     }
   };
+  tvarkytojas.kopijos = kopijos;
+  return tvarkytojas;
 };
 module.exports.ikelkSablonus = ikelkSablonus;
+module.exports.kopijuMaisos = kopijuMaisos;
+module.exports.KOPIJOS = KOPIJOS;
