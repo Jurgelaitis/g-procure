@@ -46,6 +46,7 @@
     ["ppteise.admin.",           "PP-teise",        { lt: "Teisės stebėsenos registro darbinė kopija (tvarkymo puslapis)", en: "Law monitoring register working copy (editor page)" }],
     ["ppteise.",                 "PP-teise",        { lt: "Teisės stebėsenos peržiūrų žymos ir nustatymai", en: "Law monitoring reviews and settings" }],
     ["gprocure.korteles",        "G-Procure",       { lt: "Pirkimų kortelės", en: "Procurement cards" }],
+    ["gprocure.manoPirkimai.",   "G-Procure",       { lt: "„Mano pirkimai“: prisegti pirkimai", en: "“My procurements”: pinned procurements" }],
     ["gprocure.sutartys.stebejimas", "PP-salygos",  { lt: "Sutarties parinkimo tobulinimo įrašai", en: "Contract selection observation records" }],
     ["gprocure.salygos.nustatymai", "PP-salygos",  { lt: "Nustatymai (jūsų įvesta vidaus taisyklių riba)", en: "Settings (internal-rule threshold you entered)" }],
     ["gprocure.salygos.juodrastis.", "PP-salygos", { lt: "Pirkimo sąlygų juodraštis (atsakymai, numatoma vertė)", en: "Procurement conditions draft (answers, estimated value)" }],
