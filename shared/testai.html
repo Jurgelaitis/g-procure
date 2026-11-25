@@ -8351,7 +8351,7 @@ async function testaiManoPirkimai1125(){
       tiesa(!vardas && /terminų kortelėse nėra/.test(d.querySelector(".gpmp-eksp-busena").textContent), "be datų - failas nesudaromas, pasakoma");
     } finally { f.remove(); }
   });
-  await testas("Savaitės planas: ši ir kita savaitė nuo pirmadienio, terminai pagal laiką, reikia dėmesio ir ką daryti, kiti pirkimai; Word - A4, DXA ir FIXED, be ilgųjų brūkšnių, antraštė prieš lentelę be „laikyti su kitu“; bibliotekos klaida su „Bandyti dar kartą“", async ()=>{
+  await testas("Savaitės planas: ši ir kita savaitė nuo pirmadienio, terminai pagal laiką, reikia dėmesio ir ką daryti, kiti pirkimai; Word - A4, DXA ir FIXED, be ilgųjų brūkšnių, skyriaus antraštė - kartojama pirmoji lentelės eilutė (Pages); bibliotekos klaida su „Bandyti dar kartą“", async ()=>{
     const { f, w, d } = await ramas('<div id="mp"></div>' + FAILAI + '<script src="eksportas.js"><\/script><script src="busena.js"><\/script><script src="vendor/jszip-3.10.1/jszip.min.js"><\/script>');
     try {
       const K = w.GP_KORTELE, M = w.GP_MANO_PIRKIMAI; K.naudokSaugykla(netikraSaugykla({}));
@@ -8380,8 +8380,15 @@ async function testaiManoPirkimai1125(){
         "4 lentelės, FIXED, stulpelių suma - teksto plotis (" + lent.length + ")");
       tiesa(!/w:type="pct"|w:type="auto"/.test(lent.map(l => l.split("</w:tbl>")[0]).join("")), "pločiai tik DXA");
       tiesa(!/[–—]/.test(x) && /Pirkimų savaitės planas/.test(x) && /Ši savaitė \(2026-11-23 - 2026-11-29\)/.test(x), "tekstas be ilgųjų brūkšnių");
-      const priesLent = x.split("<w:tbl>").slice(0, -1).map(s => s.slice(Math.max(s.lastIndexOf("<w:p>"), s.lastIndexOf("<w:p "))));
-      tiesa(priesLent.every(p => !/<w:keepNext\/>/.test(p)), "antraštė prieš lentelę - be „laikyti su kitu“");
+      // Pages (2026-11-25): skyriaus antraštė - pirmoji lentelės eilutė, kartojama kartu su stulpelių antraštėmis; tarp lentelių - pastraipa
+      const pirmos = lent.map(l => { const e = l.split("</w:tbl>")[0].split(/<w:tr[ >]/).slice(1); return e.slice(0, 3); });
+      const stulp = l => [...l.split("</w:tblGrid>")[0].matchAll(/<w:gridCol w:w="(\d+)"/g)].map(m => +m[1]);
+      lygu(pirmos.map(e => e[0].replace(/<[^>]+>/g, "")), ["Ši savaitė (2026-11-23 - 2026-11-29)", "Kita savaitė (2026-11-30 - 2026-12-06)", "Reikia dėmesio", "Kiti aktyvūs pirkimai"], "antraštė - pirmoji eilutė");
+      tiesa(pirmos.every((e, i) => /<w:tblHeader\/>/.test(e[0]) && /<w:tblHeader\/>/.test(e[1]) && !/<w:tblHeader\/>/.test(e[2])
+        && new RegExp('<w:gridSpan w:val="' + stulp(lent[i]).length + '"/>').test(e[0]) && /w:val="nil"/.test(e[0]) && !/<w:keepNext\/>/.test(e[0])), "antraštės ir stulpelių eilutės kartojamos, antraštė per visą plotį be rėmelių");
+      tiesa(!/<\/w:tbl>\s*<w:tbl>/.test(x), "tarp lentelių - pastraipa (kitaip Word jas sujungia)");
+      lygu(stulp(lent[0]), [2000, 1600, 3338, 1400, 1300], "savaitės lentelės stulpeliai („Liko“ - 1300)");
+      tiesa(!/<w:keepNext\/>[\s\S]{0,400}<w:tbl>/.test(x), "prieš lentelę nėra „laikyti su kitu“ pastraipos (Pages ją perkeltų su visa lentele)");
       tiesa(/w:default="1"[^>]*w:styleId="Normal"|w:styleId="Normal"[^>]*w:default="1"/.test(await zip.file("word/styles.xml").async("string")), "numatytasis Normal stilius (Pages)");
       // Bibliotekos klaida
       const g = await ramas('<div id="mp"></div>' + FAILAI + '<script src="busena.js"><\/script>');

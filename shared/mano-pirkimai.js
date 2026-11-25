@@ -425,45 +425,49 @@
       })
     };
   }
-  /* Word (docx.js ir shared/docx-stiliai.js - įkeliami tik prireikus): A4, lentelės DXA ir FIXED per teksto plotį, antraštė prieš lentelę -
-     be „laikyti su kitu“ (Pages kitaip perkelia ją su visa lentele). Vidaus darbo dokumentas, ne pirkimo dokumentas. */
+  /* Word (docx.js ir shared/docx-stiliai.js - įkeliami tik prireikus): A4, lentelės DXA ir FIXED per teksto plotį. Skyriaus antraštė prieš
+     lentelę - pirmoji lentelės eilutė be rėmelių, kartojama kartu su stulpelių antraštėmis (2026-11-25, Pages patikra): paragrafas prieš
+     lentelę puslapio apačioje likdavo vienas, o su „laikyti su kitu“ Pages perkelia jį su visa lentele ir puslapis lieka tuščias.
+     Vidaus darbo dokumentas, ne pirkimo dokumentas. */
   function planoDocx(P) {
     var D0 = global.docx, ST = global.GP_DOCX_STILIAI;
     if (!D0 || !ST) return Promise.reject(new Error("docx"));
     var t = T[P.kalba] || T.lt, D = ST.oficialus(D0), PLOTIS = 9638, PARASTE = 1134, PILKA = "595959", fonas = ST.fonas(D0);
     var RIBA = { style: D.BorderStyle.SINGLE, size: 4, color: "BFBFBF" }, RIBOS = { top: RIBA, bottom: RIBA, left: RIBA, right: RIBA };
+    var BE = { style: D.BorderStyle.NIL, size: 0, color: "auto" }, BE_RIBU = { top: BE, bottom: BE, left: BE, right: BE };
     var run = function (tx, x) { return new D.TextRun(Object.assign({ text: String(tx == null ? "" : tx) }, x || {})); };
     var par = function (v, x) { return new D.Paragraph(Object.assign({ children: Array.isArray(v) ? v : [run(v)] }, x || {})); };
-    var antr = function (tx, priesLentele) { return par([run(tx, { bold: true, size: 24 })], Object.assign({ spacing: { before: 280, after: 100 } }, priesLentele ? {} : { keepNext: true })); };
+    var antrPar = function (tx, x) { return par([run(tx, { bold: true, size: 24 })], Object.assign({ spacing: { before: 280, after: 100 } }, x || {})); };
+    var antr = function (tx) { return antrPar(tx, { keepNext: true }); };
     var cel = function (c, plotis, galva) {
       var x = { width: { size: plotis, type: D.WidthType.DXA }, borders: RIBOS,
         children: (Array.isArray(c) ? c : [c]).map(function (y) { return y instanceof D0.Paragraph ? y : par([run(y, { size: 18, bold: !!galva })]); }) };
       if (galva) x.shading = fonas;
       return new D.TableCell(x);
     };
-    var lent = function (cols, galva, eil) {
-      return new D.Table({ width: { size: PLOTIS, type: D.WidthType.DXA }, columnWidths: cols, layout: D.TableLayoutType.FIXED,
-        rows: [new D.TableRow({ tableHeader: true, cantSplit: true, children: galva.map(function (g, i) { return cel(g, cols[i], true); }) })]
-          .concat(eil.map(function (r) { return new D.TableRow({ cantSplit: true, children: r.map(function (c, i) { return cel(c, cols[i]); }) }); })) });
+    /* Po lentelės - tuščia maža pastraipa: dvi lentelės be pastraipos tarp jų Word programoje susilieja į vieną */
+    var lent = function (antraste, cols, galva, eil) {
+      return [new D.Table({ width: { size: PLOTIS, type: D.WidthType.DXA }, columnWidths: cols, layout: D.TableLayoutType.FIXED,
+        rows: [new D.TableRow({ tableHeader: true, cantSplit: true, children: [new D.TableCell({ columnSpan: cols.length, width: { size: PLOTIS, type: D.WidthType.DXA },
+          borders: BE_RIBU, margins: { top: 0, bottom: 0, left: 0, right: 0 }, children: [antrPar(antraste)] })] }),
+          new D.TableRow({ tableHeader: true, cantSplit: true, children: galva.map(function (g, i) { return cel(g, cols[i], true); }) })]
+          .concat(eil.map(function (r) { return new D.TableRow({ cantSplit: true, children: r.map(function (c, i) { return cel(c, cols[i]); }) }); })) }),
+        par([run("", { size: 8 })], { spacing: { before: 0, after: 0 } })];
     };
     var pirk = function (x) { var a = [par([run(x.pirkimas, { bold: true, size: 18 })])]; if (x.numeris) a.push(par([run(x.numeris, { size: 16, color: PILKA })])); return a; };
     var ch = [par([run(t.planTitle, { bold: true, size: 32 })], { spacing: { after: 60 } }),
       par([run(P.nuo + " - " + P.iki, { bold: true, size: 24 })], { spacing: { after: 60 } }),
       par([run(fmt(t.planSuv, { a: P.aktyvios, n: P.terminu, d: P.demesys.length }), { size: 18, color: PILKA })], { spacing: { after: 120 } })];
+    /* Stulpelis „Liko“ - 1300 DXA: angliškai „in 7 working days“ 1000 DXA langelyje lūždavo į tris eilutes */
     P.savaites.forEach(function (s) {
-      ch.push(antr(s.pav, s.eil.length > 0));
-      if (s.eil.length) ch.push(lent([2000, 1700, 3638, 1300, 1000], [t.planCData, t.planCTerm, t.planCPirk, t.planCBus, t.planCLiko],
+      if (s.eil.length) ch.push.apply(ch, lent(s.pav, [2000, 1600, 3338, 1400, 1300], [t.planCData, t.planCTerm, t.planCPirk, t.planCBus, t.planCLiko],
         s.eil.map(function (e) { return [e.tekstas, e.terminas, pirk(e), e.busena, e.liko]; })));
-      else ch.push(par(t.planBeTerm));
+      else ch.push(antr(s.pav), par(t.planBeTerm));
     });
-    ch.push(antr(t.planDem, P.demesys.length > 0));
-    if (P.demesys.length) ch.push(lent([3800, 5838], [t.planCPirk, t.planCKa],
+    if (P.demesys.length) ch.push.apply(ch, lent(t.planDem, [3800, 5838], [t.planCPirk, t.planCKa],
       P.demesys.map(function (x) { return [pirk(x), x.ka.map(function (y) { return par([run(y, { size: 18 })]); })]; })));
-    else ch.push(par(t.planDem0));
-    if (P.kiti.length) {
-      ch.push(antr(t.planKiti, true));
-      ch.push(lent([4300, 3300, 2038], [t.planCPirk, t.planCArt, t.planCBus], P.kiti.map(function (x) { return [pirk(x), x.artimiausias, x.busena]; })));
-    }
+    else ch.push(antr(t.planDem), par(t.planDem0));
+    if (P.kiti.length) ch.push.apply(ch, lent(t.planKiti, [4300, 3300, 2038], [t.planCPirk, t.planCArt, t.planCBus], P.kiti.map(function (x) { return [pirk(x), x.artimiausias, x.busena]; })));
     ch.push(par([run(fmt(t.planParengta, { d: P.parengta }), { size: 16, color: PILKA })], { spacing: { before: 280 } }));
     var doc = new D.Document({ creator: "G-Procure", title: t.planTitle + " " + P.nuo + " - " + P.iki,
       externalStyles: ST.xml({ font: "Arial", size: 20, oficialus: true }),
