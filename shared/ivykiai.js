@@ -12,8 +12,8 @@
  * Veiksmas gauna elementą su atributu (el) ir įvykį (ev); `this` - tas pats elementas, kaip įterptame atribute. Kaip ir naršyklės
  * įvykiai, veiksmai vykdomi nuo vidinio elemento į išorinį; ev.stopPropagation() veiksme sustabdo išorinius. Grąžinus false -
  * ev.preventDefault() (kaip „return false“ atribute). Tipai: click, dblclick, change, input, keydown, keyup, submit, focusin,
- * focusout, mouseover, mouseout, dragstart, dragover, dragenter, dragleave, drop, paste, load, error ir toggle (<details>; pastarieji trys
- * neburbuliuoja - gaunami gaudant).
+ * focusout, mouseover, mouseout, dragstart, dragover, dragenter, dragleave, drop, paste, load, error, toggle (<details>), blur ir focus (pastarieji
+ * neburbuliuoja - gaunami gaudant; blur - kaip onblur, focusout - kylantis).
  * Įvykis be bubbles (pvz. kodo siunčiamas new Event("change")) vykdomas tik elemento, kuriam siųstas, - kaip įterptas atributas.
  * Nežinomas veiksmas nevykdomas: įspėjimas konsolėje ir GP_IVYKIAI.nezinomi (testams).
  * ========================================================================== */
@@ -30,7 +30,7 @@
   var nezinomi = [];
   var TIPAI = ["click", "dblclick", "change", "input", "keydown", "keyup", "submit", "focusin", "focusout", "mouseover", "mouseout",
     "dragstart", "dragover", "dragenter", "dragleave", "drop", "paste"];
-  var GAUDANT = ["load", "error", "toggle"]; // neburbuliuoja - gaunami tik gaudymo fazėje (toggle - <details>, 2026-11-25)
+  var GAUDANT = ["load", "error", "toggle", "blur", "focus"]; // neburbuliuoja - gaunami tik gaudymo fazėje (toggle - <details>, blur ir focus - kaip onblur, 2026-11-25)
 
   function atributas(tipas) { return tipas === "click" ? "data-veiksmas" : "data-veiksmas-" + tipas; }
 
