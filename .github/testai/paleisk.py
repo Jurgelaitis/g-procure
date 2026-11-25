@@ -75,7 +75,9 @@ class Tylus(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         kelias = self.translate_path(self.path)
         # Tik atveriamam puslapiui ar rėmeliui - testų fetch() (šaltinio tikrinimas, pvz. CSP sargas) gauna failą tokį, koks jis yra
-        atveriama = self.headers.get("Sec-Fetch-Dest", "document") in ("document", "iframe", "frame")
+        # Darbininkas (PP-tiekejams sw.js) atveriamą puslapį persiunčia su Sec-Fetch-Dest: empty, bet Sec-Fetch-Mode: navigate (2026-11-25)
+        atveriama = (self.headers.get("Sec-Fetch-Dest", "document") in ("document", "iframe", "frame")
+                     or self.headers.get("Sec-Fetch-Mode") == "navigate")
         if atveriama and kelias.endswith(".html") and os.path.isfile(kelias):
             with open(kelias, "rb") as f:
                 b = f.read()
