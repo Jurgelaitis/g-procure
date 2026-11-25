@@ -123,6 +123,7 @@
     "pp-market-kpi": ["fred", "nyfed", "eurostat", "comext", "ecb", "osp"],
     "pp-tiekejams": ["vpt", "cvpis_dok"],
     "pirkimu-korteles": ["vpt"],
+    "mano-pirkimai": ["vpt"],
     "pp-graphs": ["vpt"],
     "pp-plan": ["vda_sutartys"],
     "pp-qual": ["vda_sutartys", "ted", "rc"],

@@ -47,7 +47,8 @@
     { id: "pp-cost-benefit-kna", lt: "Kaštų ir naudos analizė", en: "Cost-benefit analysis", be: true },
     { id: "pp-protocol", lt: "Protokolų generatorius", en: "Protocol generator", be: true },
     { id: "pp-report", lt: "Tiekėjų apklausos pažyma", en: "Supplier survey report", be: true },
-    { id: "pirkimu-korteles", lt: "Pirkimų kortelės", en: "Procurement cards", be: true }
+    { id: "pirkimu-korteles", lt: "Pirkimų kortelės", en: "Procurement cards", be: true },
+    { id: "mano-pirkimai", lt: "Mano pirkimai (darbo stalas)", en: "My procurements (desk)", be: true }
   ];
 
   /* f(id, įrankis, lygis, užduotis, [pav], [kada], [siunčiama], [patikros], [žmogus]) - kiekvienas tekstas [lt, en].
