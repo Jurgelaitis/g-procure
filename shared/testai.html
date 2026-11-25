@@ -7319,7 +7319,7 @@ async function testaiPrieinamumas(){
     ["../PP-esg/index.html", "ESRS - pridėti tašką", (w, d) => { w.setView("esrs"); return mygtukas('[onclick="addEsrsPoint()"]')(w, d); }],
     ["../PP-esg/index.html", "ESRS - eksportas", (w, d) => { w.setView("esrs"); return mygtukas('[onclick="openExportModal()"]')(w, d); }],
     ["../PP-esg/index.html", "Informacinė skiltis „Plačiau“ (savas valdymas)", mygtukas("[data-gpi-more]")],
-    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Naujas pirkimas", (w, d) => { d.querySelector('.tab[data-section=register]').click(); return mygtukas('#sec-register [onclick="addNewProc()"]')(w, d); }],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Naujas pirkimas", (w, d) => { d.querySelector('.tab[data-section=register]').click(); return mygtukas('#sec-register [data-veiksmas="naujasPirkimas"]')(w, d); }],
     // 2026-11-07 (PP-plan pertvarka): importas ir eksportas - langai antraštėje, ne skirtukai
     ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Importuoti planą", mygtukas("#btnImportas")],
     ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Eksportuoti", (w, d) => { w.confirm = () => true; w.loadDemo(); return mygtukas("#btnEksportas")(w, d); }],
@@ -7392,8 +7392,8 @@ async function testaiPrieinamumas(){
       try {
         const w = f.contentWindow, d = f.contentDocument, kur = "PP-plan · BVPŽ paieška pirkimo lange: ";
         d.querySelector('.tab[data-section=register]').click();
-        const naujas = mygtukas('[onclick="addNewProc()"]')(w, d); await zingsnis(200);
-        const bv = mygtukas('[onclick="openBvpzPicker()"]')(w, d); await zingsnis(300);
+        const naujas = mygtukas('[data-veiksmas="naujasPirkimas"]')(w, d); await zingsnis(200);
+        const bv = mygtukas('[data-veiksmas="bvpzPaieska"]')(w, d); await zingsnis(300);
         const ov = d.getElementById("bvpzPickerOverlay");
         if (!ov || !ov.contains(d.activeElement)) blogi.push(kur + "fokusas ne paieškos lange");
         const lg = ov && ov.querySelector("[role=dialog]");
@@ -8502,12 +8502,23 @@ async function testaiIvykiai1124(){
       const lauk = d.getElementById("lauk"); lauk.value = "abc";
       lauk.dispatchEvent(new w.Event("input", { bubbles: true })); lauk.dispatchEvent(new w.Event("change", { bubbles: true }));
       lygu(ivyk.splice(0), ["in:abc", "ch:abc"], "input ir change");
+      // Be bubbles (kodas ar testas: new Event("change")) - tik paties elemento veiksmas, vieną kartą (2026-11-25)
+      lauk.value = "nb"; lauk.dispatchEvent(new w.Event("change")); lauk.dispatchEvent(new w.Event("input"));
+      lygu(ivyk.splice(0), ["ch:nb", "in:nb"], "change ir input be bubbles");
+      spausk("vidTekstas"); lygu(ivyk.splice(0), ["vid:true:vid:click", "isor"], "burbuliuojantis - vieną kartą");
+      d.getElementById("vidTekstas").dispatchEvent(new w.MouseEvent("click", { bubbles: false })); lygu(ivyk.splice(0), [], "be bubbles - tėvų veiksmai nevykdomi");
       const sena = w.console.warn; w.console.warn = () => {};
       try { spausk("nez"); } finally { w.console.warn = sena; }
       tiesa(w.GP_IVYKIAI.nezinomi.includes("tokio-nera"), "nežinomas veiksmas įsimintas");
       d.body.insertAdjacentHTML("beforeend", '<img class="nera" alt="" data-veiksmas-error="klaida" src="nera-' + Date.now() + '.png">');
       for (let i = 0; i < 40 && !ivyk.length; i++) await new Promise(r => setTimeout(r, 50));
       lygu(ivyk.splice(0), ["err:nera"], "error gaudant (neburbuliuoja)");
+      // toggle (<details>, 2026-11-25 - PP-plan rūšių blokai): neburbuliuoja, gaunamas gaudant
+      w.GP_IVYKIAI.veiksmai({ perjungta: el => ivyk.push("tg:" + el.open) });
+      d.body.insertAdjacentHTML("beforeend", '<details id="det" data-veiksmas-toggle="perjungta"><summary>S</summary>T</details>');
+      d.getElementById("det").open = true;
+      for (let i = 0; i < 40 && !ivyk.length; i++) await new Promise(r => setTimeout(r, 25));
+      lygu(ivyk.splice(0), ["tg:true"], "toggle gaudant");
     } finally { f.remove(); }
   });
   await testas("Prieinamumas: spaudžiamas div su data-veiksmas pasiekiamas klaviatūra (tabindex, role, Enter), sustabdyk - ne", async ()=>{
@@ -8539,8 +8550,8 @@ async function testaiFokusas(){
   const ATVEJAI = [
     ["../PP-tiekejams/index.html", "dažnas klausimas", (w, d) => d.querySelector("#homeChips .chip"), /^SUMMARY /],
     ["../PP-esg/index.html", "„Rodyti pavyzdį“", (w, d) => d.getElementById("btnPavyzdys"), /^BUTTON (Slėpti|Hide)/],
-    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - pavyzdžiai", (w, d) => d.querySelector('[onclick="loadDemo()"]'), /^H2 Apžvalga/],
-    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - importas (langas)", (w, d) => d.querySelector('#warningCenter [onclick="atverkImporta()"], #sec-dashboard [onclick="atverkImporta()"]'), /^(DIV|INPUT|BUTTON|SELECT) .*(Vilkite Excel|Importuoti planą iš Excel|palikti nenustatytą)/],   // 2026-11-08: pirmas lango laukas - įmonė eilutėms be įmonės
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - pavyzdžiai", (w, d) => d.querySelector('[data-veiksmas="pavyzdziai"]'), /^H2 Apžvalga/],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - importas (langas)", (w, d) => d.querySelector('#warningCenter [data-veiksmas="importas"], #sec-dashboard [data-veiksmas="importas"]'), /^(DIV|INPUT|BUTTON|SELECT) .*(Vilkite Excel|Importuoti planą iš Excel|palikti nenustatytą)/],   // 2026-11-08: pirmas lango laukas - įmonė eilutėms be įmonės
     ["../PP-qual/PP-QUAL.html", "1 įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="info"]'), /^H2 1 žingsnis/],
     ["../PP-qual/PP-QUAL.html", "audito įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="check"]'), /^H2 Audito patikra/],
     ["../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "nuoroda į skaičiuoklę", (w, d) => d.querySelector('.inline-link-btn[data-veiksmas="vaizdas"][data-view="calculator"]'), /^H2 .*trukmių/i],
@@ -9095,7 +9106,8 @@ async function testaiSaugumas(){
       "../docs/market-kpi/prototipas-pirkimo-rinkos-apzvalga.html", "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html",
       "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
       // 2026-11-25 - likę įrankiai (po vieną)
-      "../PP-cost-benefit/kastu_naudos_analize.html", "../PP-carbon/index.html", "../PP-tiekejams/index.html"];
+      "../PP-cost-benefit/kastu_naudos_analize.html", "../PP-carbon/index.html", "../PP-tiekejams/index.html",
+      "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html"];
     const maisa = async t => "'sha256-" + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))))) + "'";
     const blogi = [];
     for (const m of puslapiai) {

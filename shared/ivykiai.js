@@ -12,7 +12,9 @@
  * Veiksmas gauna elementą su atributu (el) ir įvykį (ev); `this` - tas pats elementas, kaip įterptame atribute. Kaip ir naršyklės
  * įvykiai, veiksmai vykdomi nuo vidinio elemento į išorinį; ev.stopPropagation() veiksme sustabdo išorinius. Grąžinus false -
  * ev.preventDefault() (kaip „return false“ atribute). Tipai: click, dblclick, change, input, keydown, keyup, submit, focusin,
- * focusout, mouseover, mouseout, dragstart, dragover, dragenter, dragleave, drop, paste, load ir error (pastarieji - gaudant).
+ * focusout, mouseover, mouseout, dragstart, dragover, dragenter, dragleave, drop, paste, load, error ir toggle (<details>; pastarieji trys
+ * neburbuliuoja - gaunami gaudant).
+ * Įvykis be bubbles (pvz. kodo siunčiamas new Event("change")) vykdomas tik elemento, kuriam siųstas, - kaip įterptas atributas.
  * Nežinomas veiksmas nevykdomas: įspėjimas konsolėje ir GP_IVYKIAI.nezinomi (testams).
  * ========================================================================== */
 ;(function (global) {
@@ -28,7 +30,7 @@
   var nezinomi = [];
   var TIPAI = ["click", "dblclick", "change", "input", "keydown", "keyup", "submit", "focusin", "focusout", "mouseover", "mouseout",
     "dragstart", "dragover", "dragenter", "dragleave", "drop", "paste"];
-  var GAUDANT = ["load", "error"]; // neburbuliuoja - gaunami tik gaudymo fazėje
+  var GAUDANT = ["load", "error", "toggle"]; // neburbuliuoja - gaunami tik gaudymo fazėje (toggle - <details>, 2026-11-25)
 
   function atributas(tipas) { return tipas === "click" ? "data-veiksmas" : "data-veiksmas-" + tipas; }
 
@@ -60,7 +62,11 @@
     if (el && el.nodeType === 1 && el.hasAttribute(atributas(ev.type))) vykdyk(el, el.getAttribute(atributas(ev.type)), ev);
   }
 
-  TIPAI.forEach(function (t) { doc.addEventListener(t, apdorok, false); });
+  /* Neburbuliuojantis įvykis (kodas ar testas siunčia new Event("change") be bubbles): įterptas atributas jį gaudavo ant paties elemento,
+     todėl jis vykdomas gaudant ir tik elemento, kuriam siųstas (2026-11-25, PP-plan). Burbuliuojantys - tik apdorok, ne du kartus. */
+  function apdorokNeburbuliuojanti(ev) { if (!ev.bubbles) apdorokGaudant(ev); }
+
+  TIPAI.forEach(function (t) { doc.addEventListener(t, apdorok, false); doc.addEventListener(t, apdorokNeburbuliuojanti, true); });
   GAUDANT.forEach(function (t) { doc.addEventListener(t, apdorokGaudant, true); });
 
   global.GP_IVYKIAI = {
