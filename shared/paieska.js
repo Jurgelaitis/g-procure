@@ -133,6 +133,8 @@
       aprLt: "Naršyklės įrašai ir sutikimas", aprEn: "Browser storage and consent", kw: "slapukai sutikimas nustatymai cookies consent settings" },
     { href: "saugumas.html", lt: "Pranešimas apie saugumo spragas", en: "Reporting security vulnerabilities",
       aprLt: "Kaip pranešti apie spragą", aprEn: "How to report a vulnerability", kw: "saugumas spraga pažeidžiamumas security vulnerability" },
+    { href: "prieinamumas.html", lt: "Prieinamumo deklaracija", en: "Accessibility statement",
+      aprLt: "Kas tikrinama ir kaip pranešti apie kliūtį", aprEn: "What is checked and how to report a barrier", kw: "prieinamumas WCAG ekrano skaitytuvas klaviatūra accessibility screen reader keyboard" },
     { href: "atsargine-kopija.html", lt: "Atsarginė duomenų kopija", en: "Data backup",
       aprLt: "Išsaugoti ir atkurti savo duomenis", aprEn: "Save and restore your data", kw: "atsarginė kopija atkurti eksportas backup restore export" }
   ];

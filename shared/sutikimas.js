@@ -145,7 +145,7 @@
       langoPav: "Cookie and browser storage settings",
       ivadas: "G-Procure itself sets no cookies: data is kept in browser storage (localStorage), which is subject to the same rules as " +
         "cookies. Choose what you allow us to remember. You can change your decision at any time with the “Cookie settings” link " +
-        "at the bottom of the page.",
+        "(on the portal - in the footer, in the tools - in the information panel).",
       uzdaryti: "Close",
       visadaIjungti: "Always on", nenaudojama: "Not used", ijungta: "On", isjungta: "Off",
       katButini: "Necessary",
