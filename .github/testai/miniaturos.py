@@ -102,11 +102,28 @@ IRANKIAI = [
            c: { p1: { unitPrice: 255000 }, p2: { unitPrice: 11800 }, p3: { unitPrice: 1200 }, p4: { unitPrice: 18200 }, p5: { unitPrice: 850 } } };
          render.all();`);
        go("analysis");""" % PIRKIMAS, "slinkti": "document.querySelector('#matricaRodymas').closest('.card')", "atstumas": 100, "laukti": 1.5},
-    {"id": "pp-report", "kelias": "PP-report/PP-report.html",
-     "js": r"""selectForm(2);
-       const n = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); };
-       n("pirkimo-pavadinimas", "Biuro baldų pirkimas"); n("verte-be-pvm", "28000"); n("bvpz-kodas", "39130000-2");""",
-     "slinkti": "document.querySelector('#form-container')", "atstumas": 100, "laukti": 1.0},
+    # Elektroninė apklausa (2026-11-26): atverti pasiūlymai, pasiūlymų eilė ir kainų palyginimas; saugykla - tik atmintyje
+    {"id": "pp-report", "kelias": "PP-report/PP-report.html?saugykla=testine",
+     "js": r"""const A = GP_APKLAUSA, U = GP_APKLAUSA_UI, iso = ms => new Date(Date.now() + ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+       const a = U.nauja();
+       a.kvietimas.pavadinimas = "Biuro kėdžių pirkimas"; a.kvietimas.aprasymas = "Ergonominės biuro kėdės su reguliuojamu aukščiu ir porankiais.";
+       a.kvietimas.pozicijos = [{ pav: "Biuro kėdė, ergonominė", mat: "vnt.", kiekis: 12, pastaba: "juoda" }, { pav: "Pristatymas ir surinkimas", mat: "kompl.", kiekis: 1, pastaba: "" }];
+       a.kvietimas.terminas = iso(-36e5); a.kvietimas.pristatymoVieta = "Vilnius"; a.kvietimas.pristatymoTerminas = "per 30 dienų nuo užsakymo"; a.kvietimas.apmokejimas = "per 30 dienų nuo sąskaitos gavimo";
+       a.kvietimas.kontaktas = { vardas: "Vardenis Pavardenis", pastas: "vardenis.pavardenis@imone.example", tel: "+370 600 00000" };
+       a.vidaus = { verte: 8500, lesos: 9000, bvpz: "39112000-0", padalinys: "Administravimo skyrius", pareigos: "Specialistas", mazaiTiekeju: "" };
+       a.tiekejai = ["A", "B", "C"].map(r => ({ t: A.zetonas(), pav: "UAB „Tiekėjas " + r + "“", pastas: "info@tiekejas-" + r.toLowerCase() + ".example", kalba: "lt", issiusta: iso(-2 * 864e5) }));
+       a.kvietimas = A.kvietimoForma(a.kvietimas).kvietimas; a.busena = "paskelbta"; a.antspaudas = await A.antspaudas(A.bendra(a.kvietimas));
+       a.zurnalas.push(await A.zurnaloIrasas(null, "paskelbta", "kviesta tiekėjų: 3"));
+       const K = [[512, 180], [489, 240], [545, 150]];
+       for (let i = 0; i < 3; i++) {
+         const t = a.tiekejai[i], p = A.pasiulymoForma({ v: 1, tipas: "pasiulymas", apklausa: a.id, kvietimas: a.antspaudas, t: t.t,
+           tiekejas: { pav: t.pav, kodas: "30000000" + i, pvmKodas: "LT10000000001" + i, adresas: "Pavyzdžio g. " + (i + 1) + ", Vilnius", asmuo: "Vardenis Pavardenis", pastas: t.pastas, tel: "+370 600 0000" + i }, pvm: true,
+           eilutes: K[i].map((k, j) => ({ i: j, ikainis: k, pastaba: "" })), pristatymas: "per 14 dienų nuo užsakymo", galioja: 30, pastabos: "", patvirtinta: A.PATVIRTINIMAI.slice(), pateikta: iso(-9e6 + i * 6e5), kalba: "lt" }).pasiulymas;
+         a.pasiulymai.push({ t: t.t, kodas: await A.koduok(p), h: await A.antspaudas(p), gauta: iso(-8e6 + i * 6e5), gautaKaip: "ikelta", pateikta: p.pateikta, tiekejas: t.pav, pakeista: 0, duomenys: p });
+       }
+       a.atverta = iso(-18e5); a.busena = "atverta"; a.sprendimas = { rezultatas: "", laimetojas: "", neatitinka: {}, atitinka: {}, pastaba: "", patvirtinta: "" };
+       U.issaugok(a); await U.rodyk("apklausa", a.id);""",
+     "slinkti": "document.querySelector('#ea-vieta .ea-hero')", "atstumas": 92, "laukti": 1.0},
     {"id": "pp-carbon", "kelias": "PP-carbon/index.html?lang=lt",
      "js": r"""
        Store.updateEvalOffers(sar => { [["Tiekėjas A", "1000000", "800"], ["Tiekėjas B", "950000", "1500"], ["Tiekėjas C", "980000", "1150"]]

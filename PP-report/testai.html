@@ -246,6 +246,545 @@ const laiskas = (data, gavejas, dalis) => {
 /* ==========================================================================
    TESTAI
    ========================================================================== */
+/* ==========================================================================
+   Elektroninė apklausa (2026-11-26): apklausa.js, apklausa-ui.js, pasiulymas.html
+   Saugykla - netikra (GP_APKLAUSA_UI.naudokSaugykla), tikri naršyklės duomenys neliečiami.
+   ========================================================================== */
+async function testaiApklausa() {
+  grupe('Elektroninė apklausa (2026-11-26)');
+  const A = W.GP_APKLAUSA, U = W.GP_APKLAUSA_UI;
+  const q = (s) => D.querySelector(s), qa = (s) => Array.from(D.querySelectorAll(s));
+  const iso = (ms) => new Date(Date.now() + ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const atm = () => { const d = {}; return { d, getItem: k => Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null, setItem: (k, v) => { d[k] = String(v); }, removeItem: k => { delete d[k]; } }; };
+  const rasyk = (el, v, tipas) => { el.value = v; el.dispatchEvent(new W.Event(tipas || 'input', { bubbles: true })); };
+  const kol = async (f, ms) => { const iki = Date.now() + (ms || 4000); while (Date.now() < iki) { if (f()) return true; await laukti(30); } return !!f(); };
+  const TK = [['UAB „Baldų centras“', 'info@baldai.example', 'lt'], ['UAB Kėdžių pasaulis', 'pardavimai@kedes.example', 'lt'], ['Office Supplies OU', 'sales@office.example', 'en']];
+  const POZ = [{ pav: 'Biuro kėdė, ergonominė', mat: 'vnt.', kiekis: 12, pastaba: 'juoda' }, { pav: 'Pristatymas', mat: 'kompl.', kiekis: 1, pastaba: '' }];
+  async function kurk(o) {
+    o = o || {};
+    const a = U.nauja();
+    a.kvietimas.pavadinimas = o.pav || 'Biuro kėdžių pirkimas'; a.kvietimas.aprasymas = 'Ergonominės kėdės.'; a.kvietimas.pozicijos = JSON.parse(JSON.stringify(o.poz || POZ));
+    a.kvietimas.terminas = iso(o.terminas === undefined ? 2 * 864e5 : o.terminas); a.kvietimas.kontaktas = { vardas: 'Vardenis Pavardenis', pastas: 'vardenis@litgrid.example', tel: '+370 600 00000' };
+    a.vidaus = { verte: o.verte === undefined ? 8500 : o.verte, lesos: o.lesos === undefined ? null : o.lesos, bvpz: '39112000-0', padalinys: 'IT skyrius', pareigos: 'Specialistas', mazaiTiekeju: '' };
+    a.tiekejai = (o.tk || TK).map(t => ({ t: A.zetonas(), pav: t[0], pastas: t[1], kalba: t[2] || 'lt', issiusta: iso(-36e5) }));
+    a.busena = 'paskelbta'; a.kvietimas = A.kvietimoForma(a.kvietimas).kvietimas; a.antspaudas = await A.antspaudas(A.bendra(a.kvietimas));
+    a.zurnalas.push(await A.zurnaloIrasas(null, 'paskelbta', 'kviesta tiekėjų: ' + a.tiekejai.length));
+    U.issaugok(a);
+    return a;
+  }
+  async function pasiulymas(a, i, kainos, o) {
+    o = o || {};
+    const t = a.tiekejai[i];
+    const f = A.pasiulymoForma({ v: 1, tipas: 'pasiulymas', apklausa: o.apklausa || a.id, kvietimas: o.kvietimas || a.antspaudas, t: o.t || t.t,
+      tiekejas: { pav: o.pav || t.pav, kodas: '30000000' + i, asmuo: 'Asmuo ' + i, pastas: t.pastas }, pvm: o.pvm !== false,
+      eilutes: kainos.map((k, j) => ({ i: j, ikainis: k, pastaba: o.pastaba || '' })), pristatymas: 'per 14 dienų', galioja: 30, pastabos: o.pastabos || '',
+      patvirtinta: o.patvirtinta || A.PATVIRTINIMAI.slice(), pateikta: iso(o.pateikta === undefined ? -5000 + i : o.pateikta), kalba: t.kalba });
+    if (!f.ok) throw new Error('pasiūlymo forma: ' + f.klaida);
+    const kodas = await A.koduok(f.pasiulymas), h = await A.antspaudas(f.pasiulymas);
+    return { p: f.pasiulymas, kodas, h, laiskas: A.atsakymas(a.kvietimas, f.pasiulymas, kodas, h, t.kalba).tekstas };
+  }
+  const buvo = { confirm: W.confirm, prompt: W.prompt };
+  W.confirm = () => true;
+  U.naudokSaugykla(atm());
+  try {
+
+  /* ---------- bendra logika (apklausa.js) ---------- */
+  await testas('Kodas: koduok ir iskoduok grąžina tą patį objektą (lietuviškos raidės, kabutės); sugadintas, per ilgas ir svetimas kodas - klaida; __proto__ nepatenka', async () => {
+    const o = { v: 1, t: 'Ąžuolų g. „Šilas“ <b>&', n: [1, 2.5, null], gili: { a: 'ėįšųūž' } };
+    const k = await A.koduok(o);
+    tiesa(/^g[01]\.[A-Za-z0-9_-]+$/.test(k), 'kodo pavidalas: ' + k.slice(0, 20));
+    lygu(await A.iskoduok(k), o, 'pirmyn ir atgal');
+    lygu(await A.iskoduok('g0.' + btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')), o, 'nesuspaustas (g0)');
+    for (const blogas of ['', 'abc', 'g1.@@@', 'g1.AAAA', 'g2.' + k.slice(3), k.slice(0, k.length - 6) + 'zzzzzz', 'g0.' + btoa('ne json')]) {
+      let kl = null; try { await A.iskoduok(blogas); } catch (e) { kl = e.kodas; }
+      tiesa(kl === 'kodas', 'sugadintas kodas „' + blogas.slice(0, 12) + '“ -> ' + kl);
+    }
+    let kl = null; try { await A.iskoduok('g0.' + 'A'.repeat(A.RIBOS.kodas + 10)); } catch (e) { kl = e.kodas; }
+    lygu(kl, 'per-didelis', 'per ilgas kodas');
+    const pr = await A.iskoduok('g0.' + btoa('{"__proto__":{"x":1},"constructor":{"y":2},"a":1}').replace(/=+$/, ''));
+    tiesa(pr.a === 1 && ({}).x === undefined && !Object.prototype.hasOwnProperty.call(pr, '__proto__') && !Object.prototype.hasOwnProperty.call(pr, 'constructor'), 'prototipo raktai');
+  });
+
+  await testas('Kodas laiške: randamas cituotame laiške („> “), su CRLF, nuorodoje (#k= ir #p=), kaip grynas kodas ir keli viename tekste; kvietimas atskiriamas nuo pasiūlymo', async () => {
+    const k1 = await A.koduok({ a: 1, ilgas: 'x'.repeat(300) }), k2 = await A.koduok({ b: 2 });
+    const s1 = A.sarvas(k1, 'pasiulymas');
+    tiesa(s1.split('\n').every(e => e.length <= 64 || /^-----/.test(e)), 'eilutės iki 64 ženklų');
+    lygu(A.isSarvo('Laba diena,\r\n' + s1.replace(/\n/g, '\r\n') + '\r\nPagarbiai'), [{ rusis: 'pasiulymas', kodas: k1 }], 'CRLF');
+    lygu(A.isSarvo(s1.split('\n').map(e => '> > ' + e + ' ').join('\n')), [{ rusis: 'pasiulymas', kodas: k1 }], 'cituotas');
+    lygu(A.isSarvo(s1 + '\n\n' + A.sarvas(k2, 'pasiulymas')).map(x => x.kodas), [k1, k2], 'du pasiūlymai');
+    lygu(A.isSarvo(A.sarvas(k2, 'kvietimas')), [{ rusis: 'kvietimas', kodas: k2 }], 'kvietimo žymės');
+    lygu(A.isSarvo('https://g-procure.com/PP-report/pasiulymas.html#k=' + k2), [{ rusis: 'kvietimas', kodas: k2 }], 'nuoroda');
+    lygu(A.isSarvo('  ' + k2 + '\n'), [{ rusis: null, kodas: k2 }], 'grynas kodas');
+    lygu(A.isSarvo('Laba diena, kodo čia nėra'), [], 'be kodo');
+  });
+
+  await testas('Kvietimo ir pasiūlymo formos (nepatikimi duomenys): tik žinomi laukai, ribos, tipai; trūkstant privalomų - atmetama; nauja versija - „versija“', async () => {
+    const kv = { v: 1, id: 'GP-ABCD-EFGH', pirkejas: { pav: 'LITGRID AB', kodas: '302564383', kitas: 1 }, pavadinimas: '  Kėdės \n pirkimas ', aprasymas: 'a'.repeat(5000), svetimas: '<script>',
+      pozicijos: [{ pav: 'Kėdė', mat: 'vnt.', kiekis: 2, pastaba: '', x: 1 }], terminas: '2026-12-03T12:00:00Z', kontaktas: { vardas: 'V', pastas: 'v@litgrid.example', tel: '' }, tiekejas: { pav: 'UAB X', pastas: 'x@x.example' }, t: 'ABCDEFGHJKLMNPQR', kalba: 'de' };
+    const f = A.kvietimoForma(kv);
+    tiesa(f.ok, 'tinkamas kvietimas');
+    lygu(f.kvietimas.pavadinimas, 'Kėdės pirkimas', 'eilutės lūžis pavadinime');
+    lygu(f.kvietimas.aprasymas.length, A.RIBOS.tekstas, 'aprašymo riba');
+    tiesa(!('svetimas' in f.kvietimas) && !('kitas' in f.kvietimas.pirkejas) && !('x' in f.kvietimas.pozicijos[0]), 'nežinomi laukai neperkeliami');
+    lygu(f.kvietimas.kalba, 'lt', 'nežinoma kalba - lietuvių');
+    const be = (keit) => A.kvietimoForma(Object.assign(JSON.parse(JSON.stringify(kv)), keit));
+    for (const [keit, ka] of [[{ id: 'GP-1' }, 'id'], [{ pavadinimas: '' }, 'pavadinimas'], [{ terminas: '2026-12-03 12:00' }, 'terminas'], [{ pozicijos: [] }, 'pozicijos'], [{ pozicijos: [{ pav: 'K', kiekis: 0 }] }, 'kiekis 0'],
+      [{ pozicijos: [{ pav: 'K', kiekis: '2' }] }, 'kiekis tekstu'], [{ kontaktas: { pastas: 'ne paštas' } }, 'kontakto paštas'], [{ t: 'trumpas' }, 'žetonas'], [{ pirkejas: {} }, 'pirkėjas']])
+      tiesa(!be(keit).ok, 'atmetama: ' + ka);
+    lygu(be({ v: 2 }).klaida, 'versija', 'nauja versija');
+    lygu(be({ pozicijos: Array.from({ length: 60 }, (x, i) => ({ pav: 'P' + i, kiekis: 1 })) }).kvietimas.pozicijos.length, A.RIBOS.pozicijos, 'pozicijų riba');
+    const ps = { v: 1, tipas: 'pasiulymas', apklausa: 'GP-ABCD-EFGH', kvietimas: 'a'.repeat(64), t: 'ABCDEFGHJKLMNPQR', tiekejas: { pav: 'UAB X', pastas: 'blogas', svetimas: 1 }, pvm: 'taip',
+      eilutes: [{ i: 0, ikainis: 10 }, { i: 0, ikainis: 99 }, { i: 1, ikainis: -5 }, { i: 2.5, ikainis: 1 }, { i: 3, ikainis: '7' }], galioja: 30.5, patvirtinta: ['atitinka', 'atitinka', 'kitas'], pateikta: '2026-12-01T10:00:00Z', kalba: 'en' };
+    const p = A.pasiulymoForma(ps);
+    tiesa(p.ok, 'tinkamas pasiūlymas');
+    lygu(p.pasiulymas.eilutes, [{ i: 0, ikainis: 10, pastaba: '' }, { i: 1, ikainis: null, pastaba: '' }, { i: 3, ikainis: null, pastaba: '' }], 'eilutės: pasikartojanti, neigiama, trupmeninis numeris, kaina tekstu');
+    lygu([p.pasiulymas.pvm, p.pasiulymas.galioja, p.pasiulymas.patvirtinta, p.pasiulymas.tiekejas.pastas], [false, null, ['atitinka'], ''], 'tipai');
+    for (const keit of [{ tipas: 'kita' }, { apklausa: 'x' }, { kvietimas: 'abc' }, { t: '' }, { tiekejas: {} }, { pateikta: 'vakar' }]) tiesa(!A.pasiulymoForma(Object.assign({}, ps, keit)).ok, 'atmetama: ' + JSON.stringify(keit));
+  });
+
+  await testas('Antspaudas: nepriklauso nuo laukų eilės, keičiasi pakeitus bet kurį lauką; kvietimo antspaudas - be gavėjo, žetono ir kalbos (visiems tiekėjams tas pats)', async () => {
+    const h1 = await A.antspaudas({ a: 1, b: { c: [1, 2], d: 'ą' } }), h2 = await A.antspaudas({ b: { d: 'ą', c: [1, 2] }, a: 1 });
+    tiesa(/^[0-9a-f]{64}$/.test(h1) && h1 === h2, 'eilė nesvarbi');
+    tiesa(h1 !== await A.antspaudas({ a: 1, b: { c: [2, 1], d: 'ą' } }) && h1 !== await A.antspaudas({ a: 1, b: { c: [1, 2], d: 'a' } }), 'pakeitimas keičia antspaudą');
+    const k = { v: 1, id: 'GP-ABCD-EFGH', pavadinimas: 'X', tiekejas: { pav: 'A' }, t: 'ABCDEFGHJKLMNPQR', kalba: 'en' };
+    lygu(Object.keys(A.bendra(k)).sort(), ['id', 'pavadinimas', 'v'], 'bendra dalis');
+    lygu(await A.antspaudas(A.bendra(k)), await A.antspaudas(A.bendra(Object.assign({}, k, { tiekejas: { pav: 'B' }, t: 'BBBBBBBBBBBBBBBB', kalba: 'lt' }))), 'tas pats visiems tiekėjams');
+    lygu(A.trumpas('0123456789abcdef0000'), '0123-4567-89AB-CDEF', 'trumpas pavidalas');
+  });
+
+  await testas('Vertinimas: eilė pagal kainą be PVM, vienodos - anksčiau gautas; pavėluotas, nepilnas ir neatitinkantis - ne eilėje; lėšų riba (lygu - neviršija) ir neįprastai maža kaina (lygiai 30 proc. - taip)', async () => {
+    const k = { terminas: '2026-12-03T12:00:00Z', pozicijos: [{ pav: 'A', kiekis: 10 }, { pav: 'B', kiekis: 1 }] };
+    const tk = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'].map(t => ({ t, pav: t }));
+    const ps = (t, ik, gauta, o) => ({ t, gauta: gauta || '2026-12-03T10:00:00Z', duomenys: Object.assign({ tiekejas: { pav: t }, pvm: true, patvirtinta: A.PATVIRTINIMAI.slice(), eilutes: ik.map((x, i) => ({ i, ikainis: x, pastaba: '' })) }, o || {}) });
+    let v = A.vertink({ kvietimas: k, tiekejai: tk, tarifas: 0.21, lesos: 1100, neatitinka: { T5: 'be garantijos' },
+      pasiulymai: [ps('T1', [100, 100]), ps('T2', [100, 100], '2026-12-03T09:00:00Z'), ps('T3', [50, 0.5], '2026-12-03T12:00:01Z'), ps('T4', [90, null]), ps('T5', [10, 10]), ps('T6', [120, 10], '2026-12-03T12:00:00Z', { pvm: false })] });
+    lygu(v.eile, ['T2', 'T1', 'T6'], 'eilė: vienoda kaina - anksčiau gautas, terminas imtinai');
+    lygu(v.eilutes.map(e => e.busena), ['tinkamas', 'tinkamas', 'pavėluotas', 'nepilnas', 'neatitinka', 'tinkamas'], 'būsenos');
+    lygu([v.siulomas, v.virsLesu, v.eilutes[5].viso, v.eilutes[5].suPvm, v.eilutes[0].suPvm], ['T2', ['T6'], 1210, 1210, 1331], 'lėšos ir PVM (ne PVM mokėtojo suma su PVM = be PVM)');
+    lygu(v.eilutes[4].priezastis, 'be garantijos', 'neatitikimo priežastis');
+    lygu(A.vertink({ kvietimas: k, tiekejai: tk, lesos: 1100, pasiulymai: [ps('T1', [100, 100])] }).virsLesu, [], 'kaina lygi lėšoms - neviršija');
+    // NMK: vidurkis iš eilėje esančių ir lėšų neviršijančių; lygiai 30 proc. mažesnė - pažymima
+    const k1 = { terminas: k.terminas, pozicijos: [{ pav: 'A', kiekis: 1 }] };
+    v = A.vertink({ kvietimas: k1, tiekejai: tk, pasiulymai: [ps('T1', [1400]), ps('T2', [2600])] });
+    lygu([v.vidurkis, v.nmk], [2000, ['T1']], 'lygiai 30 proc.');
+    lygu(A.vertink({ kvietimas: k1, tiekejai: tk, pasiulymai: [ps('T1', [1401]), ps('T2', [2599])] }).nmk, [], 'mažiau kaip 30 proc.');
+    v = A.vertink({ kvietimas: k1, tiekejai: tk, pasiulymai: [ps('T1', [10])] });
+    lygu([v.nmk, v.vidurkis], [[], null], 'vienas pasiūlymas - nelyginama, vidurkio nėra');
+    v = A.vertink({ kvietimas: k1, tiekejai: tk, lesos: 2600, pasiulymai: [ps('T1', [1400]), ps('T2', [2600])] });
+    lygu([v.vidurkis, v.nmk, v.virsLesu], [2000, ['T1'], []], 'kaina lygi lėšoms - neviršija ir į vidurkį įskaičiuojama');
+    v = A.vertink({ kvietimas: k1, tiekejai: tk, lesos: 3000, neatitinka: { T4: 'x' }, pasiulymai: [ps('T1', [1400]), ps('T2', [2600]), ps('T3', [90000]), ps('T4', [1])] });
+    lygu([v.vidurkis, v.nmk], [2000, ['T1']], 'lėšas viršijantis ir neatitinkantis į vidurkį neįskaičiuojami');
+    lygu(A.sumos({ pozicijos: [{ kiekis: 3 }, { kiekis: 0.5 }] }, { pvm: true, eilutes: [{ i: 0, ikainis: 0.335 }, { i: 1, ikainis: 2.01 }] }, 0.21), { eilutes: [{ i: 0, ikainis: 0.335, suma: 1.01, pastaba: '' }, { i: 1, ikainis: 2.01, suma: 1.01, pastaba: '' }], truksta: 0, viso: 2.02, pvmSuma: 0.42, suPvm: 2.44 }, 'apvalinimas');
+  });
+
+  await testas('Laikas: Lietuvos laikas -> UTC žiemą ir vasarą, neegzistuojantis laikas - tuščia; „liko“ tekstai', async () => {
+    lygu([A.vilniausIUtc('2026-12-03T14:00'), A.vilniausIUtc('2026-07-01T14:00')], ['2026-12-03T12:00:00Z', '2026-07-01T11:00:00Z'], 'žiema ir vasara');
+    lygu([A.vilniausIUtc('2026-03-29T03:30'), A.vilniausIUtc('2026-02-30T10:00'), A.vilniausIUtc('rytoj')], ['', '', ''], 'neegzistuojantis laikas ir data');
+    lygu([A.utcIVilniaus('2026-12-03T12:00:00Z'), A.rodykLaika('2026-07-01T11:00:00Z')], ['2026-12-03T14:00', '2026-07-01 14:00'], 'atgal');
+    const d = new Date('2026-12-01T10:00:00Z');
+    lygu([A.liko('2026-12-03T10:00:00Z', d).tekstas, A.liko('2026-12-22T10:00:00Z', d).tekstas, A.liko('2026-12-02T09:00:00Z', d).tekstas, A.liko('2026-12-01T10:20:00Z', d).tekstas, A.liko('2026-12-01T10:00:00Z', d).praejo, A.liko('2026-12-03T10:00:00Z', d, 'en').tekstas],
+      ['liko 2 dienos', 'liko 21 diena', 'liko 23 val.', 'liko 20 min.', true, '2 days left'], 'liko');
+  });
+
+  await testas('Žurnalo grandinė: nepakeistas žurnalas sutampa; pakeistas, pašalintas ar sukeistas įrašas randamas', async () => {
+    const z = []; for (const [i, d] of [['paskelbta', 'a'], ['gauta', 'b'], ['atverta', 'c'], ['sprendimas', 'd']]) z.push(await A.zurnaloIrasas(z[z.length - 1] || null, i, d, '2026-12-01T10:00:0' + z.length + 'Z'));
+    lygu(await A.tikrinkZurnala(z), { ok: true }, 'nepakeistas');
+    const k = () => JSON.parse(JSON.stringify(z));
+    let x = k(); x[1].detales = 'pakeista'; lygu(await A.tikrinkZurnala(x), { ok: false, vieta: 1 }, 'pakeistas tekstas');
+    x = k(); x[2].laikas = '2026-12-01T09:00:00Z'; lygu(await A.tikrinkZurnala(x), { ok: false, vieta: 2 }, 'pakeistas laikas');
+    x = k(); x.splice(1, 1); lygu(await A.tikrinkZurnala(x), { ok: false, vieta: 1 }, 'pašalintas įrašas');
+    x = k(); x.reverse(); tiesa(!(await A.tikrinkZurnala(x)).ok, 'sukeista tvarka');
+  });
+
+  /* ---------- iniciatoriaus vaizdai ---------- */
+  await testas('Formos pasirinkime - apklausos kortelė; ji atveria apklausų sąrašą, „Pažymų formos“ grąžina atgal ir fokusą į antraštę; pažymų kortelės lieka', async () => {
+    U.naudokSaugykla(atm()); U.atnaujinkKortele();
+    const kort = q('#ea-kortele button.ea-kvietimas');
+    tiesa(kort && /Elektroninė apklausa/.test(kort.textContent) && /15 000 Eur be PVM/.test(kort.textContent), 'kortelė');
+    tiesa(kort.getAttribute('aria-label').indexOf('Elektroninė apklausa') === 0, 'pavadinimas prasideda matomu tekstu');
+    lygu(qa('#form-selector .form-card').length, 2, 'pažymų formų kortelės');
+    kort.click(); await kol(() => !q('#ea-vieta').hidden);
+    lygu([q('#ea-vieta h2').textContent, q('#form-selector').style.display, /Apklausų dar nėra/.test(q('#ea-vieta').textContent)], ['Elektroninės apklausos', 'none', true], 'tuščias sąrašas');
+    q('[data-veiksmas="eaUzdaryk"]').click(); await kol(() => q('#ea-vieta').hidden);
+    lygu([q('#form-selector').style.display, D.activeElement && D.activeElement.tagName], ['block', 'H2'], 'grįžus');
+  });
+
+  await testas('Nauja apklausa: neužpildžius - klaidų sąrašas su nuorodomis; vertė virš 15 000 Eur - neleidžiama, iki 5 000 Eur - pažyma nepildoma; virš 5 000 Eur ir mažiau kaip 3 tiekėjai - reikia priežasties', async () => {
+    U.naudokSaugykla(atm()); await U.rodyk('registras');
+    q('[data-veiksmas="eaNauja"]').click(); await kol(() => q('#ea-pav'));
+    q('[data-veiksmas="eaSkelbk"]').click(); await laukti(60);
+    const kl = () => qa('#ea-klaidos li').map(x => x.textContent);
+    tiesa(kl().length >= 6 && kl().some(x => /pavadinimas/.test(x)) && kl().some(x => /Pozicijos/.test(x)) && kl().some(x => /vertė/.test(x)) && kl().some(x => /terminas/.test(x)) && kl().some(x => /Tiekėjai/.test(x)), 'klaidos: ' + kl().join(' | '));
+    tiesa(D.activeElement === q('#ea-klaidos'), 'fokusas - klaidų sąraše');
+    lygu(q('#ea-pav').getAttribute('aria-invalid'), 'true', 'laukas pažymėtas');
+    qa('#ea-klaidos a')[0].click(); tiesa(D.activeElement === q('#ea-pav'), 'nuoroda veda į lauką');
+    rasyk(q('#ea-verte'), '15 000,01'); turi(q('#ea-vertes-pastaba').textContent, 'viršija 15 000 Eur', 'virš ribos');
+    rasyk(q('#ea-verte'), '15000'); turi(q('#ea-vertes-pastaba').textContent, 'galima vykdyti', 'lygiai 15 000');
+    rasyk(q('#ea-verte'), '5000'); turi(q('#ea-vertes-pastaba').textContent, 'pažyma tokios vertės pirkimui nepildoma', 'lygiai 5 000');
+    rasyk(q('#ea-verte'), '5000,01'); turi(q('#ea-vertes-pastaba').textContent, 'ne mažiau kaip į 3 tiekėjus', 'virš 5 000');
+    rasyk(q('#ea-verte'), 'apie 8 tūkst.'); turi(q('#ea-vertes-pastaba').textContent, 'turi būti skaičius', 'žodžiai');
+    // užpildoma, bet tik 2 tiekėjai ir bloga pozicija
+    rasyk(q('#ea-pav'), 'Kėdžių pirkimas'); rasyk(q('#ea-verte'), '8 500');
+    const tr = q('#ea-poz tbody tr'); rasyk(tr.querySelector('[data-p="pav"]'), 'Kėdė'); rasyk(tr.querySelector('[data-p="kiekis"]'), 'dvylika');
+    rasyk(q('#ea-terminas'), A.utcIVilniaus(iso(3 * 864e5)));
+    turi(q('#ea-termino-pastaba').textContent, 'liko 2 dienos', 'termino pastaba');
+    const tk = qa('#ea-tk tbody tr');
+    rasyk(tk[0].querySelector('[data-t="pav"]'), 'UAB A'); rasyk(tk[0].querySelector('[data-t="pastas"]'), 'a@a.example');
+    rasyk(tk[1].querySelector('[data-t="pav"]'), 'UAB B'); rasyk(tk[1].querySelector('[data-t="pastas"]'), 'A@a.example');
+    rasyk(q('#ea-kvardas'), 'Vardenis Pavardenis'); rasyk(q('#ea-kpastas'), 'vardenis@litgrid.example');
+    q('[data-veiksmas="eaSkelbk"]').click(); await laukti(60);
+    tiesa(kl().some(x => /kiekio, didesnio už nulį/.test(x)) && kl().some(x => /tas pats el. pašto adresas/.test(x)), 'kiekis ir pasikartojantis paštas: ' + kl().join(' | '));
+    lygu(q('#ea-poz [data-p="kiekis"]').value, 'dvylika', 'neteisinga reikšmė perpiešus nedingsta');
+    rasyk(q('#ea-poz [data-p="kiekis"]'), '12'); rasyk(qa('#ea-tk tbody tr')[1].querySelector('[data-t="pastas"]'), 'b@b.example');
+    q('[data-veiksmas="eaSkelbk"]').click(); await laukti(60);
+    lygu(kl(), ['Tiekėjai: kviečiate mažiau kaip 3 - nurodykite kodėl (Aprašo 27.2.1 p.)'], 'priežastis privaloma');
+    tiesa(q('#ea-maz') && q('#ea-maz').getAttribute('aria-invalid') === 'true', 'priežasties laukas');
+    rasyk(q('#ea-terminas'), A.utcIVilniaus(iso(-36e5))); rasyk(q('#ea-maz'), 'Rinkoje tik du tiekėjai');
+    q('[data-veiksmas="eaSkelbk"]').click(); await laukti(60);
+    lygu(kl(), ['Pasiūlymų terminas: laikas jau praėjęs'], 'praėjęs terminas');
+    lygu(U.skaitykVisas().length, 0, 'kol klaidos - niekas neįrašoma');
+    rasyk(q('#ea-terminas'), A.utcIVilniaus(iso(3 * 864e5)));
+    q('[data-veiksmas="eaSkelbk"]').click(); await kol(() => U.skaitykVisas().length === 1);
+    const a = U.skaitykVisas()[0];
+    lygu([a.busena, a.tiekejai.length, a.vidaus.mazaiTiekeju, a.vidaus.verte, /^[0-9a-f]{64}$/.test(a.antspaudas), a.zurnalas.map(e => e.ivykis)], ['paskelbta', 2, 'Rinkoje tik du tiekėjai', 8500, true, ['paskelbta']], 'paskelbta');
+    await kol(() => q('.ea-hero h2')); lygu(q('.ea-hero h2').textContent, 'Kėdžių pirkimas', 'atvertas apklausos vaizdas');
+  });
+
+  await testas('Pozicijos iš „Excel“: įklijuotos eilutės tampa pozicijomis (eilės numeris praleidžiamas, kiekis - skaičius, mato vienetas - trumpas tekstas)', async () => {
+    lygu(U.pozIsTeksto('1\tBiuro kėdė\t12\tvnt.\n2.\tPristatymas ir surinkimas\tkompl.\t1\n\nStalas\t2,5\n').map(p => [p.pav, p.kiekis, p.mat]),
+      [['Biuro kėdė', 12, 'vnt.'], ['Pristatymas ir surinkimas', 1, 'kompl.'], ['Stalas', 2.5, '']], 'atpažinimas');
+    U.naudokSaugykla(atm()); await U.rodyk('registras'); q('[data-veiksmas="eaNauja"]').click(); await kol(() => q('#ea-poz'));
+    const dt = new W.DataTransfer(); dt.setData('text', 'Kėdė\t12\tvnt.\nStalas\t3\tvnt.');
+    q('#ea-poz input').dispatchEvent(new W.ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); await laukti(60);
+    lygu(qa('#ea-poz tbody tr').map(tr => tr.querySelector('[data-p="pav"]').value + ' ' + tr.querySelector('[data-p="kiekis"]').value), ['Kėdė 12', 'Stalas 3'], 'lentelė');
+  });
+
+  await testas('Kvietimai: kiekvienam tiekėjui - atskira nuoroda su jo žetonu ir kalba; nuorodoje nėra numatomos vertės, lėšų ir kitų tiekėjų; laiškas - tiekėjo adresu, su terminu ir antspaudu', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ lesos: 9000 }); await U.rodyk('apklausa', a.id);
+    const N = U.busenaS().nuorodos;
+    for (const [i, t] of a.tiekejai.entries()) {
+      const n = N[t.t]; tiesa(n && /pasiulymas\.html#k=g[01]\./.test(n.nuoroda), 'nuoroda ' + i);
+      const obj = await A.iskoduok(A.isSarvo(n.nuoroda)[0].kodas), f = A.kvietimoForma(obj);
+      lygu([f.ok, f.kvietimas.t, f.kvietimas.kalba, f.kvietimas.tiekejas.pav], [true, t.t, t.kalba, t.pav], 'kvietimas ' + i);
+      lygu(await A.antspaudas(A.bendra(f.kvietimas)), a.antspaudas, 'antspaudas kaip iniciatoriaus ' + i);
+      const js = JSON.stringify(obj);
+      tiesa(!/8500|9000|verte|lesos|IT skyrius/.test(js), 'vidaus duomenų nuorodoje nėra');
+      a.tiekejai.filter(x => x.t !== t.t).forEach(x => tiesa(js.indexOf(x.pav) < 0 && js.indexOf(x.pastas) < 0 && js.indexOf(x.t) < 0, 'kito tiekėjo duomenų nėra'));
+      tiesa(n.mailto.indexOf('mailto:' + encodeURIComponent(t.pastas) + '?subject=') === 0, 'laiško adresas');
+      turi(n.laiskas.tekstas, A.trumpas(a.antspaudas), 'antspaudas laiške'); turi(n.laiskas.tekstas, A.rodykLaika(a.kvietimas.terminas), 'terminas laiške');
+    }
+    turi(N[a.tiekejai[2].t].laiskas.tema, 'Request for quotation', 'angliškas laiškas');
+    turi(N[a.tiekejai[0].t].laiskas.tema, 'Kvietimas pateikti pasiūlymą', 'lietuviškas laiškas');
+    // išsiuntimo žyma
+    const b0 = U.gauk(a.id); b0.tiekejai[0].issiusta = ''; U.issaugok(b0); await U.rodyk('apklausa', a.id);
+    turi(q('#ea-kas-toliau').textContent, 'Neišsiųsta: 1 iš 3', 'kas toliau');
+    const m = q('[data-veiksmas="eaIssiusta"][aria-pressed="false"]'); m.click(); await kol(() => U.gauk(a.id).tiekejai.every(t => t.issiusta));
+    await kol(() => /Laukiama pasiūlymų/.test(q('#ea-kas-toliau').textContent));
+    lygu(U.gauk(a.id).zurnalas.map(e => e.ivykis), ['paskelbta', 'issiusta'], 'žurnalas');
+    tiesa(D.activeElement && D.activeElement.getAttribute('data-veiksmas') === 'eaIssiusta', 'fokusas lieka ant mygtuko');
+  });
+
+  await testas('Pasiūlymų įkėlimas: cituotas laiškas ir keli laiškai iš karto; kitos apklausos, kito kvietimo ir nežinomo tiekėjo pasiūlymas atmetamas su priežastimi; tas pats - „jau įkeltas“, naujesnis pakeičia; kainos nerodomos ir neįrašomos, kol neatverta', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk(), kita = await kurk({ pav: 'Kita apklausa' }); await U.rodyk('apklausa', a.id);
+    const p0 = await pasiulymas(a, 0, [125.5, 80]), p1 = await pasiulymas(a, 1, [119, 150]), p2 = await pasiulymas(a, 2, [99, 20]);
+    const ikelk = async (t) => { rasyk(q('#ea-laisko-tekstas'), t); q('[data-veiksmas="eaIkelk"]').click(); await laukti(250); return q('#ea-ikelimo-rez').textContent; };
+    turi(await ikelk('Laba diena, siunčiu pasiūlymą'), 'kodo tekste nerasta', 'be kodo');
+    turi(await ikelk((await pasiulymas(a, 0, [1, 1], { apklausa: kita.id, kvietimas: kita.antspaudas })).laiskas), 'skirtas kitai apklausai', 'kita apklausa');
+    turi(await ikelk((await pasiulymas(a, 0, [1, 1], { kvietimas: 'f'.repeat(64) })).laiskas), 'kvietimo antspaudas nesutampa', 'kitas kvietimas');
+    turi(await ikelk((await pasiulymas(a, 0, [1, 1], { t: 'ZZZZZZZZZZZZZZZZ' })).laiskas), 'nebuvo išduota nė vienam', 'nežinomas žetonas');
+    turi(await ikelk(p0.laiskas.replace(/[A-Za-z0-9_-]{40}\n-----END/, 'x\n-----END')), 'perskaityti nepavyko', 'sugadintas kodas');
+    lygu(U.gauk(a.id).pasiulymai.length, 0, 'klaidingi neįkelti');
+    turi(await ikelk('> Persiųsta:\n' + p0.laiskas.split('\n').map(e => '> ' + e).join('\r\n')), 'UAB „Baldų centras“: pasiūlymas įkeltas', 'cituotas');
+    const r2 = await ikelk(p1.laiskas + '\n\n' + p2.laiskas); turi(r2, 'UAB Kėdžių pasaulis: pasiūlymas įkeltas', 'du iš karto (1)'); turi(r2, 'Office Supplies OU: pasiūlymas įkeltas', 'du iš karto (2)');
+    turi(await ikelk(p0.laiskas), 'jau įkeltas', 'tas pats');
+    const nauj = await pasiulymas(a, 0, [120, 80], { pateikta: 60000 }), sen = await pasiulymas(a, 0, [300, 80], { pateikta: -9e6 });
+    turi(await ikelk(sen.laiskas), 'senesnis neįkeltas', 'senesnis');
+    turi(await ikelk(nauj.laiskas), 'pakeistas naujesniu', 'naujesnis');
+    const b = U.gauk(a.id);
+    lygu([b.pasiulymai.length, b.pasiulymai.every(p => p.duomenys === null), b.pasiulymai.find(p => p.t === a.tiekejai[0].t).h, b.pasiulymai.find(p => p.t === a.tiekejai[0].t).pakeista], [3, true, nauj.h, 1], 'saugykloje - tik kodai');
+    // net jei įraše atsirastų pasiūlymo turinys (pvz., iš apklausos bylos failo), neatvertos apklausos forma jo nepalieka
+    const su = JSON.parse(JSON.stringify(b)); su.pasiulymai[0].duomenys = await A.iskoduok(su.pasiulymai[0].kodas);
+    lygu(A.apklausosForma(su).pasiulymai[0].duomenys, null, 'neatvertos apklausos įraše pasiūlymo turinys nepaliekamas');
+    su.atverta = iso(0); su.busena = 'atverta';
+    lygu((A.apklausosForma(su).pasiulymai[0].duomenys || { eilutes: [] }).eilutes.length, 2, 'atvertos - paliekamas');
+    const tekstas = q('#ea-vieta').textContent;
+    tiesa(!/125[,.]5|1[\s ]?506|1[\s ]?520|119,00|Asmuo 1/.test(tekstas), 'kainų ir pasiūlymo turinio ekrane nėra');
+    turi(tekstas, A.trumpas(nauj.h), 'rodomas antspaudas');
+    turi(q('#ea-kas-toliau').textContent, 'Pasiūlymus pateikė visi kviesti tiekėjai', 'visi pateikė');
+    lygu(b.zurnalas.map(e => e.ivykis), ['paskelbta', 'gauta', 'gauta', 'gauta', 'pakeista'], 'žurnalas');
+  });
+
+  await testas('Terminas praėjęs: įkeliant būtina nurodyti laiško gavimo laiką (ne ateityje); po termino gautas pasiūlymas pažymimas ir nevertinamas; atverti anksčiau termino galima tik kai pasiūlymus pateikė visi', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ terminas: -2 * 36e5 }); await U.rodyk('apklausa', a.id);
+    turi(q('#ea-kas-toliau').textContent, 'Terminas praėjo, pasiūlymų neįkelta', 'kas toliau');
+    tiesa(q('#ea-gauta'), 'gavimo laiko laukas');
+    const p0 = await pasiulymas(a, 0, [100, 10], { pateikta: -3 * 36e5 }), p1 = await pasiulymas(a, 1, [90, 10], { pateikta: -36e5 });
+    rasyk(q('#ea-laisko-tekstas'), p0.laiskas); q('[data-veiksmas="eaIkelk"]').click(); await laukti(100);
+    turi(q('#ea-ikelimo-rez').textContent, 'Nurodykite, kada laiškas gautas', 'be laiko');
+    const beLaiko = await U.ikelkTeksta(p0.laiskas, '', a.id);
+    lygu([beLaiko.length, beLaiko[0].ok, /terminas jau praėjo/.test(beLaiko[0].tekstas), U.gauk(a.id).pasiulymai.length], [1, false, true, 0], 'be gavimo laiko neįkeliama ir kviečiant tiesiogiai');
+    rasyk(q('#ea-gauta'), A.utcIVilniaus(iso(36e5))); q('[data-veiksmas="eaIkelk"]').click(); await laukti(100);
+    turi(q('#ea-ikelimo-rez').textContent, 'negali būti ateityje', 'ateities laikas');
+    lygu(U.gauk(a.id).pasiulymai.length, 0, 'neįkelta');
+    rasyk(q('#ea-laisko-tekstas'), p0.laiskas); rasyk(q('#ea-gauta'), A.utcIVilniaus(iso(-3 * 36e5))); q('[data-veiksmas="eaIkelk"]').click(); await kol(() => U.gauk(a.id).pasiulymai.length === 1);
+    rasyk(q('#ea-laisko-tekstas'), p1.laiskas); rasyk(q('#ea-gauta'), A.utcIVilniaus(iso(-36e5))); q('[data-veiksmas="eaIkelk"]').click(); await kol(() => U.gauk(a.id).pasiulymai.length === 2);
+    turi(q('#ea-ikelimo-rez').textContent, 'GAUTAS PO TERMINO', 'pavėluotas');
+    lygu(U.gauk(a.id).pasiulymai.map(p => p.gautaKaip), ['nurodyta', 'nurodyta'], 'laiką nurodė iniciatorius');
+    tiesa(/laiką nurodė iniciatorius/.test(U.gauk(a.id).zurnalas[1].detales) && /po termino/.test(U.gauk(a.id).zurnalas[2].detales), 'žurnale');
+    lygu(await U.atverkPasiulymus(true), false, 'anksčiau termino - ne (ne visi pateikė)');
+    q('[data-veiksmas="eaAtverkPasiulymus"]').click(); await kol(() => U.gauk(a.id).busena === 'atverta');
+    const v = U.vertink(U.gauk(a.id));
+    lygu([v.eile, v.eilutes.map(e => e.busena)], [[a.tiekejai[0].t], ['tinkamas', 'pavėluotas', 'negautas']], 'pigesnis, bet pavėluotas - ne eilėje');
+    await kol(() => q('.ea-pas'));
+    turi(q('#ea-vieta').textContent, 'Gautas po termino - nevertinamas', 'ekrane');
+    lygu(q('#ea-laisko-tekstas'), null, 'atvėrus įkelti nebegalima');
+    // vykdoma apklausa, pateikė ne visi - atverti negalima nei anksčiau, nei įprastai
+    const c = await kurk(); await U.rodyk('apklausa', c.id);
+    const cp = await pasiulymas(c, 0, [1, 1]); rasyk(q('#ea-laisko-tekstas'), cp.laiskas); q('[data-veiksmas="eaIkelk"]').click(); await kol(() => U.gauk(c.id).pasiulymai.length === 1);
+    lygu([await U.atverkPasiulymus(true), await U.atverkPasiulymus(false), U.gauk(c.id).busena, q('[data-veiksmas="eaAtverkPasiulymus"]')], [false, false, 'paskelbta', null], 'kol terminas nepraėjo ir pateikė ne visi');
+  });
+
+  await testas('Sprendimas: be atitikties įvertinimo patvirtinti negalima; pigiausią pažymėjus neatitinkančiu reikia priežasties ir siūlomas kitas tiekėjas; patvirtinus - žurnale; sprendimą galima atšaukti; nutraukiant reikia priežasties', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ lesos: 1700 }); await U.rodyk('apklausa', a.id);
+    for (const [i, k] of [[125.5, 80], [119, 150], [60, 20]].entries()) { const p = await pasiulymas(a, i, k, { pvm: i !== 2 }); await U.ikelkTeksta(p.laiskas, '', a.id); }
+    lygu(await U.atverkPasiulymus(true, a.id), true, 'visi pateikė - atverta anksčiau');
+    lygu([U.gauk(a.id).atvertaAnksciau, U.gauk(a.id).pasiulymai.every(p => p.duomenys && p.duomenys.eilutes.length === 2)], [true, true], 'atverta');
+    await U.rodyk('apklausa', a.id);
+    lygu(qa('.ea-pas .ea-pas-pav').map(x => x.textContent), ['Office Supplies OU', 'UAB Kėdžių pasaulis', 'UAB „Baldų centras“'], 'eilė ekrane');
+    turi(q('#ea-sprendimas').textContent, 'Siūlomas laimėtojas: Office Supplies OU', 'siūlomas'); turi(q('#ea-sprendimas').textContent, 'Siūloma (nepatvirtinta)', 'žyma');
+    turi(q('.ea-pas[data-b="pirmas"]').textContent, 'Neįprastai maža kaina', 'neįprastai maža kaina');
+    q('[data-veiksmas="eaPatvirtink"]').click(); await laukti(200);
+    lygu(U.gauk(a.id).busena, 'atverta', 'be įvertinimo nepatvirtinama');
+    lygu(qa('#ea-sp-kliutys li').length, 3, 'trūksta trijų įvertinimų');
+    const t2 = a.tiekejai[2].t;
+    q('input[name="ea-at-' + t2 + '"][value="ne"]').click(); await kol(() => q('#ea-pr-' + t2));
+    tiesa(D.activeElement === q('#ea-pr-' + t2), 'fokusas - priežasties lauke');
+    turi(q('#ea-sprendimas').textContent, 'Siūlomas laimėtojas: UAB Kėdžių pasaulis', 'kitas siūlomas');
+    turi(q('#ea-sp-kliutys').textContent, 'įrašykite, kuo pasiūlymas neatitinka', 'reikia priežasties');
+    rasyk(q('#ea-pr-' + t2), 'Kėdė be porankių', 'change'); await laukti(80);
+    for (const t of [a.tiekejai[0].t, a.tiekejai[1].t]) { q('input[name="ea-at-' + t + '"][value="taip"]').click(); await kol(() => U.gauk(a.id).sprendimas.atitinka[t]); await laukti(60); }
+    lygu(q('#ea-sp-kliutys'), null, 'kliūčių nebėra');
+    rasyk(q('#ea-sp-pastaba'), 'Suderinta su vadovu');
+    q('[data-veiksmas="eaPatvirtink"]').click(); await kol(() => U.gauk(a.id).busena === 'ivertinta');
+    const b = U.gauk(a.id);
+    lygu([b.sprendimas.rezultatas, b.sprendimas.laimetojas, b.sprendimas.neatitinka[t2], b.sprendimas.pastaba, b.zurnalas[b.zurnalas.length - 1].ivykis], ['laimetojas', a.tiekejai[1].t, 'Kėdė be porankių', 'Suderinta su vadovu', 'sprendimas'], 'sprendimas');
+    turi(b.zurnalas[b.zurnalas.length - 1].detales, 'UAB Kėdžių pasaulis, 1 578,00 Eur be PVM'.replace(/ (?=\d{3})/, ' '), 'žurnalo įrašas');
+    await kol(() => /Sprendimas patvirtintas/.test(q('#ea-kas-toliau').textContent));
+    lygu(q('input[name^="ea-at-"]'), null, 'patvirtinus įvertinimo keisti nebegalima');
+    q('[data-veiksmas="eaKeiskSprendima"]').click(); await kol(() => U.gauk(a.id).busena === 'atverta');
+    lygu(U.gauk(a.id).zurnalas.slice(-1)[0].ivykis, 'atsaukta', 'atšaukimas žurnale');
+    await kol(() => q('[data-veiksmas="eaNutrauk"]'));
+    W.prompt = () => '   '; q('[data-veiksmas="eaNutrauk"]').click(); await laukti(100); lygu(U.gauk(a.id).busena, 'atverta', 'be priežasties nenutraukiama');
+    W.prompt = () => null; q('[data-veiksmas="eaNutrauk"]').click(); await laukti(100); lygu(U.gauk(a.id).busena, 'atverta', 'atsisakius nenutraukiama');
+    W.prompt = () => 'Poreikio nebeliko'; q('[data-veiksmas="eaNutrauk"]').click(); await kol(() => U.gauk(a.id).busena === 'nutraukta');
+    lygu([U.gauk(a.id).sprendimas.rezultatas, U.gauk(a.id).sprendimas.pastaba], ['nutraukta', 'Poreikio nebeliko'], 'nutraukta');
+    // visi neatitinka -> atmesta; negauta
+    const c = await kurk({ tk: TK.slice(0, 1), verte: 4000 }); await U.ikelkTeksta((await pasiulymas(c, 0, [10, 10])).laiskas, '', c.id); await U.atverkPasiulymus(true, c.id);
+    const c1 = U.gauk(c.id); c1.sprendimas.neatitinka[c.tiekejai[0].t] = 'ne tas modelis'; U.issaugok(c1); await U.rodyk('apklausa', c.id);
+    lygu(q('[data-veiksmas="eaPatvirtink"]').textContent, 'Patvirtinti: visi pasiūlymai atmesti', 'mygtukas');
+    lygu([await U.patvirtink(c.id), U.gauk(c.id).sprendimas.rezultatas], [true, 'atmesta'], 'atmesta');
+    const d = await kurk({ terminas: -1000 }); await U.rodyk('apklausa', d.id);
+    q('[data-veiksmas="eaNegauta"]').click(); await kol(() => U.gauk(d.id).busena === 'ivertinta');
+    lygu(U.gauk(d.id).sprendimas.rezultatas, 'negauta', 'pasiūlymų negauta');
+  });
+
+  await testas('Pažyma: 1 priedo forma užpildoma iš apklausos (objektas, vertė, būdas, kviesti tiekėjai, pasiūlymai su įvertinimu, scenarijus, laimėtojas ir kaina); „Kita informacija“ sako, kad eilę sudarė taisyklės, ne DI; iki 5 000 Eur - pažyma nepildoma', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ lesos: 9000 });
+    for (const [i, k] of [[125.5, 80], [119, 150], [99, 20]].entries()) await U.ikelkTeksta((await pasiulymas(a, i, k, { pvm: i !== 2 })).laiskas, '', a.id);
+    lygu(await U.atverkPasiulymus(true, a.id), true, 'atverta');
+    const a1 = U.gauk(a.id); a1.sprendimas.neatitinka[a.tiekejai[2].t] = 'Kėdė be porankių'; a1.sprendimas.atitinka[a.tiekejai[0].t] = true; a1.sprendimas.atitinka[a.tiekejai[1].t] = true; U.issaugok(a1);
+    lygu(await U.patvirtink(a.id), true, 'patvirtinta');
+    await U.rodyk('apklausa', a.id);
+    turi(q('#ea-kas-toliau').textContent, 'Pažyma (1 priedas) užpildoma iš apklausos duomenų', 'virš 5 000 Eur');
+    q('[data-veiksmas="eaPazyma"]').click(); await kol(() => q('#pirkimo-pavadinimas') && q('#pirkimo-pavadinimas').value);
+    await laukti(200);
+    const f = (id) => q('#' + id).value;
+    lygu([f('pirkimo-pavadinimas'), f('verte-be-pvm'), f('verte-su-pvm'), f('lesos-be-pvm'), f('bvpz-kodas'), f('pirkimo-budas'), f('vertinimo-kriterijus'), f('ini-padalinys'), f('ini-pareigos'), f('ini-vardas'), f('kviesta-skaicius')],
+      ['Biuro kėdžių pirkimas', '8500', '10285', '9000', '39112000-0', 'Neskelbiama apklausa raštu', 'Kaina', 'IT skyrius', 'Specialistas', 'Vardenis Pavardenis', '3'], 'laukai');
+    lygu(f('kviesti-tiekejai'), 'UAB „Baldų centras“, UAB Kėdžių pasaulis, Office Supplies OU', 'kviesti tiekėjai');
+    lygu(qa('#pasiulymu-tbody tr').map(tr => ['tiekejas', 'kainaBePvm', 'kainaSuPvm', 'pasiulVert', 'neatitikimas'].map(n => tr.querySelector('[data-field="' + n + '"]').value)),
+      [['UAB „Baldų centras“', '1586', '1919.06', 'Atitinka', ''], ['UAB Kėdžių pasaulis', '1578', '1909.38', 'Atitinka', ''], ['Office Supplies OU', '1208', '1208', 'Neatitinka', 'Kėdė be porankių']], 'pasiūlymų lentelė');
+    tiesa(qa('#pasiulymu-tbody [data-field="kainaSuPvm"]').every(e => e.dataset.ranka === '1'), 'kainos neperskaičiuojamos (ne PVM mokėtojo kaina lieka)');
+    lygu([f('sprendimo-scenarijus'), f('laimetojas'), f('sutarties-be-pvm'), (q('input[name="atliekamas"]:checked') || {}).value], ['sutartis', 'UAB Kėdžių pasaulis', '1578', 'El. paštu'], 'sprendimas formoje');
+    const kita = f('kita-info');
+    for (const d of ['elektronine apklausa', a.id, A.trumpas(a.antspaudas), 'dirbtinis intelektas nenaudotas', 'Pasiūlymų antspaudai', 'anksčiau termino']) turi(kita, d, 'kita informacija');
+    tiesa(a.tiekejai.every(t => kita.indexOf(t.t) < 0), 'žetonų pažymoje nėra');
+    lygu([q('#ea-vieta').hidden, q('#form-container').style.display, U.gauk(a.id).busena, U.gauk(a.id).zurnalas.slice(-1)[0].ivykis], [true, 'block', 'uzbaigta', 'pazyma'], 'vaizdai ir būsena');
+    turi(q('#draft-info').textContent, a.id, 'pažymos juostoje - apklausos numeris');
+    W.goBackToSelector(); await laukti(60);
+    turi(q('#ea-kortele').textContent, 'Apklausų šioje naršyklėje: 1', 'grįžus kortelė atnaujinta');
+    // iki 5 000 Eur
+    const m = await kurk({ verte: 5000, tk: TK.slice(0, 1) }); await U.ikelkTeksta((await pasiulymas(m, 0, [10, 10])).laiskas, '', m.id); await U.atverkPasiulymus(true, m.id);
+    const m1 = U.gauk(m.id); m1.sprendimas.atitinka[m.tiekejai[0].t] = true; U.issaugok(m1); await U.patvirtink(m.id); await U.rodyk('apklausa', m.id);
+    turi(q('#ea-kas-toliau').textContent, 'pirkimo pažyma nepildoma (Aprašo 12 p.)', 'iki 5 000 Eur');
+    lygu(U.pazymosDuomenys(U.gauk(m.id)).fields.sprendimoScenarijus, 'vienas-tiekejas', 'vienas tiekėjas');
+  });
+
+  await testas('Nepatikimas tekstas (tiekėjo pavadinimas, pastabos, pirkimo pavadinimas su HTML) visur rodomas kaip tekstas - sąraše, kvietimuose, vertinime, žurnale ir pažymoje', async () => {
+    U.naudokSaugykla(atm()); W.__EAX = 0;
+    const X = '<img src=x onerror="window.__EAX=1">';
+    const a = await kurk({ pav: 'Kėdės ' + X, tk: [['UAB ' + X, 'x@x.example', 'lt']], poz: [{ pav: 'Kėdė ' + X, mat: 'vnt.', kiekis: 1, pastaba: X }] });
+    await U.rodyk('registras'); tiesa(!q('#ea-vieta img'), 'sąraše');
+    await U.rodyk('apklausa', a.id); tiesa(!q('#ea-vieta img'), 'kvietimuose');
+    await U.ikelkTeksta((await pasiulymas(a, 0, [10], { pav: 'UAB ' + X, pastabos: X, pastaba: X })).laiskas, '', a.id); await U.atverkPasiulymus(true, a.id); await U.rodyk('apklausa', a.id);
+    qa('#ea-vieta details').forEach(d => { d.open = true; });
+    tiesa(!q('#ea-vieta img') && q('#ea-vieta').textContent.indexOf(X) >= 0, 'vertinime - tekstu');
+    const a1 = U.gauk(a.id); a1.sprendimas.neatitinka[a.tiekejai[0].t] = X; U.issaugok(a1); await U.patvirtink(a.id); await U.rodyk('apklausa', a.id);
+    q('[data-veiksmas="eaPazyma"]').click(); await kol(() => q('#pirkimo-pavadinimas') && q('#pirkimo-pavadinimas').value); await laukti(200);
+    tiesa(!q('#form-container img[src="x"]') && !q('#ea-vieta img'), 'pažymoje');
+    await laukti(100); lygu(W.__EAX, 0, 'kodas neįvykdytas');
+    W.goBackToSelector();
+  });
+
+  await testas('Apklausos byla ir sąrašas: byla atsisiunčiama ir įkeliama kitoje naršyklėje su vientisumo patikra; pakeistas pasiūlymas, kvietimas ar žurnalas randamas; svetimas failas atmetamas; CSV langeliai su „=“ apsaugoti', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ pav: '=SUM(A1:A9)' });
+    for (const [i, k] of [[125.5, 80], [119, 150], [99, 20]].entries()) await U.ikelkTeksta((await pasiulymas(a, i, k)).laiskas, '', a.id);
+    lygu(await U.atverkPasiulymus(true, a.id), true, 'atverta');
+    const b = U.gauk(a.id), failas = JSON.stringify(A.byla(b));
+    lygu((await A.patikra(b)), { kvietimas: true, pasiulymai: b.pasiulymai.map(p => ({ t: p.t, ok: true })), zurnalas: true, zurnaloVieta: null, ok: true }, 'nepakeista');
+    const keisk = async (f) => { const x = JSON.parse(failas).apklausa; f(x); const r = A.isBylos(JSON.stringify({ formatas: A.BYLOS_FORMATAS, versija: 1, apklausa: x })); return r.ok ? await A.patikra(r.apklausa) : r; };
+    let r = await keisk(x => { x.pasiulymai[0].duomenys.eilutes[0].ikainis = 1; }); tiesa(r.ok === false && r.pasiulymai[0].ok === false && r.pasiulymai[1].ok === true, 'pakeista atverto pasiūlymo kaina');
+    r = await keisk(x => { x.kvietimas.pozicijos[0].kiekis = 99; }); tiesa(r.ok === false && r.kvietimas === false, 'pakeistas kvietimas');
+    r = await keisk(x => { x.zurnalas[1].detales = 'kita'; }); tiesa(r.ok === false && r.zurnalas === false && r.zurnaloVieta === 1, 'pakeistas žurnalas');
+    r = await keisk(x => { x.pasiulymai[1].kodas = x.pasiulymai[2].kodas; }); tiesa(r.ok === false && r.pasiulymai[1].ok === false, 'sukeisti kodai');
+    for (const [t, kl] of [['ne json', 'json'], ['{"formatas":"kitas"}', 'formatas'], [JSON.stringify({ formatas: A.BYLOS_FORMATAS, versija: 2 }), 'versija'], [JSON.stringify({ formatas: A.BYLOS_FORMATAS, versija: 1, apklausa: { id: 'x' } }), 'forma']])
+      lygu(A.isBylos(t).klaida, kl, 'atmetama: ' + kl);
+    const sv = JSON.parse(failas); sv.apklausa.svetimas = 1; sv.apklausa.pasiulymai[0].svetimas = 1; sv.apklausa.tiekejai[0].t = 'blogas';
+    const rs = A.isBylos(JSON.stringify(sv)); tiesa(rs.ok && !('svetimas' in rs.apklausa) && rs.apklausa.tiekejai.length === 2 && rs.apklausa.pasiulymai.length === 2, 'nežinomi laukai ir netinkamas tiekėjas neperkeliami');
+    // kitoje naršyklėje
+    U.naudokSaugykla(atm());
+    lygu(await U.ikelkByla(failas, 'byla.json'), true, 'įkelta');
+    lygu([U.gauk(a.id).importuota, U.gauk(a.id).busena, U.vertink(U.gauk(a.id)).eile.length], ['byla.json', 'atverta', 3], 'įkelta apklausa');
+    await kol(() => q('#ea-zr-h')); q('#ea-zr-h').parentElement.open = true;
+    turi(q('#ea-vieta').textContent, 'Vientisumo patikra: neatitikimų nerasta', 'patikros rezultatas');
+    lygu(await U.ikelkByla('{"formatas":"kitas"}', 'x.json'), false, 'svetimas failas');
+    const csv = U.csv();
+    tiesa(csv.charCodeAt(0) === 0xFEFF && /;'=SUM\(A1:A9\);/.test(csv) && csv.split('\r\n')[0].split(';').length === 13, 'CSV: ' + csv.slice(0, 200));
+  });
+
+  await testas('Saugykla: neperskaitomas apklausų įrašas neperrašomas ir sakoma kodėl; neatpažintos apklausos paliekamos; juodraštis išsaugomas ir atveriamas', async () => {
+    const s = atm(); s.setItem(U.RAKTAS, '{sugadinta'); U.naudokSaugykla(s);
+    await U.rodyk('registras');
+    turi(q('#ea-vieta').textContent, 'Apklausų įrašo perskaityti nepavyko', 'pranešimas');
+    const a = U.nauja(); a.kvietimas.pavadinimas = 'X'; lygu(U.issaugok(a), false, 'neįrašoma');
+    lygu(s.getItem(U.RAKTAS), '{sugadinta', 'įrašas nepakeistas');
+    const s2 = atm(); s2.setItem(U.RAKTAS, JSON.stringify({ schema: 1, apklausos: [{ id: 'blogas', kazkas: 1 }] })); U.naudokSaugykla(s2);
+    const j = U.nauja(); j.kvietimas.pavadinimas = 'Juodraštis A'; j.vidaus.verte = 3000; lygu(U.issaugok(j), true, 'įrašyta');
+    const rs = JSON.parse(s2.getItem(U.RAKTAS)).apklausos;
+    lygu([rs.length, rs.some(x => x.id === 'blogas' && x.kazkas === 1), U.skaitykVisas().length], [2, true, 1], 'neatpažinta apklausa palikta');
+    await U.rodyk('registras'); turi(q('#ea-vieta').textContent, 'Neperskaityta apklausų: 1', 'pasakoma');
+    q('.ea-ir').click(); await kol(() => q('#ea-pav'));
+    lygu([q('#ea-pav').value, q('#ea-verte').value, q('#ea-vieta h2').textContent], ['Juodraštis A', '3 000', 'Apklausos juodraštis'], 'juodraštis atvertas');
+    rasyk(q('#ea-pav'), 'Juodraštis B'); q('[data-veiksmas="eaJuodrastis"]').click(); await laukti(60);
+    lygu(U.gauk(j.id).kvietimas.pavadinimas, 'Juodraštis B', 'juodraštis išsaugotas');
+  });
+
+  await testas('Juodraščio įkėlimas po griežtos CSP: radijo mygtukų ir sąrašų pokyčių veiksmai paleidžiami (derybų ir sutarties formos blokai parodomi)', async () => {
+    U.naudokSaugykla(atm()); await U.rodyk('');
+    W.selectForm(2);
+    const matoma = (el) => !!el && W.getComputedStyle(el).display !== 'none';
+    const der = () => D.getElementById('derybos-section'), cpo = () => D.getElementById('cpo-pagrindimas-laukas');
+    tiesa(der() && !der().classList.contains('show') && !matoma(cpo()), 'pradžioje derybų dalis ir CPO pagrindimo laukas paslėpti');
+    W.loadFormData({ formNum: 2, fields: { pirkimoPavadinimas: 'X', cpoBusena: 'netinka' }, radios: { derybos: 'Vykdomos', atliekamas: 'CVP IS' }, rows: {} });
+    tiesa(der().classList.contains('show'), 'derybos „Vykdomos“ - derybų dalis parodyta');
+    lygu(D.getElementById('pasiulymu-heading').textContent, '1 lentelė. Gauti pirminiai pasiūlymai', 'lentelės pavadinimas pagal derybas');
+    tiesa(matoma(cpo()), 'CPO pagrindimo laukas parodytas');
+    tiesa(D.getElementById('cvpis-nr-container').classList.contains('show'), 'CVP IS numerio laukas parodytas');
+    W.goBackToSelector();
+  });
+
+  /* ---------- tiekėjo puslapis ---------- */
+  const tr = document.createElement('iframe'); tr.style.cssText = 'width:1000px;height:700px;border:0;position:absolute;left:-9999px';
+  document.body.appendChild(tr);
+  const atverkTiekeja = async (hash) => {
+    await new Promise(r => { tr.onload = r; tr.src = 'pasiulymas.html?n=' + Math.random().toString(36).slice(2) + (hash || ''); });
+    const w = tr.contentWindow; await kol(() => w.GP_PASIULYMAS && w.document.querySelector('#pslTurinys').children.length > 0);
+    return w;
+  };
+
+  await testas('Tiekėjo puslapis: be nuorodos - prašoma įklijuoti; sugadinta nuoroda - klaida; įklijavus tikrą - kvietimas parodomas; tekstas iš nuorodos rodomas tik kaip tekstas; puslapis be noindex neskelbiamas paieškai', async () => {
+    U.naudokSaugykla(atm());
+    const X = '<img src=x onerror="window.__PX=1">';
+    const a = await kurk({ pav: 'Kėdės ' + X }); await U.paruoskNuorodas(a);
+    const nuoroda = U.busenaS().nuorodos[a.tiekejai[0].t].nuoroda;
+    let w = await atverkTiekeja(''), d = w.document;
+    tiesa(d.querySelector('#pslNuoroda') && !d.querySelector('#pslForma'), 'be nuorodos - įklijavimo laukas');
+    tiesa(/noindex/.test(d.querySelector('meta[name="robots"]').content), 'noindex');
+    d.querySelector('#pslNuoroda').value = nuoroda.slice(0, nuoroda.length - 30); d.querySelector('[data-veiksmas="pslAtverk"]').click();
+    await kol(() => d.querySelector('#pslTurinys [role="alert"]')); turi(d.querySelector('#pslTurinys [role="alert"]').textContent, 'perskaityti nepavyko', 'sugadinta nuoroda');
+    d.querySelector('#pslNuoroda').value = 'Laba diena, nuoroda: ' + nuoroda + ' (iki pasimatymo)'; d.querySelector('[data-veiksmas="pslAtverk"]').click();
+    await kol(() => d.querySelector('#pslForma'));
+    lygu([d.querySelector('.ea-hero h2').textContent, w.__PX, !!d.querySelector('#pslTurinys img')], ['Kėdės ' + X, undefined, false], 'kvietimas tekstu');
+    turi(d.querySelector('#pslTurinys').textContent, A.trumpas(a.antspaudas), 'kvietimo antspaudas kaip iniciatoriaus');
+    turi(d.querySelector('#pslTurinys').textContent, 'G-Procure netikrina, kas ją išsiuntė', 'pastaba apie kvietimo kilmę');
+    tiesa(!/8[\s ]?500|IT skyrius/.test(d.querySelector('#pslTurinys').textContent), 'numatomos vertės ir vidaus duomenų nėra');
+    w = await atverkTiekeja('#p=' + nuoroda.split('#k=')[1]); tiesa(w.document.querySelector('#pslNuoroda'), 'pasiūlymo kodas vietoje kvietimo nepriimamas');
+  });
+
+  await testas('Tiekėjo puslapis: sumos skaičiuojamos įvedant; neužpildžius - klaidos prie laukų ir sąraše; parengtas pasiūlymas - kodas su tomis pačiomis kainomis, antspaudas, laiškas kontaktiniam asmeniui; anglų kalba; praėjus terminui parengti negalima', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk(); await U.paruoskNuorodas(a);
+    const N = U.busenaS().nuorodos;
+    let w = await atverkTiekeja('#' + N[a.tiekejai[0].t].nuoroda.split('#')[1]), d = w.document;
+    const ras = (el, v, tipas) => { el.value = v; el.dispatchEvent(new w.Event(tipas || 'input', { bubbles: true })); };
+    await kol(() => d.querySelector('#pslForma'));
+    lygu([d.documentElement.lang, d.querySelector('#psl-pav').value, d.querySelector('#psl-pastas').value], ['lt', 'UAB „Baldų centras“', 'info@baldai.example'], 'tiekėjo duomenys iš kvietimo');
+    const ik = d.querySelectorAll('[data-ik]');
+    ras(ik[0], '125,5'); ras(ik[0], '125,5', 'change'); ras(ik[1], '1.080'); ras(ik[1], '1.080', 'change');
+    lygu([ik[0].value, ik[1].value, d.querySelector('[data-suma="0"]').textContent, d.querySelector('#pslSumBe').textContent.replace(/ /g, ' ')], ['125,50', '1 080,00', '1 506,00', '2 586,00 Eur'], 'sumos ir perskaityta reikšmė');
+    d.querySelector('[data-f="pvm"]').click();
+    lygu(d.querySelector('#pslSumSu').textContent.replace(/ /g, ' '), '3 129,06 Eur', 'su PVM');
+    ras(ik[1], 'nemokamai');
+    d.querySelector('[data-veiksmas="pslParenk"]').click(); await laukti(100);
+    const kl = [...d.querySelectorAll('#pslKlaidos li')].map(x => x.textContent);
+    tiesa(kl.length === 5 && /2\. Pristatymas: kaina turi būti skaičius/.test(kl[0]) && kl.some(x => /galioja/.test(x)) && kl.some(x => /kodas/.test(x)) && kl.some(x => /asmuo/.test(x)) && kl.some(x => /Patvirtinimai/.test(x)), 'klaidos: ' + kl.join(' | '));
+    lygu([ik[1].getAttribute('aria-invalid'), d.querySelector('#psl-galioja').getAttribute('aria-invalid'), w.GP_PASIULYMAS.busena().rezultatas], ['true', 'true', null], 'laukai pažymėti, pasiūlymas neparengtas');
+    ras(ik[1], '80'); ras(ik[1], '80', 'change'); ras(d.querySelector('#psl-galioja'), '30'); ras(d.querySelector('#psl-kodas'), '123456789'); ras(d.querySelector('#psl-asmuo'), 'Jonas Jonaitis');
+    d.querySelectorAll('#pslPatv input').forEach(c => c.click());
+    d.querySelector('[data-veiksmas="pslParenk"]').click(); await kol(() => w.GP_PASIULYMAS.busena().rezultatas);
+    const rz = w.GP_PASIULYMAS.busena().rezultatas;
+    turi(d.querySelector('#pslRzH').textContent, 'dar neišsiųstas', 'rezultato antraštė'); tiesa(d.activeElement === d.querySelector('#pslRzH'), 'fokusas - rezultate');
+    const f = A.pasiulymoForma(await A.iskoduok(A.isSarvo(rz.laiskas.tekstas)[0].kodas));
+    lygu([f.ok, f.pasiulymas.apklausa, f.pasiulymas.kvietimas, f.pasiulymas.t, f.pasiulymas.eilutes.map(e => e.ikainis), f.pasiulymas.pvm, f.pasiulymas.galioja, f.pasiulymas.tiekejas.asmuo, await A.antspaudas(f.pasiulymas)],
+      [true, a.id, a.antspaudas, a.tiekejai[0].t, [125.5, 80], true, 30, 'Jonas Jonaitis', rz.h], 'kodas laiške = pasiūlymas');
+    tiesa(!/125|1[\s ]?586|Jonas/.test(rz.laiskas.tekstas.split('-----BEGIN')[0]), 'kainų laiško tekste atviru tekstu nėra');
+    const nuor = d.querySelector('a[data-veiksmas="pslIssiusta"]');
+    tiesa(nuor && nuor.getAttribute('href').indexOf('mailto:' + encodeURIComponent('vardenis@litgrid.example') + '?subject=') === 0, 'laiškas kontaktiniam asmeniui');
+    turi(w.GP_PASIULYMAS.kopija(), '-----BEGIN G-PROCURE OFFER-----', 'kopijos faile - kodas'); turi(w.GP_PASIULYMAS.kopija(), '1 586,00', 'kopijos faile - suma');
+    // iniciatorius įkelia tą patį laišką
+    await U.rodyk('apklausa', a.id); lygu((await U.ikelkTeksta(rz.laiskas.tekstas)).map(x => x.ok), [true], 'iniciatorius įkelia');
+    lygu(U.gauk(a.id).pasiulymai[0].h, rz.h, 'antspaudas sutampa abiejose pusėse');
+    d.querySelector('[data-kalba="en"]').click(); await laukti(80);
+    lygu([d.documentElement.lang, d.querySelector('#pslRzH').textContent, /Quotation:/.test(w.GP_PASIULYMAS.busena().rezultatas.laiskas.tema)], ['en', 'The quotation is ready - not sent yet', true], 'anglų kalba');
+    d.querySelector('[data-veiksmas="pslKeisk"]').click(); await laukti(60);
+    lygu([d.querySelector('#pslForma').hidden, d.querySelector('[data-ik="0"]').value], [false, '125,50'], 'grįžus keisti - reikšmės lieka');
+    // angliškas kvietimas ir praėjęs terminas
+    w = await atverkTiekeja('#' + N[a.tiekejai[2].t].nuoroda.split('#')[1]); await kol(() => w.document.querySelector('#pslForma'));
+    lygu([w.document.documentElement.lang, /REQUEST FOR QUOTATION/.test(w.document.querySelector('.ea-hero').textContent)], ['en', true], 'kvietimo kalba - anglų');
+    const senas = await kurk({ terminas: -60000 }); await U.paruoskNuorodas(senas);
+    w = await atverkTiekeja('#' + U.busenaS().nuorodos[senas.tiekejai[0].t].nuoroda.split('#')[1]); await kol(() => w.document.querySelector('#pslForma'));
+    lygu([w.document.querySelector('[data-veiksmas="pslParenk"]').disabled, /terminas praėjo/.test(w.document.querySelector('#pslForma').textContent), await w.GP_PASIULYMAS.parenk()], [true, true, false], 'po termino');
+    // terminas praeina, kol tiekėjas pildo: užpildytas pasiūlymas nebeparengiamas (rėmelio laikrodis pasukamas į priekį)
+    w = await atverkTiekeja('#' + N[a.tiekejai[1].t].nuoroda.split('#')[1]); d = w.document; await kol(() => d.querySelector('#pslForma'));
+    d.querySelectorAll('[data-ik]').forEach(el => { ras(el, '10'); ras(el, '10', 'change'); }); ras(d.querySelector('#psl-galioja'), '30'); ras(d.querySelector('#psl-kodas'), '123456789'); ras(d.querySelector('#psl-asmuo'), 'Jonas Jonaitis');
+    d.querySelectorAll('#pslPatv input').forEach(c => c.click());
+    const TikraData = w.Date;
+    w.Date = class extends TikraData { constructor(...x) { if (x.length) super(...x); else super(TikraData.now() + 3 * 864e5); } static now() { return TikraData.now() + 3 * 864e5; } };
+    lygu([await w.GP_PASIULYMAS.parenk(), w.GP_PASIULYMAS.busena().rezultatas], [false, null], 'terminas praėjo pildant - užpildytas pasiūlymas neparengiamas');
+    turi(d.querySelector('#pslForma').textContent, 'terminas praėjo', 'forma tai pasako');
+    w.Date = TikraData;
+  });
+
+  tr.remove();
+  } finally { W.confirm = buvo.confirm; W.prompt = buvo.prompt; U.naudokSaugykla(null); try { await U.rodyk(''); } catch (e) {} }
+}
+
 async function paleisk() {
   document.getElementById('rezultatai').innerHTML = '';
   R.ok = 0; R.blogai = 0;
@@ -2072,6 +2611,9 @@ async function paleisk() {
       lygu(kviesta, 1, 'sutikus - generuojama');
     } finally { W.GP_VEDLYS = buvo.v; W.confirm = buvo.c; W.buildDocx = buvo.b; }
   });
+
+  /* ---------------- elektroninė apklausa (2026-11-26) ---------------- */
+  await testaiApklausa();
 
   /* ---------------- pabaiga ---------------- */
   document.getElementById('busena').textContent =

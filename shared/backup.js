@@ -28,6 +28,7 @@
     ["litgrid_pranesimai",       "PP-protocol",     { lt: "Pranešimai tiekėjams", en: "Notices to suppliers" }],
     ["litgrid_user_profile",     "PP-protocol",     { lt: "Naudotojo profilis", en: "User profile" }],
     ["litgrid_pirkimo_drafts",   "PP-report",       { lt: "Pažymų juodraščiai", en: "Report drafts" }],
+    ["gprocure.apklausos",       "PP-report",       { lt: "Elektroninės apklausos (kvietimai, pasiūlymai, sprendimai)", en: "Electronic requests for quotation (invitations, quotations, decisions)" }],
     ["litgrid_cba",              "PP-cost-benefit", { lt: "Kaštų ir naudos analizė", en: "Cost-benefit analysis" }],
     ["epsog_en_skaiciuokle",     "PP-cost-benefit", { lt: "Ekonominio naudingumo skaičiuoklė", en: "Economic benefit calculator" }],
     ["epsog_rinkos_kpi",         "PP-market-KPI",   { lt: "Rinkos rodikliai", en: "Market indicators" }],

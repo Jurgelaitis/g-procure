@@ -559,7 +559,7 @@ async function testaiSkydelis(){
      PP-teise turi savą sąžiningumo skydelį, admin.html - administravimo įrankis, PP-cost-benefit/index.html -
      dalių pasirinkimo puslapis su savo paaiškinimu. */
   await testas("Skiltis visuose modulių puslapiuose: bendras failas, vieta ir unikalus modulio ID; PP-plan vietinės kopijos nebėra", async ()=>{
-    const PUSLAPIAI = ["../PP-tiekejams/index.html", "../PP-carbon/index.html", "../PP-carbon/epd.html", "../PP-esg/index.html",
+    const PUSLAPIAI = ["../PP-tiekejams/index.html", "../PP-carbon/index.html", "../PP-carbon/epd.html", "../PP-report/pasiulymas.html", "../PP-esg/index.html",
       "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-plan/bvpz-kodai.html", "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
       "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-salygos/PP-SALYGOS.html",
       "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html", "../PP-cost-benefit/kastu_naudos_analize.html",
@@ -570,11 +570,14 @@ async function testaiSkydelis(){
       const src = await (await fetch(m + "?b=" + Date.now())).text();
       if (!/<script src="(\.\.\/)?shared\/gprocure-info-panel\.js"><\/script>/.test(src)) blogi.push(m + ": nejungia komponento");
       if (src.indexOf('id="infoPanelMount"') === -1) blogi.push(m + ": nėra #infoPanelMount");
-      const id = (src.match(/moduleId:\s*"([^"]+)"/) || [])[1];
+      // puslapis be įterptų skriptų (griežta CSP be maišų, pvz. tiekėjo pasiūlymo puslapis): skiltį jungia jo paties .js failas tame pačiame kataloge
+      let visas = src;
+      if (!/moduleId:\s*"/.test(src)) for (const sk of src.matchAll(/<script src="([a-z0-9-]+\.js)"><\/script>/g)) visas += "\n" + await (await fetch(m.replace(/[^/]+$/, "") + sk[1] + "?b=" + Date.now())).text();
+      const id = (visas.match(/moduleId:\s*"([^"]+)"/) || [])[1];
       if (!id) blogi.push(m + ": nėra moduleId"); else if (idai[id]) blogi.push(m + ": moduleId „" + id + "“ jau naudoja " + idai[id]); else idai[id] = m;
       if (/\.gpi-[a-z-]+\{/.test(src) || /class="gph-/.test(src)) blogi.push(m + ": savi skilties stiliai ar vietinė pagalbos kopija");
       // vieningas principas (naudotojo sprendimas 2026-10-21): skiltis visuose moduliuose pagal numatymą užverta - atveria naudotojas
-      if (/defaultOpen\s*:\s*true/.test(src)) blogi.push(m + ": skiltis atveriama pagal numatymą (defaultOpen: true)");
+      if (/defaultOpen\s*:\s*true/.test(visas)) blogi.push(m + ": skiltis atveriama pagal numatymą (defaultOpen: true)");
     }
     lygu(blogi, [], "puslapiai");
   });
@@ -753,7 +756,7 @@ const TEISE_FAILAI = [
   "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "taisykles.js", "parengtis.js", "privalomi-elementai.js", "sutarties-elementai.js", "proporcingumas.js", "kvalifikacija.js", "skelbimas.js", "palyginimas.js", "../PP-salygos/tikrinimas.js", "../PP-salygos/sutartys.js", "../PP-salygos/sutarties-blokas.js", "../PP-salygos/sutarciu-generatorius.js", "../PP-salygos/sutarties-forma.js", "../PP-salygos/kvalifikacijos-lentele.js", "../pirkimu-korteles.html",
   "../PP-protocol/LITGRID_Generatorius_v3.html",
   "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html",
-  "../PP-report/PP-report.html",
+  "../PP-report/PP-report.html", "../PP-report/apklausa.js", "../PP-report/apklausa-ui.js", "../PP-report/pasiulymas.js",
   "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
   "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
   "../CLAUDE.md"
@@ -1084,7 +1087,7 @@ async function testaiTeise(){
    telefone antraštė slenka, o skirtukai limpa prie viršaus (anksčiau PP-esg juos uždengdavo, PP-carbon - 71 px tarpas). */
 /* Nuo 2026-09-25 (Q1 „bendras apvalkalas“) - VISI modulių puslapiai. Išimtis: PP-teise/index.html turi savo tokio paties
    stiliaus antraštę su sąžiningumo skydeliu (antra stiliaus pertvarka, naudotojo patvirtinta 2026-09-25). */
-const ANTRASTES_PUSLAPIAI = ["../PP-tiekejams/index.html", "../PP-esg/index.html", "../PP-carbon/index.html", "../PP-carbon/epd.html",
+const ANTRASTES_PUSLAPIAI = ["../PP-tiekejams/index.html", "../PP-esg/index.html", "../PP-carbon/index.html", "../PP-carbon/epd.html", "../PP-report/pasiulymas.html",
   "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-plan/bvpz-kodai.html", "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
   "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-salygos/PP-SALYGOS.html", "../PP-cost-benefit/index.html",
   "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html", "../PP-cost-benefit/kastu_naudos_analize.html",
@@ -1110,9 +1113,12 @@ async function testaiAntraste(){
     const blogi = [];
     for (const m of ANTRASTES_PUSLAPIAI) {
       const src = await (await fetch(m + "?b=" + Date.now())).text();
-      const i = src.search(/<link rel="stylesheet" href="(\.\.\/)?shared\/modulio-antraste\.css" ?\/?>/), st = src.indexOf("<style");
+      // modulio stiliai - <style> arba (puslapyje be įterptų stilių) jo paties .css failas; imama pirmoji vieta
+      const i = src.search(/<link rel="stylesheet" href="(\.\.\/)?shared\/modulio-antraste\.css" ?\/?>/),
+        st = [src.indexOf("<style"), src.search(/<link rel="stylesheet" href="(?!(\.\.\/)?shared\/)[^"]+\.css"/)].filter(x => x !== -1).sort((x, y) => x - y)[0];
       if (i === -1) { blogi.push(m + ": nejungia shared/modulio-antraste.css"); continue; }
-      if (i > st) blogi.push(m + ": bendras failas turi būti prieš modulio <style>, kitaip modulio papildymai jo neperrašo");
+      if (st === undefined) blogi.push(m + ": nerasta modulio stilių (nei <style>, nei savo .css failo)");
+      else if (i > st) blogi.push(m + ": bendras failas turi būti prieš modulio <style>, kitaip modulio papildymai jo neperrašo");
       if (!/<header class="app-header"/.test(src)) blogi.push(m + ": nėra <header class=\"app-header\">");
       // Antraštės tilpimas (2026-09-29): skriptas iškart po </header> - pritaikoma prieš pirmą piešimą
       if (!/<\/header>\s*<script src="(\.\.\/)?shared\/modulio-antraste\.js"><\/script>/.test(src)) blogi.push(m + ": po </header> nėra <script src=\"shared/modulio-antraste.js\">");
@@ -5368,7 +5374,7 @@ const TELEFONO_PUSLAPIAI = {
   "../PP-cost-benefit/kastu_naudos_analize.html": ".tabs.no-print > .tab",
   "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html": ".tabbar .tab:not(a), .preview-tab",
   "../PP-protocol/LITGRID_Generatorius_v3.html": "", "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html": ".sidenav__btn",
-  "../PP-report/PP-report.html": "", "../PP-teise/index.html": ".vaizdai button, .vaizdai-kiti button", "../PP-teise/admin.html": ""
+  "../PP-report/PP-report.html": "", "../PP-report/pasiulymas.html": "", "../PP-teise/index.html": ".vaizdai button, .vaizdai-kiti button", "../PP-teise/admin.html": ""
 };
 // Būsenos, kurių skirtukai neatveria: vedlio žingsniai, pasirinkta forma, sugeneruotas grafikas (nieko neįrašo)
 /* PP-negotiation (2026-10-06): būsenos su įkainiais - „Tiekėjai ir pasiūlymai“ (kortelės su įkėlimo zonomis), įkainių matrica su
@@ -6394,7 +6400,68 @@ const DI_FUNKCIJU_BUSENA = ["DI funkcijų sąrašas: atverti visi įrankiai (202
   const g = d.querySelectorAll("details.dif"); if (!g.length) throw new Error("DI funkcijų sąrašas nenupieštas");
   g.forEach(x => { x.open = true; });
   const v = [...d.querySelectorAll("[data-di-funkcijos]")].find(x => !x.closest("[data-kalba]").hidden); if (v) v.scrollIntoView(); }];
+/* Elektroninė apklausa (2026-11-26, PP-report): būsenos su duomenimis. Saugykla - netikra (GP_APKLAUSA_UI.naudokSaugykla), tikri duomenys neliečiami;
+   tiekėjų pasiūlymai sudaromi kaip tiekėjo puslapyje (kodas laiške) ir įkeliami tuo pačiu keliu kaip iniciatoriaus. */
+async function eaSek(w) {
+  const A = w.GP_APKLAUSA, U = w.GP_APKLAUSA_UI, s = {}, iso = ms => new Date(Date.now() + ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+  U.naudokSaugykla({ getItem: k => Object.prototype.hasOwnProperty.call(s, k) ? s[k] : null, setItem: (k, v) => { s[k] = String(v); }, removeItem: k => { delete s[k]; } });
+  const TK = [["UAB „Pavyzdinė baldų ir biuro įrangos prekybos įmonė“", "info@baldai.example", "lt"], ["UAB Kėdžių pasaulis", "pardavimai@kedes.example", "lt"], ["Office Supplies OU", "sales@office.example", "en"]];
+  const kurk = async (pav, verte, lesos) => {
+    const a = U.nauja();
+    a.kvietimas.pavadinimas = pav; a.kvietimas.aprasymas = "Ergonominės biuro kėdės su reguliuojamu aukščiu.\nGarantija - ne trumpesnė kaip 24 mėn.";
+    a.kvietimas.pozicijos = [{ pav: "Biuro kėdė, ergonominė, su reguliuojamu aukščiu ir porankiais", mat: "vnt.", kiekis: 12, pastaba: "juoda arba pilka" }, { pav: "Pristatymas ir surinkimas", mat: "kompl.", kiekis: 1, pastaba: "" }];
+    a.kvietimas.terminas = iso(2.2 * 864e5); a.kvietimas.pristatymoVieta = "Vilnius"; a.kvietimas.pristatymoTerminas = "per 30 dienų nuo užsakymo"; a.kvietimas.apmokejimas = "per 30 dienų nuo sąskaitos gavimo";
+    a.kvietimas.kontaktas = { vardas: "Vardenis Pavardenis", pastas: "vardenis.pavardenis@litgrid.example", tel: "+370 600 00000" };
+    a.vidaus = { verte, lesos, bvpz: "39112000-0", padalinys: "IT skyrius", pareigos: "Vyresnysis specialistas", mazaiTiekeju: "" };
+    a.tiekejai = TK.map((t, i) => ({ t: A.zetonas(), pav: t[0], pastas: t[1], kalba: t[2], issiusta: i < 2 ? iso(-36e5) : "" }));
+    a.busena = "paskelbta"; a.kvietimas = A.kvietimoForma(a.kvietimas).kvietimas; a.antspaudas = await A.antspaudas(A.bendra(a.kvietimas));
+    a.zurnalas.push(await A.zurnaloIrasas(null, "paskelbta", "kviesta tiekėjų: 3"));
+    U.issaugok(a); return a;
+  };
+  const laiskas = async (a, i, kainos, pvm) => {
+    const t = a.tiekejai[i], p = A.pasiulymoForma({ v: 1, tipas: "pasiulymas", apklausa: a.id, kvietimas: a.antspaudas, t: t.t, tiekejas: { pav: t.pav, kodas: "30000000" + i, pvmKodas: "LT10000000001" + i, adresas: "Gedimino pr. 1, Vilnius",
+      asmuo: "Vardenis Pavardenis", pastas: t.pastas, tel: "+370 600 0000" + i }, pvm, eilutes: kainos.map((x, j) => ({ i: j, ikainis: x, pastaba: j ? "" : "modelis „Ergo 300“" })), pristatymas: "per 14 dienų nuo užsakymo", galioja: 30,
+      pastabos: "Garantija 36 mėn.", patvirtinta: i === 1 ? ["atitinka"] : A.PATVIRTINIMAI.slice(), pateikta: iso(-5000 + i), kalba: t.kalba }).pasiulymas;
+    return A.atsakymas(a.kvietimas, p, await A.koduok(p), await A.antspaudas(p), t.kalba).tekstas;
+  };
+  const a1 = await kurk("Biuro kėdžių pirkimas", 8500, null);
+  await U.ikelkTeksta(await laiskas(a1, 0, [125.5, 80], true), "", a1.id);
+  const a2 = await kurk("Tarnybinės stoties atminties modulių ir jų diegimo paslaugų pirkimas", 12000, 1500);
+  for (const [i, kn] of [[125.5, 80], [119, 150], [40, 20]].entries()) await U.ikelkTeksta(await laiskas(a2, i, kn, i !== 2), "", a2.id);
+  await U.atverkPasiulymus(true, a2.id);
+  const j = U.nauja(); j.kvietimas.pavadinimas = "Spausdintuvų kasečių pirkimas"; j.vidaus.verte = 3200; U.issaugok(j);
+  return { vyksta: a1.id, vertinama: a2.id };
+}
+const eaIvesk = (w, el, v) => { el.value = v; el.dispatchEvent(new w.Event("input", { bubbles: true })); };
+const EA_BUSENOS = [
+  ["elektroninė apklausa: apklausų sąrašas (2026-11-26)", async w => { await eaSek(w); await w.GP_APKLAUSA_UI.rodyk("registras"); }],
+  ["elektroninė apklausa: nauja apklausa su klaidomis", async (w, d) => { await eaSek(w); await w.GP_APKLAUSA_UI.rodyk("registras"); d.querySelector('[data-veiksmas="eaNauja"]').click(); await lauk(150);
+    eaIvesk(w, d.querySelector("#ea-verte"), "8 500"); eaIvesk(w, d.querySelector('#ea-tk [data-t="pav"]'), "UAB A"); d.querySelector('[data-veiksmas="eaSkelbk"]').click(); await lauk(100); }],
+  ["elektroninė apklausa: kvietimai ir pasiūlymų įkėlimas", async (w, d) => { const r = await eaSek(w); await w.GP_APKLAUSA_UI.rodyk("apklausa", r.vyksta);
+    eaIvesk(w, d.querySelector("#ea-laisko-tekstas"), "be kodo"); d.querySelector('[data-veiksmas="eaIkelk"]').click(); await lauk(200); d.querySelectorAll("#ea-vieta details").forEach(x => { x.open = true; }); }],
+  ["elektroninė apklausa: pasiūlymų eilė, kainų palyginimas ir sprendimas", async (w, d) => { const r = await eaSek(w); await w.GP_APKLAUSA_UI.rodyk("apklausa", r.vertinama);
+    d.querySelector('.ea-pas[data-b="pirmas"] input[value="ne"]').click(); await lauk(500); d.querySelector('[data-veiksmas="eaPatvirtink"]').click(); await lauk(300);
+    d.querySelector('[data-veiksmas="eaPatikra"]').click(); await lauk(400); d.querySelectorAll("#ea-vieta details").forEach(x => { x.open = true; }); }]
+];
+/* Tiekėjo puslapis (pasiulymas.html): kvietimas iš nuorodos, kainų forma su klaidomis ir parengtas pasiūlymas. */
+async function eaTiekejoKvietimas(w, kalba) {
+  const A = w.GP_APKLAUSA, kv = { v: 1, id: A.id(), pirkejas: { pav: "LITGRID AB", kodas: "302564383" }, pavadinimas: "Tarnybinės stoties atminties modulių ir jų diegimo paslaugų pirkimas",
+    aprasymas: "Atminties moduliai tarnybinėms stotims.\nGarantija - ne trumpesnė kaip 36 mėn.", pozicijos: [{ pav: "Atminties modulis 64 GB DDR5 ECC, registruotas", mat: "vnt.", kiekis: 16, pastaba: "arba lygiavertis" },
+      { pav: "Diegimo paslauga", mat: "val.", kiekis: 8, pastaba: "" }], terminas: new Date(Date.now() + 5 * 36e5).toISOString().replace(/\.\d{3}Z$/, "Z"), pristatymoVieta: "Vilnius",
+    pristatymoTerminas: "per 30 dienų nuo užsakymo", apmokejimas: "per 30 dienų nuo sąskaitos gavimo", kontaktas: { vardas: "Vardenis Pavardenis", pastas: "vardenis.pavardenis@litgrid.example", tel: "+370 600 00000" },
+    tiekejas: { pav: "UAB „Pavyzdinė įmonė“", pastas: "info@imone.example" }, t: A.zetonas(), kalba: kalba || "lt" };
+  await w.GP_PASIULYMAS.ikelk("#k=" + await A.koduok(kv)); await lauk(100);
+}
+const EA_TIEKEJO_BUSENOS = [
+  ["kvietimas ir kainų forma su klaidomis (2026-11-26)", async (w, d) => { await eaTiekejoKvietimas(w); const ik = d.querySelectorAll("[data-ik]"); eaIvesk(w, ik[0], "410"); eaIvesk(w, ik[1], "nemokamai");
+    d.querySelector('[data-veiksmas="pslParenk"]').click(); await lauk(150); }],
+  ["parengtas pasiūlymas angliškai", async (w, d) => { await eaTiekejoKvietimas(w, "en"); d.querySelectorAll("[data-ik]").forEach((el, i) => eaIvesk(w, el, i ? "60" : "410"));
+    eaIvesk(w, d.querySelector("#psl-galioja"), "30"); eaIvesk(w, d.querySelector("#psl-kodas"), "123456789"); eaIvesk(w, d.querySelector("#psl-asmuo"), "Vardenis Pavardenis");
+    d.querySelectorAll("#pslPatv input").forEach(c => { if (!c.checked) c.click(); }); d.querySelector('[data-f="pvm"]').click(); d.querySelector('[data-veiksmas="pslParenk"]').click();
+    for (let i = 0; i < 40 && !w.GP_PASIULYMAS.busena().rezultatas; i++) await lauk(50); d.querySelectorAll("#pslTurinys details").forEach(x => { x.open = true; }); }]
+];
 const TELEFONO_BUSENOS = {
+  "../PP-report/pasiulymas.html": EA_TIEKEJO_BUSENOS,
   "../G-Procure_Project.html": APIE_BUSENOS,
   "../PP-teise/index.html": TEISE_BUSENOS,
   "../PP-qual/PP-QUAL.html": [["eksportas LT/EN: DI vertimo peržiūra su pastabomis (2026-10-26)", qualVertimoBusena], ["patikra: DI išskaidytas tekstas nesutampa su įklijuotu (2026-10-26)", qualNesutampaBusena],
@@ -6441,7 +6508,7 @@ const TELEFONO_BUSENOS = {
     ["2 žingsnis: pirkimo objekto dalys - išspręsta pagal dokumentus (D1, 2026-10-19)", dalysIssprestaBusena],
     ["tikrinimo skirtukas (2026-10-06)", (w, d) => d.getElementById("tabTikrinti").click()],
     ["slapukų sutikimo juosta angliškai (LT puslapyje - perjungiklis, 2026-10-16)", (w, d) => { w.GP_SUTIKIMAS.rodyk(); d.querySelector("[data-gpsk=kalba]").click(); }]],
-  "../PP-report/PP-report.html": [["1 priedas", w => w.selectForm(1)]],
+  "../PP-report/PP-report.html": [["1 priedas", w => w.selectForm(1)]].concat(EA_BUSENOS),
   "../PP-protocol/LITGRID_Generatorius_v3.html": [["naujo pirkimo vedlys", w => w.showPage("page-new-pk")]],
   "../pirkimu-korteles.html?saugykla=testine": [["kortelės forma", (w, d) => d.getElementById("naujaHeader").click()],
     ["kortelės forma: rinkos duomenys pagal BVPŽ (2026-10-18b)", rinkosKortelesBusena],
@@ -7867,7 +7934,8 @@ function kodoFailai(){
     "../PP-salygos/variklis.js", "../PP-salygos/laukai.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
     "../PP-ts/ts_asistentas_modules.js", "palyginimas.js", "privalomi-elementai.js", "proporcingumas.js", "kvalifikacija.js", "../PP-salygos/tikrinimas.js",
     "../PP-salygos/sutartys.js", "../PP-salygos/sutarties-blokas.js", "../PP-salygos/sutarciu-generatorius.js", "../PP-salygos/sutarties-forma.js",
-    "../PP-salygos/kvalifikacijos-lentele.js", "sutikimas.js", "analitika.js", "../PP-salygos/juodrastis.js", "specialistas.js", "ivykiai.js"]);
+    "../PP-salygos/kvalifikacijos-lentele.js", "sutikimas.js", "analitika.js", "../PP-salygos/juodrastis.js", "specialistas.js", "ivykiai.js",
+    "../PP-report/apklausa.js", "../PP-report/apklausa-ui.js", "../PP-report/pasiulymas.js"]);
 }
 
 async function testaiDatos(){
@@ -9114,7 +9182,9 @@ async function testaiSaugumas(){
       // 2026-11-25 - likę įrankiai (po vieną)
       "../PP-cost-benefit/kastu_naudos_analize.html", "../PP-carbon/index.html", "../PP-tiekejams/index.html",
       "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-qual/PP-QUAL.html", "../PP-esg/index.html",
-      "../PP-salygos/PP-SALYGOS.html", "../PP-ts/TS_Asistentas.html", "../PP-report/PP-report.html", "../PP-protocol/LITGRID_Generatorius_v3.html"];
+      "../PP-salygos/PP-SALYGOS.html", "../PP-ts/TS_Asistentas.html", "../PP-report/PP-report.html", "../PP-protocol/LITGRID_Generatorius_v3.html",
+      // 2026-11-26 - elektroninės apklausos tiekėjo puslapis (be įterptų skriptų)
+      "../PP-report/pasiulymas.html"];
     const maisa = async t => "'sha256-" + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))))) + "'";
     const blogi = [];
     for (const m of puslapiai) {
@@ -9602,7 +9672,7 @@ async function testaiSutikimas(){
         re.forEach(x => tiesa(x.test(b.textContent), b.getAttribute("data-kalba") + ": nėra " + x));
       tiesa(!/Google \(Google Fonts\)/.test(d.body.innerHTML) && lt.querySelector('a[href="slapukai.html"]') && en.querySelector('a[href="slapukai.html"]') && lt.querySelector("button[data-gp-slapukai]") && en.querySelector("button[data-gp-slapukai]"), "teikėjai ar nuorodos į slapukų politiką ir nustatymus");
       // Duomenų rūšys (nuo 2026-10-16 - blokais, ne 5 stulpelių lentele): pavadinimas ir keturios eilutės, paskutinė - teisinis pagrindas
-      tiesa(lt.querySelectorAll(".duomenu-irasas").length === 14 && en.querySelectorAll(".duomenu-irasas").length === 14, "duomenų rūšių - ne 14 (nuo 2026-10-18 - ir CVP IS pirkimo duomenys, nuo 2026-11-08 - sankcijų sąrašų patikra, nuo 2026-11-20 - viešų pirkimų sutarčių duomenys)");
+      tiesa(lt.querySelectorAll(".duomenu-irasas").length === 15 && en.querySelectorAll(".duomenu-irasas").length === 15, "duomenų rūšių - ne 15 (nuo 2026-10-18 - ir CVP IS pirkimo duomenys, nuo 2026-11-08 - sankcijų sąrašų patikra, nuo 2026-11-20 - viešų pirkimų sutarčių duomenys, nuo 2026-11-26 - elektroninė apklausa)");
       for (const [b, re, pav] of [[lt, /BDAR \d+ str\.|Elektroninių ryšių įstatymo 73 straipsnio 4 dal|organizacija/, ["Duomenys", "Kur ir kiek laiko", "Tikslas", "Teisinis pagrindas"]],
                                   [en, /Article \d+\(\d+\)|organisation/, ["Data", "Where and for how long", "Purpose", "Legal basis"]]])
         [...b.querySelectorAll(".duomenu-irasas")].forEach(x => {
@@ -9722,7 +9792,7 @@ async function testaiSutikimas(){
     const PSL = ["PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "PP-plan/bvpz-kodai.html", "PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html", "PP-ts/TS_Asistentas.html",
       "PP-qual/PP-QUAL.html", "PP-salygos/PP-SALYGOS.html", "PP-cost-benefit/index.html", "PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
       "PP-cost-benefit/kastu_naudos_analize.html", "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "PP-protocol/LITGRID_Generatorius_v3.html",
-      "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "PP-report/PP-report.html", "PP-esg/index.html", "PP-carbon/index.html", "PP-carbon/epd.html",
+      "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "PP-report/PP-report.html", "PP-report/pasiulymas.html", "PP-esg/index.html", "PP-carbon/index.html", "PP-carbon/epd.html",
       "PP-tiekejams/index.html", "PP-teise/index.html", "PP-teise/admin.html", "mano-pirkimai.html"];
     // turinio blokas, su kuriuo lyginama antraštė (numatyta - pirkimo kortelės juosta ar informacinė skiltis)
     const TURINYS = { "PP-cost-benefit/index.html": ".dalis", "PP-teise/index.html": ".vaizdai button", "PP-teise/admin.html": ".kortele" };
@@ -9924,7 +9994,8 @@ async function testaiSutikimas(){
     "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html": [["pradinis ir skirtukai", () => {}, true]],
     "../PP-protocol/LITGRID_Generatorius_v3.html": [["pradinis", () => {}]],
     "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html": [["pradinis ir meniu", () => {}, true]].concat(NEG_BUSENOS),
-    "../PP-report/PP-report.html": [["pradinis", () => {}]],
+    "../PP-report/PP-report.html": [["pradinis", () => {}]].concat(EA_BUSENOS),
+    "../PP-report/pasiulymas.html": [["pradinis", () => {}]].concat(EA_TIEKEJO_BUSENOS),
     "../PP-esg/index.html": [["pradinis ir skirtukai", () => {}, true]].concat(ESG_BUSENOS),
     "../PP-carbon/index.html": [["pradinis ir skirtukai", () => {}, true]].concat(CARBON_BUSENOS),
     "../PP-carbon/epd.html": [["pradinis", () => {}]],
@@ -9943,7 +10014,8 @@ async function testaiSutikimas(){
   await testas("Dydžių skalė (2026-10-17): perkelti moduliai (" + Object.keys(SKALES_PUSLAPIAI).map(k => k.split("/")[1]).join(", ") + ") ir bendri komponentai - tik 12, 13, 14, 16, 18, 20, 24, 32, 48 px, be clamp() ir vw (šaltiniuose ir ekrane 1280, 768 ir 375 px; išimtys - portalo antraštė 56 px ir modulio antraštės pavadinimas 19 px)", async () => {
     const SKALE = [12, 13, 14, 16, 18, 20, 24, 32, 48], blogi = [];
     const SKALEJE = Object.keys(SKALES_PUSLAPIAI).concat(["gprocure-info-panel.js", "portal-link.js", "teise-stebesena.js", "pirkimo-kortele.js", "busena.js",
-      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js", "dokumento-puslapis.css", "mano-pirkimai.js", "vpt-rinka.js", "vedlys.js", "paieska.js", "nacsaug-di.js"]);
+      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js", "dokumento-puslapis.css", "mano-pirkimai.js", "vpt-rinka.js", "vedlys.js", "paieska.js", "nacsaug-di.js",
+      "../PP-report/apklausa.css", "../PP-report/apklausa-ui.js", "../PP-report/pasiulymas.js"]);
     for (const pg of SKALEJE) {
       const src = await saltinis(pg), kiti = new Set(); let m; const re = /font-size\s*:\s*([0-9.]+)px/g;
       while ((m = re.exec(src))) if (+m[1] !== 0 && !SKALE.includes(+m[1]) && !(SKALES_ISIMTYS[pg] || { px: [] }).px.includes(+m[1])) kiti.add(m[1] + " px");
@@ -10159,7 +10231,7 @@ async function testaiAnalitika(){
   const AN_MODULIAI = ["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-report/PP-report.html",
     "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html", "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
     "../PP-cost-benefit/kastu_naudos_analize.html", "../PP-carbon/index.html", "../PP-carbon/epd.html", "../PP-esg/index.html", "../PP-tiekejams/index.html", "../PP-teise/index.html",
-    "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-protocol/LITGRID_Generatorius_v3.html", "../PP-salygos/PP-SALYGOS.html"];
+    "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-protocol/LITGRID_Generatorius_v3.html", "../PP-salygos/PP-SALYGOS.html", "../PP-report/pasiulymas.html"];
   await testas("Sargai: analitika.js visuose tikruose puslapiuose iškart po sutikimas.js; kitų analitikos ar sekimo įrankių nėra; kiekvienas įvykis kode - iš žodyno; biblioteka - sąraše ir darbininke; ES adresai ir viešas raktas", async () => {
     const blogi = [];
     const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)))];

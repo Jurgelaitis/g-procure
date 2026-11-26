@@ -370,18 +370,18 @@
       maturity: "kuriamas",
       nameLt: "Tiekėjų apklausos pažyma", nameEn: "Supplier survey report",
       href: "PP-report/PP-report.html",
-      sumLt: "Mažos vertės pirkimo pažyma ir raštai tiekėjams pagal LITGRID mažos vertės pirkimų tvarkos aprašą.",
-      sumEn: "A small-value procurement report and letters to suppliers under LITGRID's small-value procurement rules.",
+      sumLt: "Elektroninė tiekėjų apklausa iki 15 000 Eur be PVM, mažos vertės pirkimo pažyma ir raštai tiekėjams pagal LITGRID mažos vertės pirkimų tvarkos aprašą.",
+      sumEn: "An electronic request for quotation up to EUR 15,000 excluding VAT, a small-value procurement report and letters to suppliers under LITGRID's small-value procurement rules.",
       galiLt: [
-        "Dvi pažymos formos - Aprašo 1 ir 2 priedai",
-        "Patikra prieš generuojant: neatsakyti klausimai ir prieštaravimai su nuorodomis į laukus",
-        "Pasiūlymų eilė, lėšų ir sumų su PVM patikra",
+        "Elektroninė apklausa iki 15 000 Eur be PVM: kvietimai tiekėjams, pasiūlymai viena forma lietuvių ar anglų kalba, pasiūlymų eilė ir pažyma iš apklausos duomenų",
+        "Pasiūlymai neatveriami iki termino; pasiūlymų eilę sudaro taisyklės, sprendimą patvirtina žmogus; žurnalas su vientisumo patikra ir apklausos byla",
+        "Dvi pažymos formos - Aprašo 1 ir 2 priedai - su patikra prieš generuojant: neatsakyti klausimai ir prieštaravimai su nuorodomis į laukus",
         "Raštai tiekėjams apie priimtus sprendimus"
       ],
       galiEn: [
-        "Two report forms - Annexes 1 and 2 of the rules",
-        "A check before generating: unanswered questions and contradictions with links to the fields",
-        "Tender ranking, a check of funds and of amounts with VAT",
+        "An electronic request for quotation up to EUR 15,000 excluding VAT: invitations to suppliers, quotations in one form in Lithuanian or English, a ranking and a report filled in from the request data",
+        "Quotations are not opened before the deadline; the ranking is made by rules, the decision is confirmed by a person; a log with an integrity check and a request file",
+        "Two report forms - Annexes 1 and 2 of the rules - with a check before generating: unanswered questions and contradictions with links to the fields",
         "Letters to suppliers about the decisions taken"
       ],
       rezLt: "pažyma ir raštai tiekėjams Word formatu",
