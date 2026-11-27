@@ -504,35 +504,42 @@
   }
 
   /* ---------- laiškų tekstai ---------- */
+  /* Kvietimo laiškas (2026-11-27, naudotojo pastaba „ar jis ne per sudėtingas?“): trumpas, be kodų ir antspaudų - kas, iki kada, trys
+     žingsniai ir nuoroda pabaigoje. Antspaudas lieka kvietime ir pasiūlyme (vientisumo patikrai), bet tiekėjui laiške jo nereikia. */
   function laiskas(k, nuoroda, h, kalba) {
-    var en = kalba === "en", kt = k.kontaktas, kas = kt.vardas ? kt.vardas + ", " + kt.pastas : kt.pastas;
+    var en = kalba === "en", kt = k.kontaktas, kas = kt.vardas ? kt.vardas + ", " + kt.pastas : kt.pastas, data = rodykLaika(k.terminas).slice(0, 10);
     if (kt.tel) kas += ", " + kt.tel;
     if (en) return {
-      tema: "Request for quotation: " + k.pavadinimas + " (" + k.id + ")",
-      tekstas: ["Hello,", "", k.pirkejas.pav + " is carrying out a low-value procurement “" + k.pavadinimas + "” and invites you to submit a quotation.", "",
-        "Deadline: " + rodykLaika(k.terminas) + " (Lithuanian time).", "", "Open this link to see the requirements and fill in the quotation form:", nuoroda, "",
-        "Once you have filled in the form, you will get a quotation code - please send it by replying to this email.", "",
-        "Invitation fingerprint: " + trumpas(h), "Contact: " + kas].join("\n")
+      tema: "Request for quotation: " + k.pavadinimas + " (by " + data + ")",
+      tekstas: ["Hello,", "", k.pirkejas.pav + " invites you to submit a quotation for the low-value procurement “" + k.pavadinimas + "”.",
+        "Deadline: " + rodykLaika(k.terminas) + " (Lithuanian time).", "",
+        "It only takes a few minutes:", "1. Open the link below - it shows what is being bought and the terms.", "2. Enter your prices and details.",
+        "3. Click “Send the quotation” - a prepared email will open in your email program; just send it."]
+        .concat(k.dokumentai ? ["", "Please attach to the email: " + k.dokumentai] : [])
+        .concat(["", "Submit a quotation:", nuoroda, "", "Questions: " + kas]).join("\n")
     };
     return {
-      tema: "Kvietimas pateikti pasiūlymą: " + k.pavadinimas + " (" + k.id + ")",
-      tekstas: ["Laba diena,", "", k.pirkejas.pav + " vykdo mažos vertės pirkimą „" + k.pavadinimas + "“ ir kviečia Jus pateikti pasiūlymą.", "",
-        "Pasiūlymų terminas: " + rodykLaika(k.terminas) + " (Lietuvos laiku).", "", "Reikalavimus ir pasiūlymo formą rasite atvėrę šią nuorodą:", nuoroda, "",
-        "Užpildę formą gausite pasiūlymo kodą - jį atsiųskite atsakydami į šį laišką.", "",
-        "Kvietimo antspaudas: " + trumpas(h), "Kontaktinis asmuo: " + kas].join("\n")
+      tema: "Kvietimas pateikti pasiūlymą: " + k.pavadinimas + " (iki " + data + ")",
+      tekstas: ["Laba diena,", "", k.pirkejas.pav + " kviečia Jus pateikti pasiūlymą mažos vertės pirkimui „" + k.pavadinimas + "“.",
+        "Pasiūlymų terminas: " + rodykLaika(k.terminas) + " (Lietuvos laiku).", "",
+        "Pasiūlymą pateiksite per kelias minutes:", "1. Atverkite nuorodą žemiau - joje rasite, kas perkama ir kokios sąlygos.", "2. Įrašykite kainas ir savo duomenis.",
+        "3. Paspauskite „Siųsti pasiūlymą“ - jūsų pašto programoje atsivers paruoštas laiškas, kurį tereikės išsiųsti."]
+        .concat(k.dokumentai ? ["", "Prie laiško pridėkite: " + k.dokumentai] : [])
+        .concat(["", "Pateikti pasiūlymą:", nuoroda, "", "Kilus klausimų: " + kas]).join("\n")
     };
   }
+  /* Tiekėjo atsakymas: kainos - tik bloke su kodu (atviru tekstu laiške jų nėra), antspaudo laiške nebėra (jis - tiekėjo kopijoje). */
   function atsakymas(k, p, kodas, h, kalba) {
-    var en = kalba === "en";
+    var en = kalba === "en", pas = p.tiekejas.pav + (p.tiekejas.asmuo ? ", " + p.tiekejas.asmuo : "");
     if (en) return {
       tema: "Quotation: " + k.pavadinimas + " (" + k.id + ") - " + p.tiekejas.pav,
-      tekstas: ["Hello,", "", "Please find our quotation for the procurement “" + k.pavadinimas + "” (" + k.id + ") below.", "",
-        "Quotation fingerprint: " + trumpas(h), "", sarvas(kodas, "pasiulymas"), "", p.tiekejas.pav + (p.tiekejas.asmuo ? ", " + p.tiekejas.asmuo : "")].join("\n")
+      tekstas: ["Hello,", "", "Please find our quotation for the procurement “" + k.pavadinimas + "” below.",
+        "The quotation data is in the block below - please do not change it; the buyer's tool will read it.", "", sarvas(kodas, "pasiulymas"), "", pas].join("\n")
     };
     return {
       tema: "Pasiūlymas: " + k.pavadinimas + " (" + k.id + ") - " + p.tiekejas.pav,
-      tekstas: ["Laba diena,", "", "Teikiame pasiūlymą pirkimui „" + k.pavadinimas + "“ (" + k.id + ").", "",
-        "Pasiūlymo antspaudas: " + trumpas(h), "", sarvas(kodas, "pasiulymas"), "", p.tiekejas.pav + (p.tiekejas.asmuo ? ", " + p.tiekejas.asmuo : "")].join("\n")
+      tekstas: ["Laba diena,", "", "Siunčiame pasiūlymą pirkimui „" + k.pavadinimas + "“.",
+        "Pasiūlymo duomenys - žemiau esančiame bloke; jo nekeiskite, jį perskaitys pirkimo vykdytojo įrankis.", "", sarvas(kodas, "pasiulymas"), "", pas].join("\n")
     };
   }
 

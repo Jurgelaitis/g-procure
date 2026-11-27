@@ -475,13 +475,18 @@ async function testaiApklausa() {
       tiesa(!/8500|9000|verte|lesos|IT skyrius/.test(js), 'vidaus duomenų nuorodoje nėra');
       a.tiekejai.filter(x => x.t !== t.t).forEach(x => tiesa(js.indexOf(x.pav) < 0 && js.indexOf(x.pastas) < 0 && js.indexOf(x.t) < 0, 'kito tiekėjo duomenų nėra'));
       tiesa(n.mailto.indexOf('mailto:' + encodeURIComponent(t.pastas) + '?subject=') === 0, 'laiško adresas');
-      turi(n.laiskas.tekstas, A.trumpas(a.antspaudas), 'antspaudas laiške'); turi(n.laiskas.tekstas, A.rodykLaika(a.kvietimas.terminas), 'terminas laiške');
+      turi(n.laiskas.tekstas, A.rodykLaika(a.kvietimas.terminas), 'terminas laiške');
+      // paprastas laiškas (2026-11-27): be antspaudo ir kodų, nuoroda - po „Pateikti pasiūlymą:“ / „Submit a quotation:“, terminas temoje
+      const eil = n.laiskas.tekstas.split('\n'), en = t.kalba === 'en';
+      lygu([n.laiskas.tekstas.indexOf(A.trumpas(a.antspaudas)), /antspaud|fingerprint|kod[ąa]\b|\bcode\b/i.test(n.laiskas.tekstas), eil[eil.indexOf(n.nuoroda) - 1], /\d{4}-\d{2}-\d{2}\)$/.test(n.laiskas.tema)],
+        [-1, false, en ? 'Submit a quotation:' : 'Pateikti pasiūlymą:', true], 'paprastas laiškas ' + i);
+      turi(n.laiskas.tekstas, en ? '“Send the quotation”' : '„Siųsti pasiūlymą“', 'žingsniai laiške ' + i);
     }
     turi(N[a.tiekejai[2].t].laiskas.tema, 'Request for quotation', 'angliškas laiškas');
     turi(N[a.tiekejai[0].t].laiskas.tema, 'Kvietimas pateikti pasiūlymą', 'lietuviškas laiškas');
     // išsiuntimo žyma
     const b0 = U.gauk(a.id); b0.tiekejai[0].issiusta = ''; U.issaugok(b0); await U.rodyk('apklausa', a.id);
-    turi(q('#ea-kas-toliau').textContent, 'Neišsiųsta: 1 iš 3', 'kas toliau');
+    turi(q('#ea-kas-toliau').textContent, 'neišsiųsta 1 iš 3', 'kas toliau');
     const m = q('[data-veiksmas="eaIssiusta"][aria-pressed="false"]'); m.click(); await kol(() => U.gauk(a.id).tiekejai.every(t => t.issiusta));
     await kol(() => /Laukiama pasiūlymų/.test(q('#ea-kas-toliau').textContent));
     lygu(U.gauk(a.id).zurnalas.map(e => e.ivykis), ['paskelbta', 'issiusta'], 'žurnalas');
@@ -767,8 +772,15 @@ async function testaiApklausa() {
     lygu([ik[1].getAttribute('aria-invalid'), d.querySelector('#psl-galioja').getAttribute('aria-invalid'), w.GP_PASIULYMAS.busena().rezultatas], ['true', 'true', null], 'laukai pažymėti, pasiūlymas neparengtas');
     ras(ik[1], '80'); ras(ik[1], '80', 'change'); ras(d.querySelector('#psl-galioja'), '30'); ras(d.querySelector('#psl-kodas'), '123456789'); ras(d.querySelector('#psl-asmuo'), 'Jonas Jonaitis');
     d.querySelectorAll('#pslPatv input').forEach(c => c.click());
-    d.querySelector('[data-veiksmas="pslParenk"]').click(); await kol(() => w.GP_PASIULYMAS.busena().rezultatas);
+    // „Siųsti pasiūlymą“ (2026-11-27): parengus iškart atveriamas paruoštas laiškas (mailto perimamas, kad testas pašto programos neatvertų)
+    const atverta = []; w.addEventListener('click', e => { const x = e.target.closest && e.target.closest('a[href^="mailto:"]'); if (x) { atverta.push(x.getAttribute('href')); e.preventDefault(); } }, true);
+    turi(d.querySelector('[data-veiksmas="pslParenk"]').textContent, 'Siųsti pasiūlymą', 'mygtukas');
+    d.querySelector('[data-veiksmas="pslParenk"]').click(); await kol(() => w.GP_PASIULYMAS.busena().rezultatas); await kol(() => atverta.length);
     const rz = w.GP_PASIULYMAS.busena().rezultatas;
+    lygu([atverta.length, atverta[0].indexOf('mailto:' + encodeURIComponent('vardenis@litgrid.example') + '?subject='), decodeURIComponent(atverta[0].split('&body=')[1]) === rz.laiskas.tekstas, !!d.querySelector('[data-psl-laiskas]')],
+      [1, 0, true, false], 'laiškas atvertas iškart');
+    tiesa(!/antspaud/i.test(rz.laiskas.tekstas), 'antspaudo atsakymo laiške nėra');
+    tiesa(!d.querySelector('#pslRezultatas details.ea-tech').open && /Liko išsiųsti laišką/.test(d.querySelector('#pslRezultatas .ea-pastaba').textContent), 'techninė informacija suskleista, pagrindinis veiksmas matomas');
     turi(d.querySelector('#pslRzH').textContent, 'dar neišsiųstas', 'rezultato antraštė'); tiesa(d.activeElement === d.querySelector('#pslRzH'), 'fokusas - rezultate');
     const f = A.pasiulymoForma(await A.iskoduok(A.isSarvo(rz.laiskas.tekstas)[0].kodas));
     lygu([f.ok, f.pasiulymas.apklausa, f.pasiulymas.kvietimas, f.pasiulymas.t, f.pasiulymas.eilutes.map(e => e.ikainis), f.pasiulymas.pvm, f.pasiulymas.galioja, f.pasiulymas.tiekejas.asmuo, await A.antspaudas(f.pasiulymas)],
@@ -923,6 +935,53 @@ async function testaiApklausa() {
     await U.atverkPasiulymus(true, a.id); await U.rodyk('apklausa', a.id); await kol(() => q('.ea-pas'));
     turi(q('#ea-vieta').textContent, 'Kviestas kitas tiekėjas', 'eilėje'); turi(q('#ea-vieta').textContent, 'Pasiūlymą pateikė ne kviestas tiekėjas', 'prie sprendimo');
     lygu([A.kitasPavadinimas('UAB „Baldų centras“', 'Baldų centras, UAB'), A.kitasPavadinimas('AB „Amber Grid“', 'Amber Grid AB'), A.kitasPavadinimas('UAB Alfa', 'UAB Beta')], [false, false, true], 'pavadinimų palyginimas');
+  });
+
+  await testas('Siuntimas paeiliui (naudotojo sprendimas 2026-11-27): vienu paspaudimu atveriamas kito tiekėjo laiškas; išsiųstu pažymima tik patvirtinus; per ilgas laiškas - tekstas nukopijuojamas; išsiuntus visus - laukiama pasiūlymų', async () => {
+    U.naudokSaugykla(atm());
+    const a0 = await kurk(), a = U.gauk(a0.id); a.tiekejai.forEach(t => { t.issiusta = ''; }); U.issaugok(a);
+    const stabdyk = e => { const x = e.target.closest && e.target.closest('a[href^="mailto:"]'); if (x) e.preventDefault(); };
+    W.addEventListener('click', stabdyk);
+    const kop = []; const buvoKop = W.GP_KOPIJA.kopijuok; W.GP_KOPIJA.kopijuok = (t) => { kop.push(t); return Promise.resolve(true); };
+    try {
+      await U.rodyk('apklausa', a.id); await kol(() => q('#ea-seka-kitas'));
+      const nuor = U.busenaS().nuorodos, tk = a.tiekejai;
+      turi(q('#ea-seka-h').textContent, 'neišsiųsta 3 iš 3', 'pradžia');
+      lygu([q('#ea-seka-kitas').getAttribute('href'), q('#ea-seka-kitas').textContent], [nuor[tk[0].t].mailto, 'Atverti laišką: ' + tk[0].pav + ' (1 iš 3)'], 'pirmo tiekėjo laiškas');
+      q('#ea-seka-kitas').click(); await kol(() => /Atvertas laiškas tiekėjui/.test((q('.ea-seka') || {}).textContent || ''));
+      lygu([U.gauk(a.id).tiekejai[0].issiusta, D.activeElement && D.activeElement.id], ['', 'ea-seka-kitas'], 'atvėrus - dar nepažymėta, fokusas - kitame veiksme');
+      lygu([q('#ea-seka-kitas').getAttribute('href'), /Išsiųsta - atverti kitą: /.test(q('#ea-seka-kitas').textContent), q('#ea-seka-dar').getAttribute('href')], [nuor[tk[1].t].mailto, true, nuor[tk[0].t].mailto], 'kitas ir „Atverti dar kartą“');
+      q('#ea-seka-kitas').click(); await kol(() => U.gauk(a.id).tiekejai[0].issiusta && /Atvertas laiškas tiekėjui UAB Kėdžių/.test(q('.ea-seka').textContent));
+      turi(q('#ea-seka-h').textContent, 'neišsiųsta 2 iš 3', 'pirmas pažymėtas');
+      lygu(U.gauk(a.id).zurnalas.filter(e => e.ivykis === 'issiusta').length, 1, 'žurnale');
+      q('#ea-seka-kitas').click(); await kol(() => U.gauk(a.id).tiekejai[1].issiusta && /Office Supplies/.test(q('.ea-seka').textContent));
+      lygu(q('#ea-seka-kitas').textContent, 'Išsiųsta - visi kvietimai išsiųsti', 'paskutinis');
+      q('#ea-seka-kitas').click(); await kol(() => U.gauk(a.id).tiekejai.every(t => t.issiusta) && !q('.ea-seka'));
+      turi(q('#ea-kas-toliau').textContent, 'Laukiama pasiūlymų', 'visi išsiųsti');
+      lygu([U.gauk(a.id).zurnalas.filter(e => e.ivykis === 'issiusta').length, kop.length], [3, 0], 'visi žurnale, trumpų laiškų tekstas nekopijuojamas');
+      // per ilgas laiškas: atveriamas tuščias laiškas, tekstas nukopijuojamas
+      const b0 = await kurk({ tk: [TK[0]] }), b = U.gauk(b0.id); b.tiekejai[0].issiusta = '';
+      b.kvietimas.aprasymas = Array.from({ length: 400 }, (x, i) => 'Reikalavimas ' + i + ': ' + Math.round(Math.sin(i + 1) * 1e6)).join('; ').slice(0, 2900); U.issaugok(b);
+      await U.rodyk('apklausa', b.id); await kol(() => q('#ea-seka-kitas'));
+      tiesa(U.busenaS().nuorodos[b.tiekejai[0].t].visas === false, 'laiškas per ilgas atverti su tekstu');
+      q('#ea-seka-kitas').click(); await kol(() => /per ilgas/.test((q('.ea-seka') || {}).textContent || ''));
+      tiesa(kop.length === 1 && kop[0].indexOf('pasiulymas.html#k=') >= 0, 'laiško tekstas nukopijuotas');
+      q('#ea-seka-kitas').click(); await kol(() => U.gauk(b.id).tiekejai[0].issiusta && !q('.ea-seka'));
+    } finally { W.removeEventListener('click', stabdyk); W.GP_KOPIJA.kopijuok = buvoKop; }
+  });
+
+  await testas('Pirkimui skirtos lėšos (naudotojo pasiūlymas 2026-11-27): atskiro lauko nėra - lėšomis laikoma numatoma vertė; anksčiau įrašytos lėšos naudojamos', async () => {
+    U.naudokSaugykla(atm());
+    await U.rodyk('registras'); q('[data-veiksmas="eaNauja"]').click(); await kol(() => q('#ea-verte'));
+    tiesa(!q('#ea-lesos') && /laikoma ir pirkimui skirtomis lėšomis/.test(q('#ea-verte-uz').textContent), 'vienas laukas su paaiškinimu');
+    const a = await kurk({ verte: 8500 }); await U.rodyk('apklausa', a.id);
+    await U.ikelkTeksta((await pasiulymas(a, 0, [710, 100])).laiskas, '', a.id); await U.ikelkTeksta((await pasiulymas(a, 1, [600, 100])).laiskas, '', a.id); await U.ikelkTeksta((await pasiulymas(a, 2, [650, 100])).laiskas, '', a.id);
+    await U.atverkPasiulymus(true, a.id);
+    const v = U.vertink(U.gauk(a.id));
+    lygu([v.lesos, v.virsLesu], [8500, [a.tiekejai[0].t]], 'virš numatomos vertės pažymima');
+    await U.rodyk('apklausa', a.id); await kol(() => q('.ea-pas')); turi(q('#ea-vieta').textContent, 'Viršija numatomą vertę', 'žyma');
+    lygu(U.pazymosDuomenys(U.gauk(a.id)).fields.lesosBePvm, '8500', 'pažymoje - skirtos lėšos = numatoma vertė');
+    const b = await kurk({ verte: 8500, lesos: 9000 }); lygu(U.vertink(U.gauk(b.id)).lesos, 9000, 'anksčiau įrašytos lėšos');
   });
 
   await testas('Terminas: mažiau kaip 3 darbo dienos - įspėjimas (Aprašo 31.2 p.); „liko ... min.“ be dvigubo taško; vertė virš 15 000 Eur - Aprašo 20 p.; senesnis gavimo laikas nei paskelbimas - klaida', async () => {

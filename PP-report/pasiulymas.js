@@ -116,10 +116,12 @@
       '<dt>' + L("Pasiūlymų atvėrimas", "Opening of quotations") + '</dt><dd>' + L("Pasibaigus terminui. Jei pasiūlymus pateikia visi kviesti tiekėjai, jie gali būti atverti ir anksčiau - tada pateikto pasiūlymo pakeisti nebegalima.", "After the deadline. If all invited suppliers submit quotations, they may be opened earlier - then a submitted quotation can no longer be changed.") + '</dd>' +
       (K.dokumentai ? '<dt>' + L("Prie laiško pridėkite", "Attach to the email") + '</dt><dd style="white-space:pre-line">' + esc(K.dokumentai) + '</dd>' : '') +
       '<dt>' + L("Kontaktinis asmuo", "Contact person") + '</dt><dd>' + esc(kt.vardas ? kt.vardas + ", " : "") + '<a href="mailto:' + esc(kt.pastas) + '">' + esc(kt.pastas) + '</a>' + (kt.tel ? ", " + esc(kt.tel) : "") + '</dd>' +
-      '<dt>' + L("Kvietimo antspaudas", "Invitation fingerprint") + '</dt><dd><span class="ea-antsp">' + esc(A.trumpas(H)) + '</span> <span class="ea-uzuomina">' +
-        L("- turi sutapti su antspaudu kvietimo laiške", "- must match the fingerprint in the invitation email") + '</span></dd></dl>' +
+      '</dl>' +
       '<p class="ea-uzuomina" style="margin-top:12px">' + L("Kvietimas perskaitytas iš nuorodos - G-Procure netikrina, kas ją išsiuntė. Jei abejojate, ar kvietimas tikras, susisiekite su pirkimo vykdytoju jums žinomais kontaktais.",
-        "The invitation was read from the link - G-Procure does not verify who sent it. If you doubt whether the invitation is genuine, contact the buyer using contact details you already know.") + '</p></section>';
+        "The invitation was read from the link - G-Procure does not verify who sent it. If you doubt whether the invitation is genuine, contact the buyer using contact details you already know.") + '</p>' +
+      '<details class="ea-tech"><summary>' + L("Techninė informacija", "Technical information") + '</summary><p class="ea-uzuomina">' +
+        L("Kvietimo antspaudas: ", "Invitation fingerprint: ") + '<span class="ea-antsp">' + esc(A.trumpas(H)) + '</span>' +
+        L(" - pagal jį pirkimo vykdytojas gali patikrinti, kad pasiūlymas parengtas būtent šiam kvietimui.", " - with it the buyer can check that the quotation was prepared for exactly this invitation.") + '</p></details></section>';
     return s;
   }
   function laukas(k, et, o) {
@@ -179,41 +181,49 @@
     patv.forEach(function (p) { s += '<label class="ea-zymimas"><input type="checkbox" data-f="' + p[0] + '"' + (F.patv[p[0]] ? " checked" : "") + (praejo ? " disabled" : "") + '><span>' + esc(p[1]) + '</span></label>'; });
     s += '</div><span class="ea-klaida" id="psl-patv-kl" hidden></span>' +
       '<div id="pslKlaidos" tabindex="-1"></div>' +
-      '<div class="ea-eile" style="margin-top:20px"><button type="button" class="ea-btn ea-btn--pagr" data-veiksmas="pslParenk"' + (praejo ? " disabled" : "") + '>' + L("Parengti pasiūlymą", "Prepare the quotation") + '</button>' +
-      '<span class="ea-uzuomina">' + L("Pasiūlymas dar nebus išsiųstas - kitame žingsnyje jį išsiųsite el. paštu.", "The quotation will not be sent yet - in the next step you will send it by email.") + '</span></div></section>';
-    s += '<p class="ea-uzuomina">' + L("Šis puslapis jūsų įvestų duomenų niekur nesiunčia ir nesaugo: pasiūlymą pirkimo vykdytojas gaus tik tada, kai patys išsiųsite laišką. Pasiūlymo kodas suspaustas, bet neužšifruotas: pirkimo vykdytojo įrankis kainų nerodo, kol pasiūlymai neatverti, tačiau tai darbo tvarka, ne šifras.",
-      "This page does not send or store the data you enter: the buyer will receive the quotation only when you send the email yourself. The quotation code is compressed but not encrypted: the buyer's tool does not show prices until the quotations are opened, but this is a working procedure, not encryption.") + '</p></form>';
+      '<div class="ea-eile" style="margin-top:20px"><button type="button" class="ea-btn ea-btn--pagr" data-veiksmas="pslParenk"' + (praejo ? " disabled" : "") + '>' + L("Siųsti pasiūlymą", "Send the quotation") + '</button>' +
+      '<span class="ea-uzuomina">' + L("Jūsų pašto programoje atsivers paruoštas laiškas kontaktiniam asmeniui - pasiūlymas pateiktas, kai jį išsiunčiate.", "A prepared email to the contact person will open in your email program - the quotation is submitted when you send it.") + '</span></div></section>';
+    s += '<p class="ea-uzuomina">' + L("Šis puslapis jūsų įvestų duomenų niekur nesiunčia ir nesaugo: pasiūlymą pirkimo vykdytojas gaus tik tada, kai patys išsiųsite laišką.",
+      "This page does not send or store the data you enter: the buyer will receive the quotation only when you send the email yourself.") + '</p></form>';
     return s;
   }
+  function laiskoHref() { var l = REZ.laiskas; return "mailto:" + encodeURIComponent(K.kontaktas.pastas) + "?subject=" + encodeURIComponent(l.tema) + "&body=" + encodeURIComponent(l.tekstas); }
   function rezultatoHtml() {
     if (!REZ) return "";
-    var l = REZ.laiskas, href = "mailto:" + encodeURIComponent(K.kontaktas.pastas) + "?subject=" + encodeURIComponent(l.tema) + "&body=" + encodeURIComponent(l.tekstas);
-    var trumpas = href.length <= MAILTO_RIBA, s = REZ.sumos;
+    var l = REZ.laiskas, href = laiskoHref(), trumpas = href.length <= MAILTO_RIBA, s = REZ.sumos;
     return '<section class="ea-card ea-rezult" aria-labelledby="pslRzH" id="pslRezultatas">' +
-      '<h3 id="pslRzH" tabindex="-1">' + L("Pasiūlymas parengtas - dar neišsiųstas", "The quotation is ready - not sent yet") + '</h3>' +
-      '<div class="ea-pastaba ea-pastaba--demesio"><strong>' + L("Liko vienas žingsnis", "One step left") + '</strong>' +
-        L("Pirkimo vykdytojas pasiūlymą gaus tik tada, kai išsiųsite jį el. paštu adresu ", "The buyer will receive the quotation only when you send it by email to ") + '<b>' + esc(K.kontaktas.pastas) + '</b> ' +
-        L("iki ", "by ") + '<b>' + esc(A.rodykLaika(K.terminas)) + '</b> ' + L("(Lietuvos laiku).", "(Lithuanian time).") + '</div>' +
+      '<h3 id="pslRzH" tabindex="-1">' + L("Pasiūlymas paruoštas - dar neišsiųstas", "The quotation is ready - not sent yet") + '</h3>' +
+      '<div class="ea-pastaba ea-pastaba--demesio"><strong>' + L("Liko išsiųsti laišką", "Now send the email") + '</strong>' +
+        (trumpas ? L("Jūsų pašto programoje atsiveria paruoštas laiškas adresu ", "A prepared email to ") + '<b>' + esc(K.kontaktas.pastas) + '</b>' + L(" - paspauskite jame „Siųsti“ iki ", " opens in your email program - click “Send” in it by ")
+          : L("Laiškas per ilgas atverti automatiškai: nukopijuokite jo tekstą ir išsiųskite adresu ", "The email is too long to open automatically: copy its text and send it to ") + '<b>' + esc(K.kontaktas.pastas) + '</b>' + L(" iki ", " by ")) +
+        '<b>' + esc(A.rodykLaika(K.terminas)) + '</b> ' + L("(Lietuvos laiku). Kol laiško neišsiuntėte, pasiūlymas nepateiktas.", "(Lithuanian time). Until you send the email, the quotation is not submitted.") +
+        '<div class="ea-eile" style="margin-top:10px">' +
+        (trumpas ? '<a class="ea-btn ea-btn--pagr" href="' + esc(href) + '" data-veiksmas="pslIssiusta">' + L("Laiškas neatsivėrė? Atverti dar kartą", "Email did not open? Open it again") + '</a>' : '') +
+        '<button type="button" class="ea-btn' + (trumpas ? "" : " ea-btn--pagr") + '" data-veiksmas="pslKopijuok" data-ka="tekstas">' + L("Kopijuoti laiško tekstą", "Copy the email text") + '</button>' +
+        (trumpas ? '' : '<button type="button" class="ea-btn" data-veiksmas="pslKopijuok" data-ka="adresas">' + L("Kopijuoti adresą", "Copy the address") + '</button>' +
+          '<button type="button" class="ea-btn" data-veiksmas="pslKopijuok" data-ka="tema">' + L("Kopijuoti temą", "Copy the subject") + '</button>') + '</div></div>' +
+      (K.dokumentai ? '<p style="margin-top:12px"><b>' + L("Prie laiško pridėkite:", "Attach to the email:") + '</b> ' + esc(K.dokumentai) + ' ' + L("Kainų juose nenurodykite - kainos jau yra laiške.", "Do not state prices in them - the prices are already in the email.") + '</p>' : '') +
       '<dl class="ea-dl" style="margin:12px 0"><dt>' + L("Kaina be PVM", "Price excl. VAT") + '</dt><dd><b>' + esc(eur(s.viso)) + '</b></dd>' +
-        (REZ.pasiulymas.pvm ? '<dt>' + L("Kaina su PVM", "Price incl. VAT") + '</dt><dd>' + esc(eur(s.suPvm)) + '</dd>' : '<dt>PVM</dt><dd>' + L("netaikomas (ne PVM mokėtojas)", "not applicable (not VAT registered)") + '</dd>') +
+        (REZ.pasiulymas.pvm ? '<dt>' + L("Kaina su PVM", "Price incl. VAT") + '</dt><dd>' + esc(eur(s.suPvm)) + '</dd>' : '<dt>PVM</dt><dd>' + L("netaikomas (ne PVM mokėtojas)", "not applicable (not VAT registered)") + '</dd>') + '</dl>' +
+      '<div class="ea-eile"><button type="button" class="ea-btn" data-veiksmas="pslAtsisiusk">' + L("Atsisiųsti kopiją savo įrašams", "Download a copy for your records") + '</button>' +
+        '<button type="button" class="ea-btn" data-veiksmas="spausdinti">' + L("Spausdinti", "Print") + '</button>' +
+        '<button type="button" class="ea-btn ea-btn--tylus" data-veiksmas="pslKeisk">' + L("Keisti pasiūlymą", "Change the quotation") + '</button></div>' +
+      '<details class="ea-tech" style="margin-top:12px"><summary>' + L("Laiško tekstas ir techninė informacija", "Email text and technical information") + '</summary>' +
+        '<dl class="ea-dl"><dt>' + L("Gavėjas", "To") + '</dt><dd>' + esc(K.kontaktas.pastas) + '</dd><dt>' + L("Tema", "Subject") + '</dt><dd>' + esc(l.tema) + '</dd>' +
         '<dt>' + L("Pasiūlymo antspaudas", "Quotation fingerprint") + '</dt><dd><span class="ea-antsp">' + esc(A.trumpas(REZ.h)) + '</span> <span class="ea-uzuomina">' +
           L("- pagal jį pirkimo vykdytojas ir jūs galėsite patikrinti, kad vertintas būtent šis pasiūlymas", "- with it the buyer and you can check that exactly this quotation was evaluated") + '</span></dd></dl>' +
-      '<ol><li><b>' + L("Išsiųskite pasiūlymą.", "Send the quotation.") + '</b> ' +
-        (trumpas ? L("Atverkite paruoštą laišką savo el. pašto programoje ir išsiųskite.", "Open the prepared email in your email program and send it.")
-          : L("Nukopijuokite laiško tekstą, įklijuokite į naują laišką (arba atsakymą į kvietimą) ir išsiųskite.", "Copy the email text, paste it into a new email (or a reply to the invitation) and send it.")) +
-        '<div class="ea-eile" style="margin-top:8px">' +
-        (trumpas ? '<a class="ea-btn ea-btn--pagr" href="' + esc(href) + '" data-veiksmas="pslIssiusta">' + L("Atverti laišką", "Open the email") + '</a>' : '') +
-        '<button type="button" class="ea-btn' + (trumpas ? "" : " ea-btn--pagr") + '" data-veiksmas="pslKopijuok" data-ka="tekstas">' + L("Kopijuoti laiško tekstą", "Copy the email text") + '</button>' +
-        '<button type="button" class="ea-btn" data-veiksmas="pslKopijuok" data-ka="adresas">' + L("Kopijuoti adresą", "Copy the address") + '</button>' +
-        '<button type="button" class="ea-btn" data-veiksmas="pslKopijuok" data-ka="tema">' + L("Kopijuoti temą", "Copy the subject") + '</button></div></li>' +
-      (K.dokumentai ? '<li><b>' + L("Prie laiško pridėkite dokumentus:", "Attach these documents to the email:") + '</b> ' + esc(K.dokumentai) + ' ' + L("Kainų juose nenurodykite - kainos yra tik pasiūlymo kode.", "Do not state prices in them - prices are only in the quotation code.") + '</li>' : '') +
-      '<li><b>' + L("Kodo laiške nekeiskite.", "Do not change the code in the email.") + '</b> ' + L("Jame - jūsų kainos ir duomenys; pakeistas kodas nebus perskaitytas.", "It contains your prices and details; a changed code cannot be read.") + '</li>' +
-      '<li><b>' + L("Pasilikite kopiją savo įrašams.", "Keep a copy for your records.") + '</b> ' + L("Kopijoje kainos matomos atviru tekstu, todėl jos pirkimo vykdytojui nesiųskite - siųskite tik laišką su kodu.", "Prices are visible in plain text in the copy, so do not send it to the buyer - send only the email with the code.") + '<div class="ea-eile" style="margin-top:8px">' +
-        '<button type="button" class="ea-btn" data-veiksmas="pslAtsisiusk">' + L("Atsisiųsti kopiją savo įrašams", "Download a copy for your records") + '</button>' +
-        '<button type="button" class="ea-btn" data-veiksmas="spausdinti">' + L("Spausdinti", "Print") + '</button></div></li></ol>' +
-      '<details style="margin-top:12px"><summary>' + L("Laiško tekstas", "Email text") + '</summary><dl class="ea-dl"><dt>' + L("Gavėjas", "To") + '</dt><dd>' + esc(K.kontaktas.pastas) + '</dd><dt>' + L("Tema", "Subject") + '</dt><dd>' + esc(l.tema) + '</dd></dl>' +
-        '<pre class="ea-kodas" style="max-height:260px" tabindex="0" aria-label="' + L("Laiško tekstas", "Email text") + '">' + esc(l.tekstas) + '</pre></details>' +
-      '<div class="ea-eile" style="margin-top:16px"><button type="button" class="ea-btn ea-btn--tylus" data-veiksmas="pslKeisk">' + L("Keisti pasiūlymą", "Change the quotation") + '</button></div></section>';
+        '<pre class="ea-kodas" style="max-height:260px" tabindex="0" aria-label="' + L("Laiško tekstas", "Email text") + '">' + esc(l.tekstas) + '</pre>' +
+        '<p class="ea-uzuomina">' + L("Bloko su duomenimis laiške nekeiskite - pakeistas jis nebus perskaitytas. Jame jūsų kainos suspaustos, bet neužšifruotos: pirkimo vykdytojo įrankis kainų nerodo, kol pasiūlymai neatverti, tačiau tai darbo tvarka, ne šifras. Kopijoje savo įrašams kainos matomos atviru tekstu, todėl jos pirkimo vykdytojui nesiųskite.",
+          "Do not change the data block in the email - a changed block cannot be read. Your prices in it are compressed but not encrypted: the buyer's tool does not show prices until the quotations are opened, but this is a working procedure, not encryption. Prices are visible in plain text in the copy for your records, so do not send it to the buyer.") + '</p></details></section>';
+  }
+  /* „Siųsti pasiūlymą“: parengus iškart atveriamas paruoštas laiškas (naudotojo pastaba 2026-11-27 - pateikimas turi būti kelių akimirkų reikalas) */
+  function atverkLaiska() {
+    if (!REZ) return false;
+    var href = laiskoHref();
+    if (href.length > MAILTO_RIBA) return false;
+    var a = doc.createElement("a"); a.href = href; a.setAttribute("data-psl-laiskas", ""); a.hidden = true;
+    doc.body.appendChild(a); a.click(); a.remove(); baigta();
+    return true;
   }
   function piesk() {
     pieskAntraste();
@@ -318,7 +328,7 @@
     pslAtverk: function () { var t = $("pslNuoroda").value; KLAIDA = ""; ikelk(t).then(function () { var h = $("pslKvH") || $("pslIvH"); if (h) { h.setAttribute("tabindex", "-1"); h.focus(); } }); },
     pslSumos: function () { skaitykForma(); rodykSumas(); },
     pslIkainis: function (el) { var v = skaitykSuma(el.value); if (v !== null) { el.value = fmt(v, 2, 4, true); el.removeAttribute("aria-invalid"); var k = $("psl-ik" + el.getAttribute("data-ik") + "-kl"); if (k) { k.hidden = true; k.textContent = ""; } } skaitykForma(); rodykSumas(); },
-    pslParenk: function () { parenk(); },
+    pslParenk: function () { parenk().then(function (ok) { if (ok) atverkLaiska(); }); },
     pslEik: function (el) { var t = $(el.getAttribute("data-id")); if (t) { t.scrollIntoView({ block: "center" }); t.focus(); } return false; },
     pslKopijuok: function (el) {
       var ka = el.getAttribute("data-ka"), t = ka === "adresas" ? K.kontaktas.pastas : ka === "tema" ? REZ.laiskas.tema : REZ.laiskas.tekstas;
@@ -335,12 +345,12 @@
     lt: { title: "Kas tai ir kaip naudotis", purpose: "Pasiūlymo forma mažos vertės pirkimo apklausai: kvietimą gavote el. paštu, pasiūlymą parengiate čia ir išsiunčiate el. paštu.",
       stepsTitle: "Kaip pateikti pasiūlymą", steps: ["<b>Atverkite nuorodą</b> iš kvietimo laiško - puslapis parodys, kas perkama ir iki kada laukiama pasiūlymų.",
         "<b>Įrašykite vieneto kainas</b> be PVM, pasiūlymo galiojimo terminą ir savo duomenis. Sumos suskaičiuojamos automatiškai.",
-        "<b>Parenkite pasiūlymą</b> ir <b>išsiųskite jį el. paštu</b> kvietime nurodytam kontaktiniam asmeniui iki termino. Kol laiško neišsiuntėte, pasiūlymas nepateiktas."],
+        "<b>Paspauskite „Siųsti pasiūlymą“</b> - jūsų pašto programoje atsivers paruoštas laiškas kontaktiniam asmeniui; <b>išsiųskite jį</b> iki termino. Kol laiško neišsiuntėte, pasiūlymas nepateiktas."],
       noteTitle: "Duomenys", note: "Kvietimas perskaitomas jūsų naršyklėje iš nuorodos. Įvesti duomenys <b>niekur nesiunčiami ir nesaugomi</b> - pasiūlymą pirkimo vykdytojas gauna tik jūsų išsiųstu laišku. Uždarius puslapį neparengtas pasiūlymas neišlieka." },
     en: { title: "What this is and how to use it", purpose: "A quotation form for a low-value procurement: you received the invitation by email, you prepare the quotation here and send it by email.",
       stepsTitle: "How to submit a quotation", steps: ["<b>Open the link</b> from the invitation email - the page shows what is being bought and the deadline.",
         "<b>Enter the unit prices</b> excluding VAT, the validity of the quotation and your details. Totals are calculated automatically.",
-        "<b>Prepare the quotation</b> and <b>send it by email</b> to the contact person named in the invitation before the deadline. Until you send the email, the quotation is not submitted."],
+        "<b>Click “Send the quotation”</b> - a prepared email to the contact person opens in your email program; <b>send it</b> before the deadline. Until you send the email, the quotation is not submitted."],
       noteTitle: "Data", note: "The invitation is read in your browser from the link. The data you enter is <b>not sent or stored anywhere</b> - the buyer receives the quotation only in the email you send. If you close the page, an unprepared quotation is not kept." }
   };
   if (window.GProcureInfoPanel && $("infoPanelMount")) window.GProcureInfoPanel.mount({ target: "#infoPanelMount", moduleId: "pp-report-pasiulymas", getLang: function () { return KALBA; }, content: INFO });

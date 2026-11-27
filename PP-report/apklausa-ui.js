@@ -83,8 +83,11 @@
     if (a.tiekejai.some(function (t) { return !t.issiusta; })) return { k: "siusti", t: "Išsiųskite kvietimus", z: "demesio", veiksmas: true };
     return { k: "vyksta", t: "Laukiama pasiūlymų", z: "info" };
   }
+  /* Pirkimui skirtos lėšos (2026-11-27, naudotojo pasiūlymas): atskiro lauko nebėra - lėšomis laikoma numatoma pirkimo vertė.
+     Apklausose, sukurtose iki tol su atskirai įrašytomis lėšomis, naudojamos jos. */
+  function skirtosLesos(a) { return a.vidaus.lesos !== null && a.vidaus.lesos !== undefined ? a.vidaus.lesos : a.vidaus.verte; }
   function vertink(a) {
-    return A.vertink({ kvietimas: a.kvietimas, tiekejai: a.tiekejai, pasiulymai: a.pasiulymai, lesos: a.vidaus.lesos, tarifas: tarifas(), neatitinka: a.sprendimas ? a.sprendimas.neatitinka : {} });
+    return A.vertink({ kvietimas: a.kvietimas, tiekejai: a.tiekejai, pasiulymai: a.pasiulymai, lesos: skirtosLesos(a), tarifas: tarifas(), neatitinka: a.sprendimas ? a.sprendimas.neatitinka : {} });
   }
   function tiekejas(a, t) { return a.tiekejai.filter(function (x) { return x.t === t; })[0] || null; }
   function pasiulymas(a, t) { return a.pasiulymai.filter(function (x) { return x.t === t; })[0] || null; }
@@ -207,7 +210,7 @@
       kvietimas: { pirkejas: { pav: org ? org.pavadinimas || "LITGRID AB" : "LITGRID AB", kodas: rekv ? rekv.kodas : "" }, pavadinimas: is ? is.kvietimas.pavadinimas : "", aprasymas: is ? is.kvietimas.aprasymas : "",
         pozicijos: is ? is.kvietimas.pozicijos : [], terminas: "", pristatymoVieta: is ? is.kvietimas.pristatymoVieta : "", pristatymoTerminas: is ? is.kvietimas.pristatymoTerminas : "",
         apmokejimas: is ? is.kvietimas.apmokejimas : "", kontaktas: kt },
-      vidaus: { verte: is ? is.vidaus.verte : null, lesos: is ? is.vidaus.lesos : null, bvpz: is ? is.vidaus.bvpz : "", padalinys: vd.padalinys || "", pareigos: vd.pareigos || "", mazaiTiekeju: "" },
+      vidaus: { verte: is ? is.vidaus.verte : null, lesos: null, bvpz: is ? is.vidaus.bvpz : "", padalinys: vd.padalinys || "", pareigos: vd.pareigos || "", mazaiTiekeju: "" },
       tiekejai: is ? is.tiekejai.map(function (t) { return { t: A.zetonas(), pav: t.pav, pastas: t.pastas, kalba: t.kalba }; }) : [], pasiulymai: [], zurnalas: [] });
   }
   function ankstesniTiekejai() {
@@ -256,9 +259,9 @@
       k.pozicijos.map(pozicijuEilute).join("") + '</tbody></table></div>' +
       '<span class="ea-klaida" id="ea-poz-kl"' + (S.klaidos.some(function (x) { return x.id === "ea-poz"; }) ? "" : " hidden") + '>' + esc((S.klaidos.filter(function (x) { return x.id === "ea-poz"; })[0] || {}).tekstas || "") + '</span>' +
       '<div class="ea-eile" style="margin-top:8px"><button type="button" class="ea-btn ea-btn--maz" data-veiksmas="eaPozPridek">+ Pridėti poziciją</button></div></section>';
-    s += '<section class="ea-card" aria-labelledby="ea-h2"><h3 id="ea-h2">2. Vertė ir lėšos</h3><p class="ea-sub">Tiekėjams nerodoma. Pagal vertę įrankis patikrina, ar apklausą galima vykdyti šiuo būdu.</p><div class="ea-laukai ea-laukai--3">' +
-      lauk("ea-verte", "Numatoma pirkimo vertė be PVM, Eur", typeof vd._verte === "string" ? vd._verte : vd.verte === null ? "" : fmt(vd.verte, 0, 2).replace(/\u00a0/g, " "), { privaloma: true, rezimas: "decimal", pvz: "pvz., 8 500", veiksmas: "eaVerte" }) +
-      lauk("ea-lesos", "Pirkimui skirtos lėšos be PVM, Eur", typeof vd._lesos === "string" ? vd._lesos : vd.lesos === null ? "" : fmt(vd.lesos, 0, 2).replace(/\u00a0/g, " "), { rezimas: "decimal", pvz: "pvz., 9 000", uzuomina: "Jei įrašysite - pasiūlymai, viršijantys lėšas, bus pažymėti." }) +
+    s += '<section class="ea-card" aria-labelledby="ea-h2"><h3 id="ea-h2">2. Numatoma vertė</h3><p class="ea-sub">Tiekėjams nerodoma. Pagal vertę įrankis patikrina, ar apklausą galima vykdyti šiuo būdu.</p><div class="ea-laukai">' +
+      lauk("ea-verte", "Numatoma pirkimo vertė be PVM, Eur", typeof vd._verte === "string" ? vd._verte : vd.verte === null ? "" : fmt(vd.verte, 0, 2).replace(/\u00a0/g, " "), { privaloma: true, rezimas: "decimal", pvz: "pvz., 8 500", veiksmas: "eaVerte",
+        uzuomina: "Ji laikoma ir pirkimui skirtomis lėšomis: pasiūlymai, viršijantys šią sumą, bus pažymėti, o pažymoje ji įrašoma kaip skirtos lėšos." }) +
       lauk("ea-bvpz", "BVPŽ kodas", vd.bvpz, { max: 40, pvz: "pvz., 39112000-0" }) + '</div><div id="ea-vertes-pastaba" aria-live="polite"></div></section>';
     s += '<section class="ea-card" aria-labelledby="ea-h3"><h3 id="ea-h3">3. Sąlygos tiekėjams</h3><p class="ea-sub">Šią dalį matys tiekėjai.</p><div class="ea-laukai">' +
       lauk("ea-terminas", "Pasiūlymų terminas (Lietuvos laiku)", typeof k._terminas === "string" ? k._terminas : k.terminas ? A.utcIVilniaus(k.terminas) : "", { privaloma: true, tipas: "datetime-local", veiksmas: "eaTerminas", uzuomina: '<span id="ea-termino-pastaba"></span>' }) +
@@ -362,7 +365,6 @@
       k.pozicijos.push({ pav: g("pav"), mat: g("mat"), kiekis: typeof kv === "number" && isFinite(kv) ? kv : (kt ? NaN : null), pastaba: g("pastaba"), _kiekis: kt });
     });
     vd.verte = suma(val("ea-verte")); vd._verte = val("ea-verte").trim();
-    vd.lesos = suma(val("ea-lesos")); vd._lesos = val("ea-lesos").trim();
     vd.bvpz = val("ea-bvpz");
     k.terminas = A.vilniausIUtc(val("ea-terminas")); k._terminas = val("ea-terminas");
     k.pristatymoVieta = val("ea-vieta-l"); k.pristatymoTerminas = val("ea-ptermin"); k.apmokejimas = val("ea-apmok");
@@ -398,7 +400,6 @@
     if (!vd._verte) b("ea-verte", "Numatoma pirkimo vertė: įrašykite sumą be PVM");
     else if (vd.verte === null) b("ea-verte", "Numatoma pirkimo vertė: suma turi būti skaičius, didesnis už nulį");
     else if (vd.verte > RIBA_CVPIS) b("ea-verte", "Numatoma pirkimo vertė viršija 15 000 Eur be PVM - toks pirkimas vykdomas CVP IS priemonėmis");
-    if (vd._lesos && vd.lesos === null) b("ea-lesos", "Pirkimui skirtos lėšos: suma turi būti skaičius, didesnis už nulį");
     if (!k._terminas) b("ea-terminas", "Pasiūlymų terminas: nurodykite datą ir laiką");
     else if (!k.terminas) b("ea-terminas", "Pasiūlymų terminas: tokio laiko nėra");
     else if (A.liko(k.terminas, new Date()).praejo) b("ea-terminas", "Pasiūlymų terminas: laikas jau praėjęs");
@@ -453,7 +454,7 @@
   }
   function kasToliauHtml(a, b) {
     var k = a.kvietimas, s = "", n;
-    if (b.k === "siusti") { n = a.tiekejai.filter(function (t) { return !t.issiusta; }).length; s = '<div class="ea-pastaba ea-pastaba--demesio"><strong>Išsiųskite kvietimus</strong>Neišsiųsta: ' + n + ' iš ' + a.tiekejai.length + '. Kiekvienam tiekėjui paruoštas atskiras laiškas su asmenine nuoroda - žr. skiltį „Kvietimai“ žemiau.</div>'; }
+    if (b.k === "siusti") s = siuntimoSekaHtml(a);
     else if (b.k === "vyksta") s = '<div class="ea-pastaba ea-pastaba--info"><strong>Laukiama pasiūlymų</strong>Gavę tiekėjo laišką su pasiūlymo kodu, įkelkite jį žemiau. Kainos nebus rodomos, kol pasiūlymai neatverti.</div>';
     else if (b.k === "visi") s = '<div class="ea-pastaba ea-pastaba--gerai"><strong>Pasiūlymus pateikė visi kviesti tiekėjai</strong>Galite laukti termino arba atverti pasiūlymus dabar. Atvėrus anksčiau termino pakeisti pasiūlymai nebepriimami, o atvėrimas įrašomas į žurnalą.' +
       '<div class="ea-eile" style="margin-top:10px"><button type="button" class="ea-btn ea-btn--pagr" data-veiksmas="eaAtverkPasiulymus" data-anksciau="1">Atverti pasiūlymus dabar</button></div></div>';
@@ -467,6 +468,36 @@
     else if (b.k === "nutraukta") s = '<div class="ea-pastaba ea-pastaba--klaida"><strong>Apklausa nutraukta</strong>' + esc(a.sprendimas && a.sprendimas.pastaba ? a.sprendimas.pastaba : "") + '</div>';
     void k;
     return s;
+  }
+  /* Siuntimas paeiliui (2026-11-27, naudotojo sprendimas): vienu paspaudimu atveriamas kito tiekėjo laiškas jūsų pašto programoje;
+     išsiuntus - „Išsiųsta - atverti kitą“ pažymi ankstesnį išsiųstu (žurnale) ir atveria kitą. Laišką siunčia žmogus savo pašto programoje,
+     todėl išsiųstu pažymima tik jo patvirtinimu, ne atvėrus. Per ilgam laiškui atveriamas tuščias laiškas, o tekstas nukopijuojamas. */
+  function sekaMygtukas(t, tekstas, buvo, pagr) {
+    var n = S.nuorodos[t.t] || {};
+    return '<a class="ea-btn' + (pagr ? " ea-btn--pagr" : "") + '" id="' + (pagr ? "ea-seka-kitas" : "ea-seka-dar") + '" href="' + esc(n.mailto || "#") + '" data-veiksmas="eaSeka" data-t="' + esc(t.t) + '"' +
+      (buvo ? ' data-buvo="' + esc(buvo) + '"' : '') + '>' + tekstas + '</a>';
+  }
+  function siuntimoSekaHtml(a) {
+    var liko = a.tiekejai.filter(function (t) { return !t.issiusta; }), n = a.tiekejai.length;
+    if (!liko.length) return "";
+    var dabar = S.seka && S.seka.id === a.id ? tiekejas(a, S.seka.t) : null;
+    if (dabar && dabar.issiusta) dabar = null;
+    var kitas = liko.filter(function (t) { return !dabar || t.t !== dabar.t; })[0], nr = function (t) { return a.tiekejai.indexOf(t) + 1; };
+    var s = '<section class="ea-pastaba ea-pastaba--demesio ea-seka" aria-labelledby="ea-seka-h"><strong id="ea-seka-h" tabindex="-1">Išsiųskite kvietimus - neišsiųsta ' + liko.length + ' iš ' + n + '</strong>';
+    if (!dabar) {
+      s += 'Laiškai atveriami jūsų pašto programoje po vieną: atverkite, patikrinkite ir išsiųskite, tada grįžkite čia ir atverkite kitą.' +
+        '<div class="ea-eile" style="margin-top:10px">' + sekaMygtukas(kitas, 'Atverti laišką: ' + esc(kitas.pav) + ' (' + nr(kitas) + ' iš ' + n + ')', "", true) + '</div>';
+    } else {
+      var nd = S.nuorodos[dabar.t] || {};
+      s += 'Atvertas laiškas tiekėjui <b>' + esc(dabar.pav) + '</b> (' + esc(dabar.pastas) + '). Išsiuntę jį savo pašto programoje, pažymėkite' + (kitas ? ' ir atverkite kitą' : '') + '.' +
+        (nd.visas === false ? '<div class="ea-uzuomina" style="margin-top:6px">Laiškas per ilgas atverti su tekstu: atvertas tuščias laiškas, o laiško tekstas nukopijuotas - įklijuokite jį.</div>' : '') +
+        '<div class="ea-eile" style="margin-top:10px">' +
+        (kitas ? sekaMygtukas(kitas, 'Išsiųsta - atverti kitą: ' + esc(kitas.pav) + ' (' + nr(kitas) + ' iš ' + n + ')', dabar.t, true)
+          : '<button type="button" class="ea-btn ea-btn--pagr" id="ea-seka-kitas" data-veiksmas="eaSeka" data-buvo="' + esc(dabar.t) + '">Išsiųsta - visi kvietimai išsiųsti</button>') +
+        sekaMygtukas(dabar, 'Atverti dar kartą', "", false) +
+        '<button type="button" class="ea-btn ea-btn--tylus" data-veiksmas="eaKopijuok" data-t="' + esc(dabar.t) + '" data-ka="laiskas">Kopijuoti laiško tekstą</button></div>';
+    }
+    return s + '<div class="ea-uzuomina" style="margin-top:8px">Kiekvienam tiekėjui - atskiras laiškas su asmenine nuoroda. Visus laiškus galite matyti ir siųsti ir skiltyje „Kvietimai“ žemiau.</div></section>';
   }
   function kvietimuHtml(a, suskleista, beVeiksmu) {
     var s = '<section class="ea-card" aria-labelledby="ea-kv-h"><details' + (suskleista ? "" : " open") + '><summary id="ea-kv-h">Kvietimai (' + a.tiekejai.filter(function (t) { return t.issiusta; }).length + ' iš ' + a.tiekejai.length + ' išsiųsta)</summary>' +
@@ -532,7 +563,7 @@
       if (e.busena === "pavėluotas") zymos += '<span class="ea-zyma ea-zyma--klaida">Gautas po termino - nevertinamas</span>';
       if (e.busena === "nepilnas") zymos += '<span class="ea-zyma ea-zyma--klaida">Trūksta kainų: ' + e.truksta + ' poz.</span>';
       if (e.busena === "neatitinka") zymos += '<span class="ea-zyma ea-zyma--klaida">Neatitinka poreikio</span>';
-      if (e.virsLesu) zymos += '<span class="ea-zyma ea-zyma--demesio">Viršija skirtas lėšas</span>';
+      if (e.virsLesu) zymos += '<span class="ea-zyma ea-zyma--demesio">Viršija numatomą vertę</span>';
       if (e.nmk) zymos += '<span class="ea-zyma ea-zyma--demesio">Neįprastai maža kaina</span>';
       if (e.kitasTiekejas) zymos += '<span class="ea-zyma ea-zyma--demesio">Kviestas kitas tiekėjas: ' + esc(e.kitasTiekejas) + '</span>';
       if (e.nepatvirtinta && e.nepatvirtinta.length) zymos += '<span class="ea-zyma ea-zyma--demesio">Tiekėjas nepatvirtino: ' + esc(e.nepatvirtinta.map(function (x) { return PATV_PAV[x]; }).join(", ")) + '</span>';
@@ -590,10 +621,10 @@
     else {
       s += '<div class="ea-pastaba ea-pastaba--gerai"><strong>Siūlomas laimėtojas: ' + esc(lm.tiekejas) + ' <span class="ea-zyma ea-zyma--demesio">Siūloma (nepatvirtinta)</span></strong>Mažiausia kaina tarp vertinamų pasiūlymų - ' + esc(eur(lm.viso)) + ' be PVM' +
         (a.vidaus.verte !== null ? " (numatoma vertė " + esc(eur(a.vidaus.verte)) + ")" : "") + '. Eilę sudarė taisyklės; ar pasiūlymas atitinka poreikį, įvertinate ir sprendimą priimate jūs.</div>';
-      if (lm.virsLesu) s += '<div class="ea-pastaba ea-pastaba--demesio"><strong>Kaina viršija pirkimui skirtas lėšas</strong>Skirta ' + esc(eur(v.lesos)) + ' be PVM. Pažymoje reikės nurodyti, ar lėšos padidintos.</div>';
+      if (lm.virsLesu) s += '<div class="ea-pastaba ea-pastaba--demesio"><strong>Kaina viršija numatomą vertę (pirkimui skirtas lėšas)</strong>' + (a.vidaus.lesos !== null ? 'Skirta ' : 'Numatoma vertė ') + esc(eur(v.lesos)) + ' be PVM. Pažymoje reikės nurodyti, ar lėšos padidintos.</div>';
       if (lm.nmk) s += '<div class="ea-pastaba ea-pastaba--demesio"><strong>Kaina gali būti neįprastai maža</strong>Ji 30 ir daugiau procentų mažesnė už vertinamų pasiūlymų kainų vidurkį (' + esc(eur(v.vidurkis)) + '). Paprašykite tiekėjo kainą pagrįsti ir rezultatą nurodykite pažymoje' + teise("nmk_riba") + '.</div>';
       if (gauta === 1 && a.tiekejai.length > 1) s += '<div class="ea-pastaba ea-pastaba--info">Gautas vienas pasiūlymas iš ' + a.tiekejai.length + ' kviestų tiekėjų - palyginti kainų nėra su kuo.</div>';
-      else if (v.nmkNetikrinta) s += '<div class="ea-pastaba ea-pastaba--info">Neįprastai mažos kainos patikra neatlikta: pirkimui skirtų lėšų neviršija mažiau kaip du vertinami pasiūlymai, todėl kainų vidurkio palyginti nėra su kuo. Jei kaina atrodo neįprastai maža, įvertinkite patys.</div>';
+      else if (v.nmkNetikrinta) s += '<div class="ea-pastaba ea-pastaba--info">Neįprastai mažos kainos patikra neatlikta: numatomos vertės (pirkimui skirtų lėšų) neviršija mažiau kaip du vertinami pasiūlymai, todėl kainų vidurkio palyginti nėra su kuo. Jei kaina atrodo neįprastai maža, įvertinkite patys.</div>';
       if (lm.kitasTiekejas) s += '<div class="ea-pastaba ea-pastaba--demesio"><strong>Pasiūlymą pateikė ne kviestas tiekėjas</strong>Kvietimas buvo išsiųstas „' + esc(lm.kitasTiekejas) + '“, o pasiūlymą pateikė „' + esc(lm.tiekejas) + '“ (nuoroda galėjo būti persiųsta). Prieš patvirtindami įsitikinkite, kad tai priimtina.</div>';
     }
     s += '<div class="ea-laukas" style="margin-top:12px"><label for="ea-sp-pastaba">Pastaba prie sprendimo</label><textarea id="ea-sp-pastaba" rows="2" maxlength="1000" placeholder="pvz., kaina suderinta su biudžeto valdytoju">' + esc(a.sprendimas ? a.sprendimas.pastaba : "") + '</textarea></div>';
@@ -643,7 +674,7 @@
     if (galas) info.push("Paskutinio apklausos žurnalo įrašo antspaudas (pažymos pildymo metu): " + String(galas.h).toUpperCase().replace(/(.{4})(?=.)/g, "$1-") + ".");
     var tinkamu = v.eile.length, laiku = v.eilutes.filter(function (e) { return e.busena !== "negautas" && e.busena !== "pavėluotas"; }).length;
     return { formNum: 1, timestamp: dabarIso(),
-      fields: { pirkimoPavadinimas: k.pavadinimas, verteBePvm: st(a.vidaus.verte), verteSuPvm: a.vidaus.verte !== null && tar ? st(a.vidaus.verte * (1 + tar)) : "", lesosBePvm: st(a.vidaus.lesos), bvpzKodas: a.vidaus.bvpz,
+      fields: { pirkimoPavadinimas: k.pavadinimas, verteBePvm: st(a.vidaus.verte), verteSuPvm: a.vidaus.verte !== null && tar ? st(a.vidaus.verte * (1 + tar)) : "", lesosBePvm: st(skirtosLesos(a)), bvpzKodas: a.vidaus.bvpz,
         pirkimoBudas: "Neskelbiama apklausa raštu", vertinimoKriterijus: "Kaina", iniPadalinys: a.vidaus.padalinys, iniPareigos: a.vidaus.pareigos, iniVardas: k.kontaktas.vardas,
         kviestaSkaicius: String(a.tiekejai.length), kviestiTiekejai: a.tiekejai.map(function (t) { return t.pav; }).join(", "), kitaInfo: info.join("\n"),
         sprendimoScenarijus: sp.rezultatas === "negauta" || !laiku ? "negauta" : sp.rezultatas === "atmesta" ? "atmesta" : tinkamu === 1 ? "vienas-tiekejas" : "sutartis" },
@@ -791,7 +822,7 @@
     var eil = [["Apklausos Nr.", "Pavadinimas", "Būsena", "Sukurta", "Pasiūlymų terminas", "Numatoma vertė be PVM", "Skirtos lėšos be PVM", "Kviesta tiekėjų", "Gauta pasiūlymų", "Rezultatas", "Laimėtojas", "Laimėjusi kaina be PVM", "Kvietimo antspaudas"]];
     skaitykVisas().forEach(function (a) {
       var sp = a.sprendimas, lm = sp && sp.rezultatas === "laimetojas" ? tiekejas(a, sp.laimetojas) : null, kn = laimejusiKaina(a), n = function (x) { return typeof x === "number" ? String(x).replace(".", ",") : ""; };
-      eil.push([a.id, a.kvietimas.pavadinimas, busena(a).t, A.rodykLaika(a.sukurta), A.rodykLaika(a.kvietimas.terminas), n(a.vidaus.verte), n(a.vidaus.lesos), a.tiekejai.length, a.pasiulymai.length,
+      eil.push([a.id, a.kvietimas.pavadinimas, busena(a).t, A.rodykLaika(a.sukurta), A.rodykLaika(a.kvietimas.terminas), n(a.vidaus.verte), n(skirtosLesos(a)), a.tiekejai.length, a.pasiulymai.length,
         sp && sp.patvirtinta ? { laimetojas: "Nustatytas laimėtojas", atmesta: "Visi pasiūlymai atmesti", negauta: "Pasiūlymų negauta", nutraukta: "Nutraukta" }[sp.rezultatas] || "" : "", lm ? lm.pav : "", n(kn), A.trumpas(a.antspaudas)]);
     });
     return "\ufeff" + eil.map(function (e) { return e.map(csvLangelis).join(";"); }).join("\r\n") + "\r\n";
@@ -899,6 +930,20 @@
     eaKopijuok: function (el) {
       var n = S.nuorodos[el.getAttribute("data-t")], ka = el.getAttribute("data-ka"); if (!n) return;
       global.GP_KOPIJA.kopijuok(ka === "nuoroda" ? n.nuoroda : n.laiskas.tema + "\n\n" + n.laiskas.tekstas, { sekme: ka === "nuoroda" ? "Nuoroda nukopijuota" : "Laiško tema ir tekstas nukopijuoti" });
+    },
+    eaSeka: function (el) {
+      var a = gauk(S.id); if (!a) return false;
+      var t = el.getAttribute("data-t"), buvo = el.getAttribute("data-buvo"), n = t ? S.nuorodos[t] : null, darbas = Promise.resolve();
+      if (t && !n) return false;
+      if (buvo) {
+        var tb = tiekejas(a, buvo);
+        if (tb && !tb.issiusta) { tb.issiusta = dabarIso(); darbas = irasas(a, "issiusta", tb.pav + " (" + tb.pastas + ")").then(function () { issaugok(a); }); }
+      }
+      S.seka = t ? { id: a.id, t: t } : null;
+      if (n && n.visas === false && global.GP_KOPIJA) global.GP_KOPIJA.kopijuok(n.laiskas.tekstas, { tylus: true });
+      // perpiešiama po nuorodos numatytojo veiksmo (setTimeout), kad paspausta nuoroda spėtų atverti laišką
+      setTimeout(function () { darbas.then(function () { return perpiesk(t ? "ea-seka-kitas" : "ea-ps-h"); }).then(function () { if (!t) pranesk("Visi kvietimai išsiųsti. Laukiama pasiūlymų."); }); }, 0);
+      // nuorodos numatytasis veiksmas (mailto) atveria laišką pašto programoje
     },
     eaIssiusta: function (el) {
       var a = gauk(S.id), t = a && tiekejas(a, el.getAttribute("data-t")); if (!t) return;
