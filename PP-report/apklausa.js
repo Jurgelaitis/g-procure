@@ -76,8 +76,11 @@
   function saugusJson(t) {
     return JSON.parse(t, function (k, v) { return k === "__proto__" || k === "constructor" || k === "prototype" ? undefined : v; });
   }
-  function koduok(obj) {
+  /* koduok(obj, { suspausti: false }) - nesuspaustas „g0.“ kodas: jį perskaito ir naršyklės be DecompressionStream (iOS iki 16.4);
+     naudojamas trumpoms nuorodoms, kurių kodo ilgis adrese nesvarbus (2026-11-27, tiekėjo patikra V4). */
+  function koduok(obj, o) {
     var baitai = new global.TextEncoder().encode(JSON.stringify(obj));
+    if (o && o.suspausti === false) return Promise.resolve("g0." + b64(baitai));
     if (typeof global.CompressionStream !== "function") return Promise.resolve("g0." + b64(baitai));
     return srautu(baitai, new global.CompressionStream("deflate-raw")).then(function (z) { return "g1." + b64(z); },
       function () { return "g0." + b64(baitai); });
@@ -174,7 +177,9 @@
       pavadinimas: eilute(x.pavadinimas, RIBOS.pavadinimas), aprasymas: tekstas(x.aprasymas, RIBOS.tekstas),
       pozicijos: (Array.isArray(x.pozicijos) ? x.pozicijos : []).slice(0, RIBOS.pozicijos).map(function (p) {
         p = objektas(p);
-        return { pav: eilute(p.pav, RIBOS.trumpas), mat: eilute(p.mat, 20), kiekis: skaicius(p.kiekis, 0, 1e9), pastaba: eilute(p.pastaba, RIBOS.trumpas) };
+        var poz = { pav: eilute(p.pav, RIBOS.trumpas), mat: eilute(p.mat, 20), kiekis: skaicius(p.kiekis, 0, 1e9), pastaba: eilute(p.pastaba, RIBOS.trumpas) };
+        var en = eilute(p.pavEn, RIBOS.trumpas); if (en) poz.pavEn = en;     // pavadinimas anglų kalba EN kvietimams (neprivaloma)
+        return poz;
       }),
       terminas: laikas(x.terminas),
       pristatymoVieta: eilute(x.pristatymoVieta, RIBOS.trumpas), pristatymoTerminas: eilute(x.pristatymoTerminas, RIBOS.trumpas),
@@ -184,6 +189,9 @@
     var dok = tekstas(x.dokumentai, 1000);
     if (dok) k.dokumentai = dok;          // dokumentai, kuriuos tiekėjas prideda prie laiško (neprivaloma)
     if (x.nacsaugumas === true) k.nacsaugumas = true;   // tik kai taikoma - anksčiau paskelbtų kvietimų antspaudas nesikeičia
+    /* Neprivalomi laukai (2026-11-27, naudotojo sprendimai T4, T5): įrašomi tik kai yra - anksčiau paskelbtų kvietimų antspaudas nesikeičia */
+    var pavEn = eilute(x.pavadinimasEn, RIBOS.pavadinimas); if (pavEn) k.pavadinimasEn = pavEn;
+    if (typeof x.galiojaMin === "number" && Math.floor(x.galiojaMin) === x.galiojaMin && x.galiojaMin >= 1 && x.galiojaMin <= 365) k.galiojaMin = x.galiojaMin;
     if (x.tiekejas !== undefined || x.t !== undefined) {
       k.tiekejas = { pav: eilute(tk.pav, RIBOS.pavadinimas), pastas: pastas(tk.pastas) };
       k.t = ZETONO_RE.test(x.t) ? x.t : "";
@@ -220,6 +228,7 @@
       patvirtinta: (Array.isArray(x.patvirtinta) ? x.patvirtinta : []).filter(function (a, i, s) { return (PATVIRTINIMAI.indexOf(a) >= 0 || a === NACSAUG) && s.indexOf(a) === i; }),
       pateikta: laikas(x.pateikta), kalba: x.kalba === "en" ? "en" : "lt"
     };
+    if (tk.fizinis === true) p.tiekejas.fizinis = true;   // fizinis asmuo (individuali veikla) - tik kai pažymėta, kitų pasiūlymų antspaudas nesikeičia
     if (!p.apklausa || !p.kvietimas || !p.t || !p.tiekejas.pav || !p.pateikta) return { ok: false, klaida: "forma" };
     return { ok: true, pasiulymas: p };
   }
@@ -277,7 +286,8 @@
       return { t: tk.t, tiekejas: x.duomenys.tiekejas.pav || tk.pav, gauta: x.gauta, sumos: s, viso: s.viso, suPvm: s.suPvm, pvm: x.duomenys.pvm,
         busena: busena, truksta: s.truksta, priezastis: busena === "neatitinka" ? String(neat[tk.t] || "") : "",
         nepatvirtinta: reikiaPatvirtinti(k).filter(function (a) { return x.duomenys.patvirtinta.indexOf(a) < 0; }),
-        kitasTiekejas: kitasPavadinimas(tk.pav, x.duomenys.tiekejas.pav) ? tk.pav : "", parengta: x.duomenys.pateikta || "" };
+        kitasTiekejas: kitasPavadinimas(tk.pav, x.duomenys.tiekejas.pav) ? tk.pav : "", parengta: x.duomenys.pateikta || "",
+        trumpasGaliojimas: !!(k.galiojaMin && typeof x.duomenys.galioja === "number" && x.duomenys.galioja < k.galiojaMin) };
     });
     var tinkami = eil.filter(function (e) { return e.busena === "tinkamas"; }).sort(function (a, b) {
       return a.viso - b.viso || new Date(a.gauta) - new Date(b.gauta) || (a.t < b.t ? -1 : 1);
@@ -322,7 +332,9 @@
         pavadinimas: eilute(kv.pavadinimas, RIBOS.pavadinimas), aprasymas: tekstas(kv.aprasymas, RIBOS.tekstas),
         pozicijos: (Array.isArray(kv.pozicijos) ? kv.pozicijos : []).slice(0, RIBOS.pozicijos).map(function (p) {
           p = objektas(p);
-          return { pav: eilute(p.pav, RIBOS.trumpas), mat: eilute(p.mat, 20), kiekis: skaicius(p.kiekis, 0, 1e9), pastaba: eilute(p.pastaba, RIBOS.trumpas) };
+          var poz = { pav: eilute(p.pav, RIBOS.trumpas), mat: eilute(p.mat, 20), kiekis: skaicius(p.kiekis, 0, 1e9), pastaba: eilute(p.pastaba, RIBOS.trumpas) };
+          var en = eilute(p.pavEn, RIBOS.trumpas); if (en) poz.pavEn = en;
+          return poz;
         }),
         terminas: laikas(kv.terminas), pristatymoVieta: eilute(kv.pristatymoVieta, RIBOS.trumpas), pristatymoTerminas: eilute(kv.pristatymoTerminas, RIBOS.trumpas),
         apmokejimas: eilute(kv.apmokejimas, RIBOS.trumpas), kontaktas: { vardas: eilute(kt.vardas, 120), pastas: pastas(kt.pastas), tel: eilute(kt.tel, 40) }
@@ -371,6 +383,8 @@
     }
     var kdok = tekstas(kv.dokumentai, 1000); if (kdok) a.kvietimas.dokumentai = kdok;
     if (kv.nacsaugumas === true) a.kvietimas.nacsaugumas = true;
+    var kpEn = eilute(kv.pavadinimasEn, RIBOS.pavadinimas); if (kpEn) a.kvietimas.pavadinimasEn = kpEn;
+    if (typeof kv.galiojaMin === "number" && Math.floor(kv.galiojaMin) === kv.galiojaMin && kv.galiojaMin >= 1 && kv.galiojaMin <= 365) a.kvietimas.galiojaMin = kv.galiojaMin;
     if (busena !== "juodrastis" && (!a.antspaudas || !kvietimoForma(a.kvietimas).ok)) return null;
     if (!a.sukurta) a.sukurta = a.keista || "";
     return a;
@@ -510,12 +524,17 @@
   /* ---------- laiškų tekstai ---------- */
   /* Kvietimo laiškas (2026-11-27, naudotojo pastaba „ar jis ne per sudėtingas?“): trumpas, be kodų ir antspaudų - kas, iki kada, trys
      žingsniai ir nuoroda pabaigoje. Antspaudas lieka kvietime ir pasiūlyme (vientisumo patikrai), bet tiekėjui laiške jo nereikia. */
+  /* Kvietimo turinys anglų kalba (T5): pavadinimai - iniciatoriaus įrašyti, kitaip lietuviški; dažni mato vienetai išverčiami. */
+  var VNT_EN = { "vnt": "pcs", "vnt.": "pcs", "kompl": "set", "kompl.": "set", "komplektas": "set", "kompl.,": "set", "pak": "pack", "pak.": "pack", "val": "h", "val.": "h",
+    "mėn": "month", "mėn.": "month", "d": "day", "d.": "day", "dien.": "day", "paslauga": "service", "kartas": "time", "kartai": "times", "vnt./mėn.": "pcs/month", "porų": "pairs", "pora": "pair" };
+  function matEn(mat) { var m = String(mat || "").trim(); return Object.prototype.hasOwnProperty.call(VNT_EN, m.toLowerCase()) ? VNT_EN[m.toLowerCase()] : m; }
+  function pavadinimas(k, kalba) { return kalba === "en" && k.pavadinimasEn ? k.pavadinimasEn : k.pavadinimas; }
   function laiskas(k, nuoroda, h, kalba) {
     var en = kalba === "en", kt = k.kontaktas, kas = kt.vardas ? kt.vardas + ", " + kt.pastas : kt.pastas, data = rodykLaika(k.terminas).slice(0, 10);
     if (kt.tel) kas += ", " + kt.tel;
     if (en) return {
-      tema: "Request for quotation: " + k.pavadinimas + " (by " + data + ")",
-      tekstas: ["Hello,", "", k.pirkejas.pav + " invites you to submit a quotation for the low-value procurement “" + k.pavadinimas + "”.",
+      tema: "Request for quotation: " + pavadinimas(k, "en") + " (by " + data + ")",
+      tekstas: ["Hello,", "", k.pirkejas.pav + " invites you to submit a quotation for the low-value procurement “" + pavadinimas(k, "en") + "”.",
         "Deadline: " + rodykLaika(k.terminas) + " (Lithuanian time).", "",
         "It only takes a few minutes:", "1. Open the link below - it shows what is being bought and the terms.", "2. Enter your prices and details.",
         "3. Click “Send the quotation” - a prepared email will open in your email program; just send it."]
@@ -536,8 +555,8 @@
   function atsakymas(k, p, kodas, h, kalba) {
     var en = kalba === "en", pas = p.tiekejas.pav + (p.tiekejas.asmuo ? ", " + p.tiekejas.asmuo : "");
     if (en) return {
-      tema: "Quotation: " + k.pavadinimas + " (" + k.id + ") - " + p.tiekejas.pav,
-      tekstas: ["Hello,", "", "Please find our quotation for the procurement “" + k.pavadinimas + "” below.",
+      tema: "Quotation: " + pavadinimas(k, "en") + " (" + k.id + ") - " + p.tiekejas.pav,
+      tekstas: ["Hello,", "", "Please find our quotation for the procurement “" + pavadinimas(k, "en") + "” below.",
         "The quotation data is in the block below - please do not change it; the buyer's tool will read it.", "", sarvas(kodas, "pasiulymas"), "", pas].join("\n")
     };
     return {
@@ -549,7 +568,7 @@
 
   global.GP_APKLAUSA = {
     RIBOS: RIBOS, PATVIRTINIMAI: PATVIRTINIMAI, NACSAUG: NACSAUG, reikiaPatvirtinti: reikiaPatvirtinti, kitasPavadinimas: kitasPavadinimas, NMK_DALIS: NMK_DALIS, ID_RE: ID_RE, ZETONO_RE: ZETONO_RE,
-    id: id, zetonas: zetonas, koduok: koduok, iskoduok: iskoduok, sarvas: sarvas, isSarvo: isSarvo, atkoduok: atkoduok,
+    id: id, zetonas: zetonas, matEn: matEn, pavadinimas: pavadinimas, koduok: koduok, iskoduok: iskoduok, sarvas: sarvas, isSarvo: isSarvo, atkoduok: atkoduok,
     kvietimoForma: kvietimoForma, pasiulymoForma: pasiulymoForma, bendra: bendra, kanonas: kanonas, antspaudas: antspaudas, trumpas: trumpas,
     apvalink: apvalink, sumos: sumos, vertink: vertink, zurnaloIrasas: zurnaloIrasas, tikrinkZurnala: tikrinkZurnala,
     vilniausIUtc: vilniausIUtc, utcIVilniaus: utcIVilniaus, rodykLaika: rodykLaika, liko: liko, forma: forma,

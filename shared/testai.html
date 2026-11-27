@@ -178,6 +178,17 @@ async function testaiJuosta(){
     lygu(juosta(d).querySelector("a").getAttribute("href"), "../../index.html", "href iš data-portalas");
   });
 
+  await testas("data-auditorija=\"tiekejams\": tiekėjo puslapyje - „Tiekėjams“ ir nuoroda į G-Procure tiekėjams, ne „Visi įrankiai“ (2026-11-27)", async ()=>{
+    const { d } = await ramas('<script src="portal-link.js" data-portalas="../PP-tiekejams/index.html" data-auditorija="tiekejams"><\/script>');
+    const a = juosta(d).querySelector("a");
+    lygu(a.getAttribute("href"), "../PP-tiekejams/index.html", "href");
+    tiesa(/Tiekėjams/.test(a.textContent) && !/Visi įrankiai/.test(a.textContent), "tekstas: " + a.textContent);
+    const { d: de } = await ramas('<script src="portal-link.js" data-auditorija="tiekejams"><\/script>', "en");
+    tiesa(/For suppliers/.test(juosta(de).querySelector("a").textContent), "EN tekstas");
+    const src = await (await fetch("../PP-report/pasiulymas.html?b=" + Date.now())).text();
+    tiesa(/<script src="\.\.\/shared\/portal-link\.js" data-portalas="\.\.\/PP-tiekejams\/index\.html" data-auditorija="tiekejams"><\/script>/.test(src), "tiekėjo puslapis jungia tiekėjų nuorodą");
+  });
+
   await testas("Pakartotinis įkėlimas juostos nedubliuoja", async ()=>{
     const { d, w } = await ramas(SKRIPTAS);
     w.GP_PORTALAS.ikelk(); w.GP_PORTALAS.ikelk();
@@ -10235,8 +10246,18 @@ async function testaiAnalitika(){
   await testas("Sargai: analitika.js visuose tikruose puslapiuose iškart po sutikimas.js; kitų analitikos ar sekimo įrankių nėra; kiekvienas įvykis kode - iš žodyno; biblioteka - sąraše ir darbininke; ES adresai ir viešas raktas", async () => {
     const blogi = [];
     const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)))];
+    // Tiekėjo pasiūlymo puslapis (2026-11-27, tiekėjo patikra V1): statistika nerenkama, juosta nerodoma (data-gp-sutikimas="be-juostos")
+    const BE_ANALITIKOS = ["../PP-report/pasiulymas.html"];
+    if (!/beJuostos = doc\.documentElement\.getAttribute\("data-gp-sutikimas"\) === "be-juostos"/.test(await saltinis("sutikimas.js")) || !/!TESTINE && !beJuostos && !galiojantis\(\)/.test(await saltinis("sutikimas.js")))
+      blogi.push("sutikimas.js: data-gp-sutikimas=\"be-juostos\" juostos nebeslepia");
     for (const m of puslapiai) {
       const src = await saltinis(m);
+      if (BE_ANALITIKOS.indexOf(m) >= 0) {
+        if (/shared\/analitika\.js/.test(src)) blogi.push(m + ": tiekėjo puslapyje statistika nerenkama - analitika.js nejungiamas");
+        if (!/<html lang="lt" data-gp-sutikimas="be-juostos">/.test(src)) blogi.push(m + ": be data-gp-sutikimas=\"be-juostos\"");
+        if (!/<script src="\.\.\/shared\/sutikimas\.js"><\/script>/.test(src)) blogi.push(m + ": sutikimas.js nejungtas");
+        continue;
+      }
       const su = src.search(/<script src="(?:\.\.\/)?shared\/sutikimas\.js"><\/script>\n<script src="(?:\.\.\/)?shared\/analitika\.js"><\/script>/);
       if (su < 0) blogi.push(m + ": analitika.js ne iškart po sutikimas.js");
       if ((src.match(/<script src="(?:\.\.\/)?shared\/analitika\.js"><\/script>/g) || []).length !== 1) blogi.push(m + ": analitika.js ne vieną kartą");

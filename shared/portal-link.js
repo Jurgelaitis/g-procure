@@ -33,6 +33,8 @@
   /* Adresas imamas is <script data-portalas="...">, numatytas - portalas saknyje. */
   var scriptEl = doc.currentScript;
   var ADRESAS = (scriptEl && scriptEl.getAttribute("data-portalas")) || "../index.html";
+  /* data-auditorija="tiekejams" - tiekėjams skirtas puslapis (pasiūlymo forma): nuoroda į G-Procure tiekėjams, ne į pirkėjų įrankius */
+  var TIEKEJAMS = !!(scriptEl && scriptEl.getAttribute("data-auditorija") === "tiekejams");
 
   /* Tekstai rasomi tiesiogiai UTF-8, kaip shared/ai-proxy.js zinutese. */
   var TEKSTAI = {
@@ -48,6 +50,10 @@
     }
   };
 
+  if (TIEKEJAMS) {
+    TEKSTAI.lt.etikete = "Tiekėjams"; TEKSTAI.lt.aria = "Atverti G-Procure tiekėjams skirtą dalį";
+    TEKSTAI.en.etikete = "For suppliers"; TEKSTAI.en.aria = "Open the G-Procure section for suppliers";
+  }
   function kalba() {
     var l = (doc.documentElement.getAttribute("lang") || "lt").toLowerCase();
     return l.indexOf("en") === 0 ? "en" : "lt";

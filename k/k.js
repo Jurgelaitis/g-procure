@@ -15,14 +15,26 @@
     rysys: ["Nepavyko atverti kvietimo", "Nepavyko pasiekti G-Procure serverio. Patikrinkite interneto ryšį ir bandykite dar kartą po minutės.",
       "Could not reach the G-Procure server. Check your internet connection and try again in a minute."]
   };
+  /* ID iš adreso dalies po „#“: tarpai ir brūkšneliai nepaisomi, skyrybos ženklai gale (nukopijuota su tašku ar skliaustu) - irgi */
   function idIs(hash) {
-    var x = String(hash || "").replace(/^#/, "").replace(/[\s-]/g, "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1");
+    var x = String(hash || "").replace(/^#/, "").replace(/[\s-]/g, "").replace(/[.,;:!?)\]}>'"»“”]+$/, "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1");
     return ID_RE.test(x) ? x : null;
+  }
+  /* Įklijuotas tekstas: trumpa nuoroda (ir per „Safe Links“ - koduota), vien ID arba ilga nuoroda su kvietimo kodu */
+  function isTeksto(t) {
+    t = String(t || "");
+    var m = /g-procure\.com(?:\/|%(?:25)?2F)k(?:\/|%(?:25)?2F)?(?:#|%(?:25)?23)([0-9A-Za-z-]{10,14})/i.exec(t);
+    if (m) { var id = idIs(m[1]); if (id) return { id: id }; }
+    var k = /[#&]k=(g[01]\.[A-Za-z0-9_-]{16,})/.exec(t.replace(/%23/gi, "#").replace(/%3D/gi, "="));
+    if (k) return { kodas: k[1] };
+    var x = idIs(t.trim());
+    return x ? { id: x } : null;
   }
   function rodyk(rusis) {
     var t = TEKSTAI[rusis], h = document.getElementById("kH");
     h.textContent = t[0]; document.getElementById("kLt").textContent = t[1]; document.getElementById("kEn").textContent = t[2];
     document.getElementById("kKartoti").hidden = rusis !== "rysys";
+    document.getElementById("kForma").hidden = rusis === "rysys";
     document.title = t[0] + " - G-Procure";
   }
   /* atverk(hash, { fetch, eik }) -> Promise<"atverta" | "neteisinga" | "nera" | "rysys"> (testams - netikri fetch ir eik) */
@@ -42,6 +54,15 @@
     }).catch(function () { return "rysys"; }).then(function (b) { if (b !== "atverta") rodyk(b); return b; });
   }
   document.getElementById("kKartoti").addEventListener("click", function () { atverk(location.hash); });
-  window.GP_TRUMPA = { atverk: atverk, idIs: idIs };
+  document.getElementById("kForma").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var r = isTeksto(document.getElementById("kNuoroda").value), kl = document.getElementById("kFormaKl");
+    if (!r) { kl.textContent = "Nuoroda neatpažinta - nukopijuokite visą nuorodą iš laiško. / The link was not recognised - copy the whole link from the email."; return; }
+    kl.textContent = "";
+    if (r.kodas) { location.replace("../PP-report/pasiulymas.html#k=" + r.kodas); return; }
+    try { history.replaceState(null, "", "#" + r.id); } catch (x) { /* nebūtina */ }
+    atverk("#" + r.id);
+  });
+  window.GP_TRUMPA = { atverk: atverk, idIs: idIs, isTeksto: isTeksto };
   atverk(location.hash);
 })();

@@ -269,6 +269,7 @@ async function testaiApklausa() {
     a.kvietimas.terminas = iso(o.terminas === undefined ? 2 * 864e5 : o.terminas); a.kvietimas.kontaktas = { vardas: 'Vardenis Pavardenis', pastas: 'vardenis@litgrid.example', tel: '+370 600 00000' };
     a.vidaus = { verte: o.verte === undefined ? 8500 : o.verte, lesos: o.lesos === undefined ? null : o.lesos, bvpz: '39112000-0', padalinys: 'IT skyrius', pareigos: 'Specialistas', mazaiTiekeju: '' };
     a.tiekejai = (o.tk || TK).map(t => ({ t: A.zetonas(), pav: t[0], pastas: t[1], kalba: t[2] || 'lt', issiusta: iso(-36e5) }));
+    Object.assign(a.kvietimas, o.kv || {});
     a.busena = 'paskelbta'; a.kvietimas = A.kvietimoForma(a.kvietimas).kvietimas; a.antspaudas = await A.antspaudas(A.bendra(a.kvietimas));
     a.zurnalas.push(await A.zurnaloIrasas(null, 'paskelbta', 'kviesta tiekėjų: ' + a.tiekejai.length, iso(-7 * 864e5),
       { k: a.antspaudas, v: a.vidaus.verte === null ? '' : String(a.vidaus.verte), l: a.vidaus.lesos === null ? '' : String(a.vidaus.lesos) }));
@@ -474,7 +475,7 @@ async function testaiApklausa() {
       const js = JSON.stringify(obj);
       tiesa(!/8500|9000|verte|lesos|IT skyrius/.test(js), 'vidaus duomenų nuorodoje nėra');
       a.tiekejai.filter(x => x.t !== t.t).forEach(x => tiesa(js.indexOf(x.pav) < 0 && js.indexOf(x.pastas) < 0 && js.indexOf(x.t) < 0, 'kito tiekėjo duomenų nėra'));
-      tiesa(n.mailto.indexOf('mailto:' + encodeURIComponent(t.pastas) + '?subject=') === 0, 'laiško adresas');
+      tiesa(n.mailto.indexOf('mailto:' + encodeURIComponent(t.pastas).replace(/%40/g, '@') + '?subject=') === 0 && n.mailto.split('?')[0].indexOf('%40') < 0, 'laiško adresas („@“ nekoduojamas)');
       turi(n.laiskas.tekstas, A.rodykLaika(a.kvietimas.terminas), 'terminas laiške');
       // paprastas laiškas (2026-11-27): be antspaudo ir kodų, nuoroda - po „Pateikti pasiūlymą:“ / „Submit a quotation:“, terminas temoje
       const eil = n.laiskas.tekstas.split('\n'), en = t.kalba === 'en';
@@ -762,8 +763,14 @@ async function testaiApklausa() {
     lygu([d.documentElement.lang, d.querySelector('#psl-pav').value, d.querySelector('#psl-pastas').value], ['lt', 'UAB „Baldų centras“', 'info@baldai.example'], 'tiekėjo duomenys iš kvietimo');
     const ik = d.querySelectorAll('[data-ik]');
     ras(ik[0], '125,5'); ras(ik[0], '125,5', 'change'); ras(ik[1], '1.080'); ras(ik[1], '1.080', 'change');
+    // „1.080“ - dviprasmiška (2026-11-27, D3): klausiama prie lauko, tyliai nepasirenkama
+    const dv = d.getElementById('psl-ik1-dv');
+    tiesa(!dv.hidden && /Kaip suprasti „1\.080“/.test(dv.textContent) && dv.querySelectorAll('[data-veiksmas="pslDvi"]').length === 2 && d.querySelector('[data-suma="1"]').textContent === '-', 'dviprasmiška kaina - klausimas: ' + dv.textContent);
+    dv.querySelector('[data-v="t"]').click();
+    tiesa(dv.hidden && d.activeElement === ik[1], 'pasirinkus - klausimas dingsta, fokusas - lauke');
     lygu([ik[0].value, ik[1].value, d.querySelector('[data-suma="0"]').textContent, d.querySelector('#pslSumBe').textContent.replace(/ /g, ' ')], ['125,50', '1 080,00', '1 506,00', '2 586,00 Eur'], 'sumos ir perskaityta reikšmė');
-    d.querySelector('[data-f="pvm"]').click();
+    lygu(d.querySelector('#pslSumSu').textContent, '-', 'PVM nepasirinktas - suma su PVM nerodoma');
+    d.querySelector('#psl-pvm-taip').click();
     lygu(d.querySelector('#pslSumSu').textContent.replace(/ /g, ' '), '3 129,06 Eur', 'su PVM');
     ras(ik[1], 'nemokamai');
     d.querySelector('[data-veiksmas="pslParenk"]').click(); await laukti(100);
@@ -771,23 +778,23 @@ async function testaiApklausa() {
     tiesa(kl.length === 5 && /2\. Pristatymas: kaina turi būti skaičius/.test(kl[0]) && kl.some(x => /galioja/.test(x)) && kl.some(x => /kodas/.test(x)) && kl.some(x => /asmuo/.test(x)) && kl.some(x => /Patvirtinimai/.test(x)), 'klaidos: ' + kl.join(' | '));
     lygu([ik[1].getAttribute('aria-invalid'), d.querySelector('#psl-galioja').getAttribute('aria-invalid'), w.GP_PASIULYMAS.busena().rezultatas], ['true', 'true', null], 'laukai pažymėti, pasiūlymas neparengtas');
     ras(ik[1], '80'); ras(ik[1], '80', 'change'); ras(d.querySelector('#psl-galioja'), '30'); ras(d.querySelector('#psl-kodas'), '123456789'); ras(d.querySelector('#psl-asmuo'), 'Jonas Jonaitis');
-    d.querySelectorAll('#pslPatv input').forEach(c => c.click());
+    if (!d.querySelector('[data-f="pvm"]:checked')) d.querySelector('#psl-pvm-ne').click(); d.querySelectorAll('#pslPatv input').forEach(c => c.click());
     // „Siųsti pasiūlymą“ (2026-11-27): parengus iškart atveriamas paruoštas laiškas (mailto perimamas, kad testas pašto programos neatvertų)
     const atverta = []; w.addEventListener('click', e => { const x = e.target.closest && e.target.closest('a[href^="mailto:"]'); if (x) { atverta.push(x.getAttribute('href')); e.preventDefault(); } }, true);
     turi(d.querySelector('[data-veiksmas="pslParenk"]').textContent, 'Siųsti pasiūlymą', 'mygtukas');
     d.querySelector('[data-veiksmas="pslParenk"]').click(); await kol(() => w.GP_PASIULYMAS.busena().rezultatas); await kol(() => atverta.length);
     const rz = w.GP_PASIULYMAS.busena().rezultatas;
-    lygu([atverta.length, atverta[0].indexOf('mailto:' + encodeURIComponent('vardenis@litgrid.example') + '?subject='), decodeURIComponent(atverta[0].split('&body=')[1]) === rz.laiskas.tekstas, !!d.querySelector('[data-psl-laiskas]')],
+    lygu([atverta.length, atverta[0].indexOf('mailto:vardenis@litgrid.example?subject='), decodeURIComponent(atverta[0].split('&body=')[1]) === rz.laiskas.tekstas, !!d.querySelector('[data-psl-laiskas]')],
       [1, 0, true, false], 'laiškas atvertas iškart');
     tiesa(!/antspaud/i.test(rz.laiskas.tekstas), 'antspaudo atsakymo laiške nėra');
-    tiesa(!d.querySelector('#pslRezultatas details.ea-tech').open && /Liko išsiųsti laišką/.test(d.querySelector('#pslRezultatas .ea-pastaba').textContent), 'techninė informacija suskleista, pagrindinis veiksmas matomas');
-    turi(d.querySelector('#pslRzH').textContent, 'dar neišsiųstas', 'rezultato antraštė'); tiesa(d.activeElement === d.querySelector('#pslRzH'), 'fokusas - rezultate');
+    tiesa(!d.querySelector('#pslRezultatas details.ea-tech').open && /Išsiųskite laišką iki/.test(d.querySelector('#pslRezultatas .ea-pastaba').textContent), 'techninė informacija suskleista, pagrindinis veiksmas matomas');
+    turi(d.querySelector('#pslRzH').textContent, 'liko išsiųsti laišką', 'rezultato antraštė'); tiesa(d.activeElement === d.querySelector('#pslRzH'), 'fokusas - rezultate');
     const f = A.pasiulymoForma(await A.iskoduok(A.isSarvo(rz.laiskas.tekstas)[0].kodas));
     lygu([f.ok, f.pasiulymas.apklausa, f.pasiulymas.kvietimas, f.pasiulymas.t, f.pasiulymas.eilutes.map(e => e.ikainis), f.pasiulymas.pvm, f.pasiulymas.galioja, f.pasiulymas.tiekejas.asmuo, await A.antspaudas(f.pasiulymas)],
       [true, a.id, a.antspaudas, a.tiekejai[0].t, [125.5, 80], true, 30, 'Jonas Jonaitis', rz.h], 'kodas laiške = pasiūlymas');
     tiesa(!/125|1[\s ]?586|Jonas/.test(rz.laiskas.tekstas.split('-----BEGIN')[0]), 'kainų laiško tekste atviru tekstu nėra');
     const nuor = d.querySelector('a[data-veiksmas="pslIssiusta"]');
-    tiesa(nuor && nuor.getAttribute('href').indexOf('mailto:' + encodeURIComponent('vardenis@litgrid.example') + '?subject=') === 0, 'laiškas kontaktiniam asmeniui');
+    tiesa(nuor && nuor.getAttribute('href').indexOf('mailto:vardenis@litgrid.example?subject=') === 0, 'laiškas kontaktiniam asmeniui');
     const kop = w.GP_PASIULYMAS.kopija();
     tiesa(!/BEGIN G-PROCURE/.test(kop) && /TIEKĖJO KOPIJA - NESIŲSTI/.test(kop) && /1 586,00/.test(kop), 'kopija savo įrašams: be kodo, su įspėjimu, su suma');
     await U.rodyk('apklausa', a.id); turi((await U.ikelkTeksta(kop, '', a.id))[0].tekstas, 'tiekėjo kopija savo įrašams', 'iniciatorius kopijos neįkelia');
@@ -795,7 +802,7 @@ async function testaiApklausa() {
     await U.rodyk('apklausa', a.id); lygu((await U.ikelkTeksta(rz.laiskas.tekstas)).map(x => x.ok), [true], 'iniciatorius įkelia');
     lygu(U.gauk(a.id).pasiulymai[0].h, rz.h, 'antspaudas sutampa abiejose pusėse');
     d.querySelector('[data-kalba="en"]').click(); await laukti(80);
-    lygu([d.documentElement.lang, d.querySelector('#pslRzH').textContent, /Quotation:/.test(w.GP_PASIULYMAS.busena().rezultatas.laiskas.tema)], ['en', 'The quotation is ready - not sent yet', true], 'anglų kalba');
+    lygu([d.documentElement.lang, d.querySelector('#pslRzH').textContent, /Quotation:/.test(w.GP_PASIULYMAS.busena().rezultatas.laiskas.tema)], ['en', 'The quotation is ready - now send the email', true], 'anglų kalba');
     d.querySelector('[data-veiksmas="pslKeisk"]').click(); await laukti(60);
     lygu([d.querySelector('#pslForma').hidden, d.querySelector('[data-ik="0"]').value], [false, '125,50'], 'grįžus keisti - reikšmės lieka');
     // angliškas kvietimas ir praėjęs terminas
@@ -807,7 +814,7 @@ async function testaiApklausa() {
     // terminas praeina, kol tiekėjas pildo: užpildytas pasiūlymas nebeparengiamas (rėmelio laikrodis pasukamas į priekį)
     w = await atverkTiekeja('#' + N[a.tiekejai[1].t].nuoroda.split('#')[1]); d = w.document; await kol(() => d.querySelector('#pslForma'));
     d.querySelectorAll('[data-ik]').forEach(el => { ras(el, '10'); ras(el, '10', 'change'); }); ras(d.querySelector('#psl-galioja'), '30'); ras(d.querySelector('#psl-kodas'), '123456789'); ras(d.querySelector('#psl-asmuo'), 'Jonas Jonaitis');
-    d.querySelectorAll('#pslPatv input').forEach(c => c.click());
+    if (!d.querySelector('[data-f="pvm"]:checked')) d.querySelector('#psl-pvm-ne').click(); d.querySelectorAll('#pslPatv input').forEach(c => c.click());
     const TikraData = w.Date;
     w.Date = class extends TikraData { constructor(...x) { if (x.length) super(...x); else super(TikraData.now() + 3 * 864e5); } static now() { return TikraData.now() + 3 * 864e5; } };
     lygu([await w.GP_PASIULYMAS.parenk(), w.GP_PASIULYMAS.busena().rezultatas], [false, null], 'terminas praėjo pildant - užpildytas pasiūlymas neparengiamas');
@@ -904,7 +911,7 @@ async function testaiApklausa() {
     tiesa(d.querySelector('[data-f="nacsaugumas"]') && /27\.2\.3 ir 31\.4/.test(d.querySelector('#pslPatv').textContent), 'patvirtinimas tiekėjo formoje');
     d.querySelectorAll('[data-ik]').forEach(el => { el.value = '10'; el.dispatchEvent(new w.Event('input', { bubbles: true })); });
     for (const [id, v] of [['psl-galioja', '30'], ['psl-kodas', '123'], ['psl-asmuo', 'A A']]) { const el = d.getElementById(id); el.value = v; el.dispatchEvent(new w.Event('input', { bubbles: true })); }
-    d.querySelectorAll('#pslPatv input').forEach(c => { if (c.getAttribute('data-f') !== 'nacsaugumas') c.click(); });
+    if (!d.querySelector('[data-f="pvm"]:checked')) d.querySelector('#psl-pvm-ne').click(); d.querySelectorAll('#pslPatv input').forEach(c => { if (c.getAttribute('data-f') !== 'nacsaugumas') c.click(); });
     lygu(await w.GP_PASIULYMAS.parenk(), false, 'be nacionalinio saugumo patvirtinimo - neparengiama');
     d.querySelector('[data-f="nacsaugumas"]').click(); lygu(await w.GP_PASIULYMAS.parenk(), true, 'su patvirtinimu');
     lygu(w.GP_PASIULYMAS.busena().rezultatas.pasiulymas.patvirtinta.indexOf('nacsaugumas') >= 0, true, 'kode');
@@ -927,7 +934,7 @@ async function testaiApklausa() {
     tiesa(!!d.querySelector('#pslForma'), 'tiekėjo puslapyje atsiveria cituota nuoroda');
     const ik = d.querySelectorAll('[data-ik]'); for (const [el, v] of [[ik[0], '125,-'], [ik[1], '0']]) { el.value = v; el.dispatchEvent(new w.Event('input', { bubbles: true })); el.dispatchEvent(new w.Event('change', { bubbles: true })); }
     for (const [id, v] of [['psl-galioja', '30'], ['psl-kodas', '123'], ['psl-asmuo', 'A A'], ['psl-pav', 'UAB „Visai kita įmonė“']]) { const el = d.getElementById(id); el.value = v; el.dispatchEvent(new w.Event('input', { bubbles: true })); }
-    d.querySelectorAll('#pslPatv input').forEach(c => c.click());
+    if (!d.querySelector('[data-f="pvm"]:checked')) d.querySelector('#psl-pvm-ne').click(); d.querySelectorAll('#pslPatv input').forEach(c => c.click());
     lygu(await w.GP_PASIULYMAS.parenk(), true, 'kaina 0 ir „125,-“');
     lygu(w.GP_PASIULYMAS.busena().rezultatas.pasiulymas.eilutes.map(e => e.ikainis), [125, 0], 'perskaitytos kainos');
     await U.rodyk('apklausa', a.id); turi((await U.ikelkTeksta(w.GP_PASIULYMAS.busena().rezultatas.laiskas.tekstas, '', a.id))[0].tekstas, 'nors kviestas', 'įkeliant pažymima');
@@ -1013,7 +1020,8 @@ async function testaiApklausa() {
       await U.rodyk('apklausa', a.id); await kol(() => U.gauk(a.id).tiekejai.every(t => t.trumpa) && /Laiškuose - trumpos nuorodos/.test((q('.ea-trumpos') || {}).textContent || ''));
       lygu([kv.length, kv[0].u, kv[0].o.method, kv[0].o.credentials, kv[0].kunas.iki, kv[0].kunas.kodai.length], [1, 'https://api.g-procure.com/api/k', 'POST', 'omit', a.kvietimas.terminas, 3], 'viena užklausa visiems tiekėjams');
       const N = U.busenaS().nuorodos;
-      tiesa(a.tiekejai.every((t, i) => kv[0].kunas.kodai[i] === N[t.t].nuoroda.split('#k=')[1]), 'siunčiami tik kvietimų kodai (tie patys, kaip ilgose nuorodose)');
+      tiesa(a.tiekejai.every((t, i) => /^g0\./.test(kv[0].kunas.kodai[i])), 'siunčiami tik kvietimų kodai - nesuspausti (g0), kad perskaitytų ir senesnės naršyklės');
+      for (const [i, t] of a.tiekejai.entries()) lygu(JSON.stringify(await A.iskoduok(kv[0].kunas.kodai[i])), JSON.stringify(await A.iskoduok(N[t.t].nuoroda.split('#k=')[1])), 'tas pats kvietimas kaip ilgoje nuorodoje');
       a.tiekejai.forEach((t, i) => { const n = N[t.t];
         lygu([n.rodoma, n.laiskas.tekstas.indexOf(n.rodoma) > 0, n.laiskas.tekstas.indexOf('pasiulymas.html#k=') < 0, decodeURIComponent(n.mailto).indexOf(n.rodoma) > 0],
           ['https://g-procure.com/k/#7F3K9QX2M' + 'ABC'[i], true, true, true], 'laiškas su trumpa nuoroda ' + i); });
@@ -1074,6 +1082,171 @@ async function testaiApklausa() {
     const nav = []; pw.GP_PASIULYMAS.eik = u => nav.push(u);
     pw.document.querySelector('#pslNuoroda').value = 'Pateikti pasiūlymą: https://g-procure.com/k/#7f3k9qx2m0'; pw.document.querySelector('[data-veiksmas="pslAtverk"]').click(); await laukti(80);
     lygu([nav, !!pw.document.querySelector('#pslTurinys [role="alert"]')], [['../k/#7F3K9QX2M0'], false], 'įklijavus trumpą nuorodą - ji atveriama, ne klaida');
+  });
+
+  /* ---------- nepriklausoma patikra tiekėjo akimis ir naudotojo sprendimai T1-T6 (2026-11-27) ---------- */
+  const pildyk = async (w, o) => {
+    o = o || {}; const d = w.document, ras = (el, v, t) => { el.value = v; el.dispatchEvent(new w.Event(t || 'input', { bubbles: true })); };
+    await kol(() => d.querySelector('#pslForma'));
+    d.querySelectorAll('[data-ik]').forEach(el => { ras(el, o.kaina || '10'); ras(el, o.kaina || '10', 'change'); });
+    ras(d.querySelector('#psl-galioja'), o.galioja || '30'); if (o.kodas !== false) ras(d.querySelector('#psl-kodas'), '123456789'); ras(d.querySelector('#psl-asmuo'), 'Jonas Jonaitis');
+    if (o.pvm !== null) d.querySelector(o.pvm === false ? '#psl-pvm-ne' : '#psl-pvm-taip').click();
+    d.querySelectorAll('#pslPatv input').forEach(c => { if (!c.checked) c.click(); });
+    return ras;
+  };
+  const nuorodaTk = (i) => '#' + U.busenaS().nuorodos[U.gauk(U.busenaS().nuorodos.__id).tiekejai[i].t].nuoroda.split('#')[1];
+
+  await testas('Tiekėjo patikra (2026-11-27): „Siųsti pasiūlymą“ - be naršyklės klausimo „Palikti svetainę?“, du paspaudimai - vienas laiškas, gavėjo „@“ nekoduojamas; kopijavimo mygtukai matomi visada; „Taip, laišką išsiunčiau“ - būsena „išsiųstas“; po termino neišsiųstas - aiškus įspėjimas', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ verte: 4000 }); await U.paruoskNuorodas(a);
+    const w = await atverkTiekeja(nuorodaTk(0)), d = w.document;
+    await pildyk(w);
+    const atverta = [];
+    w.addEventListener('click', e => { const x = e.target.closest && e.target.closest('a[href^="mailto:"]'); if (x) { atverta.push({ href: x.getAttribute('href'), pakeista: w.GP_DARBAS.pakeista() }); e.preventDefault(); } }, true);
+    const b = d.querySelector('[data-veiksmas="pslParenk"]'); b.click(); b.click();
+    await kol(() => atverta.length); await laukti(150);
+    lygu([atverta.length, atverta[0].pakeista, atverta[0].href.indexOf('mailto:vardenis@litgrid.example?subject=')], [1, false, 0], 'vienas laiškas, be „Palikti svetainę?“, „@“ nekoduotas');
+    const rz = d.querySelector('#pslRezultatas');
+    tiesa(['adresas', 'tema', 'tekstas'].every(k => rz.querySelector('[data-veiksmas="pslKopijuok"][data-ka="' + k + '"]')) && /Gmail/.test(rz.textContent), 'kopijavimo mygtukai ir pastaba naršyklės paštui');
+    rz.querySelector('[data-veiksmas="pslPazymek"][data-ka="taip"]').click(); await laukti(50);
+    lygu([d.querySelector('#pslRzH').textContent, d.activeElement === d.querySelector('#pslRzH'), !!d.querySelector('[data-veiksmas="pslKeisk"]')], ['Pasiūlymas išsiųstas', true, true], 'išsiųsta');
+    turi(d.querySelector('#pslRezultatas').textContent, 'galios vėliau parengtas', 'kaip pakeisti');
+    d.querySelector('[data-veiksmas="pslPazymek"][data-ka="ne"]').click(); await laukti(50);
+    turi(d.querySelector('#pslRzH').textContent, 'liko išsiųsti laišką', 'žymą galima nuimti');
+    const TikraData = w.Date;
+    w.Date = class extends TikraData { constructor(...x) { if (x.length) super(...x); else super(TikraData.now() + 3 * 864e5); } static now() { return TikraData.now() + 3 * 864e5; } };
+    try {
+      d.querySelector('[data-kalba="lt"]').click(); await laukti(60);
+      const t = d.querySelector('#pslRezultatas').textContent;
+      tiesa(/Pasiūlymų terminas praėjo/.test(d.querySelector('#pslRzH').textContent) && /gali nebevertinti/.test(t) && !d.querySelector('a[data-veiksmas="pslIssiusta"]') && !d.querySelector('[data-veiksmas="pslKeisk"]'), 'po termino - įspėjimas, be „Atverti dar kartą“: ' + t.slice(0, 160));
+      d.querySelector('[data-veiksmas="pslPazymek"][data-ka="iki"]').click(); await laukti(50);
+      tiesa(/išsiuntėte iki termino/.test(d.querySelector('#pslRezultatas').textContent) && !d.querySelector('#pslRezultatas .ea-pastaba--klaida'), 'išsiųsta iki termino - be klaidos');
+    } finally { w.Date = TikraData; }
+  });
+
+  await testas('Tiekėjo patikra (2026-11-27): PVM - privalomas „Taip / Ne“ be numatytojo, PVM kodas su „Ne“ - įspėjimas; dviprasmiška kaina („2,375“, „12.500“) - klausimas prie lauko, neatsakius neparengiama; angliškai - „VAT“', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ verte: 4000 }); await U.paruoskNuorodas(a);
+    const w = await atverkTiekeja(nuorodaTk(0)), d = w.document;
+    const ras = await pildyk(w, { pvm: null });
+    const ik0 = d.querySelector('[data-ik="0"]'); ras(ik0, '2,375'); ras(ik0, '2,375', 'change');
+    tiesa(!d.querySelector('[data-f="pvm"]:checked') && d.querySelectorAll('#psl-pvm input[type="radio"]').length === 2 && d.querySelector('#psl-pvm legend'), 'PVM - klausimas su dviem atsakymais, iš anksto nepažymėtas');
+    lygu(d.querySelector('#pslSumSu').textContent, '-', 'be PVM atsakymo bendra suma nerodoma');
+    lygu(await w.GP_PASIULYMAS.parenk(), false, 'be PVM atsakymo ir neišspręstos kainos - neparengiama');
+    const kl = [...d.querySelectorAll('#pslKlaidos li')].map(x => x.textContent).join(' | ');
+    tiesa(/PVM: pasirinkite/.test(kl) && /patikslinkite, kaip suprasti „2,375“/.test(kl), 'klaidos: ' + kl);
+    tiesa(!d.getElementById('psl-ik0-dv').hidden && ik0.getAttribute('aria-describedby').indexOf('psl-ik0-dv') >= 0, 'klausimas prie lauko, susietas su lauku');
+    d.querySelector('#psl-ik0-dv [data-v="d"]').click();
+    lygu([ik0.value, d.querySelector('[data-suma="0"]').textContent, d.getElementById('psl-ik0-dv').hidden], ['2,375', '28,50', true], 'pasirinkta 2,375 Eur');
+    d.querySelector('#psl-pvm-ne').click(); ras(d.querySelector('#psl-pvmKodas'), 'LT100001234567');
+    tiesa(!d.getElementById('psl-pvm-pst').hidden && /PVM mokėtojo kodą/.test(d.getElementById('psl-pvm-pst').textContent), 'PVM kodas su „Ne“ - įspėjimas');
+    lygu(await w.GP_PASIULYMAS.parenk(), true, 'įspėjimas parengti netrukdo');
+    const p = w.GP_PASIULYMAS.busena().rezultatas.pasiulymas;
+    lygu([p.pvm, p.eilutes[0].ikainis], [false, 2.375], 'kode - be PVM, 2,375');
+    d.querySelector('[data-kalba="en"]').click(); await laukti(60);
+    const dl = d.querySelector('#pslRezultatas .ea-dl').textContent;
+    tiesa(/VAT/.test(dl) && !/PVM/.test(dl), 'angliškai - VAT: ' + dl);
+    d.querySelector('[data-veiksmas="pslKeisk"]').click(); await laukti(50);
+    const e0 = d.querySelector('[data-ik="0"]'); ras(e0, '12.500'); ras(e0, '12.500', 'change');
+    tiesa(/How should “12\.500” be read\?/.test(d.getElementById('psl-ik0-dv').textContent), 'klausimas angliškai');
+    d.querySelector('#psl-ik0-dv [data-v="t"]').click();
+    lygu(e0.value, '12,500.00', 'tūkstančiai');
+    lygu([w.GP_PASIULYMAS.dviprasmiska('0,125'), w.GP_PASIULYMAS.dviprasmiska('1 250,50'), w.GP_PASIULYMAS.dviprasmiska('125,505'), w.GP_PASIULYMAS.dviprasmiska('€ 2.375')], [false, false, true, true], 'kas dviprasmiška');
+  });
+
+  await testas('Naudotojo sprendimai T2-T5 (2026-11-27): kvietime - pavadinimai anglų kalba ir mažiausias galiojimas (iniciatoriaus formoje ir tiekėjui), mato vienetai angliškai; nacionalinio saugumo patvirtinimo paaiškinimas; fizinis asmuo - be asmens kodo; kitas kvietimas tame pačiame skirtuke ankstesnio pasiūlymo neperima; terminas ir tiekėjo laiku', async () => {
+    U.naudokSaugykla(atm());
+    // iniciatoriaus forma
+    const n = U.nauja(); Object.assign(n.kvietimas, { pavadinimas: 'Kėdės', pozicijos: JSON.parse(JSON.stringify(POZ)), terminas: iso(2 * 864e5), kontaktas: { vardas: 'V P', pastas: 'v@litgrid.example', tel: '' } });
+    n.vidaus.verte = 4000; n.tiekejai = [{ t: A.zetonas(), pav: 'UAB A', pastas: 'a@a.example', kalba: 'lt' }]; U.busenaS().darbinis = n; await U.rodyk('kurimas');
+    tiesa(!q('#ea-pav-en') && !q('#ea-poz [data-p="pavEn"]'), 'be anglų kalbos tiekėjo - angliškų laukų nėra');
+    const sel = q('#ea-tk [data-t="kalba"]'); sel.value = 'en'; sel.dispatchEvent(new W.Event('change', { bubbles: true })); await laukti(50);
+    tiesa(q('#ea-pav-en') && q('#ea-poz [data-p="pavEn"]') && W.document.activeElement === q('#ea-tk [data-t="kalba"]'), 'anglų kalbos tiekėjui - angliški laukai, fokusas lieka');
+    q('#ea-pav-en').value = 'Office chairs'; q('#ea-poz [data-p="pavEn"]').value = 'Ergonomic chair'; q('#ea-galmin').value = 'abc';
+    tiesa(U.tikrinkKurima().some(k => /Mažiausias pasiūlymo galiojimas/.test(k.tekstas)), 'netinkamas galiojimas - klaida');
+    q('#ea-galmin').value = '60'; lygu(U.tikrinkKurima().filter(k => /galiojimas/.test(k.tekstas)).length, 0, 'tinkamas - be klaidos');
+    const sk = U.busenaS().darbinis.kvietimas;
+    lygu([sk.pavadinimasEn, sk.pozicijos[0].pavEn, sk.galiojaMin], ['Office chairs', 'Ergonomic chair', 60], 'perskaityta iš formos');
+    // kvietimas tiekėjui
+    const POZ2 = JSON.parse(JSON.stringify(POZ)); POZ2[0].pavEn = 'Ergonomic office chair';
+    const a = await kurk({ verte: 8500, poz: POZ2, kv: { pavadinimasEn: 'Purchase of office chairs', galiojaMin: 60, nacsaugumas: true } }); await U.paruoskNuorodas(a);
+    lygu([a.kvietimas.pavadinimasEn, a.kvietimas.galiojaMin, a.kvietimas.pozicijos[0].pavEn, a.kvietimas.pozicijos[1].pavEn], ['Purchase of office chairs', 60, 'Ergonomic office chair', undefined], 'kvietime');
+    turi(U.busenaS().nuorodos[a.tiekejai[2].t].laiskas.tema, 'Purchase of office chairs', 'angliško laiško tema - angliškas pavadinimas');
+    let w = await atverkTiekeja(nuorodaTk(2)), d = w.document; await kol(() => d.querySelector('#pslForma'));
+    const tx = d.querySelector('#pslTurinys').textContent;
+    tiesa(/Purchase of office chairs/.test(d.querySelector('#pslKvH').textContent) && /Ergonomic office chair/.test(tx) && /pcs/.test(tx) && /Pristatymas/.test(tx) && /Some of the text below is in Lithuanian/.test(tx), 'angliškas kvietimas: ' + tx.slice(0, 300));
+    tiesa(/at least 60 days from the deadline/.test(tx) && /Government of the Republic of Lithuania/.test(tx), 'galiojimas ir nacionalinio saugumo tekstas');
+    await pildyk(w, { galioja: '30' });
+    lygu(await w.GP_PASIULYMAS.parenk(), false, 'galiojimas trumpesnis už reikalaujamą - neparengiama');
+    turi([...d.querySelectorAll('#pslKlaidos li')].map(x => x.textContent).join(' '), 'at least 60 days', 'klaida');
+    // lietuviškas kvietimas: paaiškinimas, fizinis asmuo
+    w = await atverkTiekeja(nuorodaTk(0)); d = w.document; await kol(() => d.querySelector('#pslForma'));
+    const det = d.querySelector('#pslPatv ~ details.ea-tech');
+    tiesa(det && /Ką reiškia nacionalinio saugumo patvirtinimas/.test(det.textContent) && /27\.2\.3 ir 31\.4/.test(det.textContent) && /atitikties deklaracijos/.test(det.textContent), 'paaiškinimas prie patvirtinimo');
+    tiesa(d.querySelector('label[for="psl-kodas"]').classList.contains('ea-privaloma') && /Įmonės kodas/.test(d.querySelector('label[for="psl-kodas"]').textContent), 'juridiniam - įmonės kodas privalomas');
+    d.querySelector('[data-f="fizinis"]').click(); await laukti(30);
+    tiesa(!d.querySelector('label[for="psl-kodas"]').classList.contains('ea-privaloma') && /Asmens kodo nenurodykite/.test(d.querySelector('#pslForma').textContent) && d.activeElement === d.querySelector('[data-f="fizinis"]'), 'fiziniam - neprivaloma, asmens kodo neprašoma');
+    await pildyk(w, { kodas: false, galioja: '60' });
+    lygu(await w.GP_PASIULYMAS.parenk(), true, 'fiziniam be kodo - parengiama');
+    lygu([w.GP_PASIULYMAS.busena().rezultatas.pasiulymas.tiekejas.fizinis, w.GP_PASIULYMAS.busena().rezultatas.pasiulymas.tiekejas.kodas], [true, ''], 'kode');
+    // kitas kvietimas tame pačiame skirtuke
+    w.location.hash = nuorodaTk(1).slice(1); await kol(() => w.GP_PASIULYMAS.busena().kvietimas && w.GP_PASIULYMAS.busena().kvietimas.t === a.tiekejai[1].t && d.querySelector('#pslForma'));
+    lygu([d.querySelector('#psl-pav').value, d.querySelectorAll('#pslPatv input:checked').length, d.querySelector('[data-f="fizinis"]').checked, d.querySelector('#psl-asmuo').value], ['UAB Kėdžių pasaulis', 0, false, ''], 'ankstesnio pasiūlymo duomenys ir patvirtinimai neperimti');
+    // tiekėjo laiku
+    const TikrasDTF = w.Intl.DateTimeFormat;
+    w.Intl.DateTimeFormat = function (...x) { return x.length ? new TikrasDTF(...x) : { resolvedOptions: () => ({ timeZone: 'Europe/London' }) }; };
+    try { d.querySelector('[data-kalba="lt"]').click(); await laukti(40); } finally { w.Intl.DateTimeFormat = TikrasDTF; }
+    turi(d.querySelector('.ea-laikr').textContent, 'jūsų laiku', 'užsienio tiekėjui - ir jo laiku');
+    const sk2 = await kurk({ verte: 4000, terminas: 10 * 60000 }); await U.paruoskNuorodas(sk2);
+    w = await atverkTiekeja(nuorodaTk(0)); await kol(() => w.document.querySelector('#pslLiko'));
+    tiesa(w.document.querySelector('#pslLiko').classList.contains('ea-skubu'), 'liko mažai laiko - išryškinta');
+  });
+
+  await testas('Tiekėjo patikra (2026-11-27): išsiųstą pasiūlymą galima pakeisti įklijavus savo laišką; kito kvietimo pasiūlymas formos nekeičia; įklijuotas pasiūlymas vietoje kvietimo - paaiškinimas; spausdinamas visas pasiūlymas; trumpa nuoroda per „Safe Links“ ir vien ID; senesnė naršyklė atveria nesuspaustą kvietimą; k/ puslapyje - laukas nuorodai įklijuoti', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ verte: 4000 }); await U.paruoskNuorodas(a);
+    let w = await atverkTiekeja(nuorodaTk(0)), d = w.document;
+    const ras = await pildyk(w, { kaina: '125,5' }); ras(d.querySelector('#psl-pastabos'), 'Garantija 2 metai');
+    w.addEventListener('click', e => { if (e.target.closest && e.target.closest('a[href^="mailto:"]')) e.preventDefault(); }, true);
+    lygu(await w.GP_PASIULYMAS.parenk(), true, 'parengta');
+    const sp = d.querySelector('.ea-tik-spaudai');
+    tiesa(sp && w.getComputedStyle(sp).display === 'none' && sp.querySelectorAll('tbody tr').length === 2 && /125,50/.test(sp.textContent) && /UAB „Baldų centras“/.test(sp.textContent) && /Garantija 2 metai/.test(sp.textContent), 'spausdinimui - visas pasiūlymas (ekrane nerodomas)');
+    tiesa(/\.ea \.ea-tik-spaudai \{ display: block/.test(await (await fetch('apklausa.css?b=' + Date.now())).text()), 'spausdinant rodomas');
+    const laiskas = w.GP_PASIULYMAS.busena().rezultatas.laiskas.tekstas;
+    w = await atverkTiekeja(nuorodaTk(0)); d = w.document; await kol(() => d.querySelector('#pslAtkurti'));
+    lygu(d.querySelector('[data-ik="0"]').value, '', 'atvėrus iš naujo - forma tuščia');
+    d.querySelector('#pslAtkurti').open = true;
+    const kitas = await kurk({ verte: 4000 });
+    d.querySelector('#pslAtkurtiT').value = (await pasiulymas(kitas, 0, [1, 2])).laiskas; d.querySelector('[data-veiksmas="pslAtkurk"]').click(); await laukti(80);
+    tiesa(/kitam kvietimui/.test(d.querySelector('#pslAtkurtiB').textContent) && d.querySelector('[data-ik="0"]').value === '', 'kito kvietimo pasiūlymas formos nekeičia');
+    d.querySelector('#pslAtkurtiT').value = '> ' + laiskas.split('\n').join('\n> '); d.querySelector('[data-veiksmas="pslAtkurk"]').click();
+    await kol(() => d.querySelector('[data-ik="0"]') && d.querySelector('[data-ik="0"]').value === '125,50');
+    lygu([d.querySelector('#psl-pvm-taip').checked, d.querySelector('#psl-galioja').value, d.querySelector('#psl-asmuo').value, d.querySelector('#psl-pastabos').value, d.querySelectorAll('#pslPatv input:checked').length, d.activeElement === d.getElementById('pslKnH')],
+      [true, '30', 'Jonas Jonaitis', 'Garantija 2 metai', 0, true], 'forma užpildyta, patvirtinimai - iš naujo');
+    turi(d.querySelector('#pslForma').textContent, 'Forma užpildyta pagal jūsų pasiūlymą', 'pranešimas');
+    // įklijuotas pasiūlymas vietoje kvietimo
+    w = await atverkTiekeja(''); d = w.document;
+    d.querySelector('#pslNuoroda').value = laiskas; d.querySelector('[data-veiksmas="pslAtverk"]').click(); await laukti(80);
+    turi(d.querySelector('#pslTurinys [role="alert"]').textContent, 'Įklijavote pasiūlymo laišką', 'paaiškinimas');
+    const T = w.GP_PASIULYMAS.trumposId;
+    lygu([T('https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fg-procure.com%2Fk%2F%237F3K9QX2MZ&data=05%7C02'), T('7F3K-9QX2MZ'), T(' 7f3k9qx2mz. '), T('Laba diena'), T('ABCDEFGHIJ')],
+      ['7F3K9QX2MZ', '7F3K9QX2MZ', '7F3K9QX2MZ', null, null], 'trumpa nuoroda per Safe Links ir vien ID');
+    // senesnė naršyklė (be DecompressionStream): nesuspaustas kvietimas atveriamas, suspaustas - aiškus paaiškinimas
+    const kv = JSON.parse(JSON.stringify(a.kvietimas)); kv.tiekejas = { pav: a.tiekejai[0].pav, pastas: a.tiekejai[0].pastas }; kv.t = a.tiekejai[0].t; kv.kalba = 'lt';
+    const k0 = await A.koduok(kv, { suspausti: false }), k1 = await A.koduok(kv);
+    w = await atverkTiekeja(''); d = w.document; delete w.DecompressionStream; w.DecompressionStream = undefined;
+    await w.GP_PASIULYMAS.ikelk('#k=' + k0); await kol(() => w.GP_PASIULYMAS.busena().kvietimas);
+    lygu([/^g0\./.test(k0), /^g1\./.test(k1), w.GP_PASIULYMAS.busena().kvietimas.t], [true, true, kv.t], 'nesuspaustas kvietimas atveriamas be DecompressionStream');
+    await w.GP_PASIULYMAS.ikelk('#k=' + k1); await laukti(60);
+    turi(d.querySelector('#pslTurinys').textContent, 'iOS 16.4', 'suspaustas - paaiškinimas su iOS versija');
+    // k/ puslapis
+    await new Promise(r => { tr.onload = r; tr.src = '../k/index.html?n=' + Math.random().toString(36).slice(2); });
+    const kw = tr.contentWindow; await kol(() => kw.GP_TRUMPA && /neteisinga/.test(kw.document.querySelector('#kH').textContent));
+    tiesa(!kw.document.querySelector('#kForma').hidden && kw.document.querySelector('label[for="kNuoroda"]'), 'neteisinga nuoroda - laukas įklijuoti');
+    lygu([kw.GP_TRUMPA.isTeksto('https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fg-procure.com%2Fk%2F%237F3K9QX2MZ&data=1'), kw.GP_TRUMPA.isTeksto('https://g-procure.com/PP-report/pasiulymas.html#k=' + k0).kodas === k0,
+      kw.GP_TRUMPA.isTeksto('7F3K9QX2MZ'), kw.GP_TRUMPA.idIs('#7F3K9QX2MZ).'), kw.GP_TRUMPA.isTeksto('labas')], [{ id: '7F3K9QX2MZ' }, true, { id: '7F3K9QX2MZ' }, '7F3K9QX2MZ', null], 'k/ atpažįsta įklijuotą tekstą');
+    kw.document.querySelector('#kNuoroda').value = 'labas'; kw.document.querySelector('#kAtverti').click(); await laukti(30);
+    turi(kw.document.querySelector('#kFormaKl').textContent, 'Nuoroda neatpažinta', 'neatpažinta - klaida, be užklausos');
   });
 
   tr.remove();

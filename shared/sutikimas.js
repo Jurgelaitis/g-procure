@@ -570,7 +570,10 @@
     });
     var virsutinis = false;
     try { virsutinis = global.top === global; } catch (e) { virsutinis = false; }
-    function arRodyti() { if (virsutinis && !TESTINE && !galiojantis()) rodyk(); }
+    /* Puslapis be neprivalomų įrašų (<html data-gp-sutikimas="be-juostos">, pvz. tiekėjo pasiūlymo forma): statistika nerenkama, įrašomi tik
+       paties lankytojo pasirinkimai (kalba, skilties būsena), todėl juosta nerodoma; nustatymai - per „Slapukų nustatymai“ nuorodą (2026-11-27). */
+    var beJuostos = doc.documentElement.getAttribute("data-gp-sutikimas") === "be-juostos";
+    function arRodyti() { if (virsutinis && !TESTINE && !beJuostos && !galiojantis()) rodyk(); }
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", arRodyti, { once: true }); else arRodyti();
   }
 

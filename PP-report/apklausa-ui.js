@@ -214,7 +214,7 @@
     return A.apklausosForma({ id: A.id(), busena: "juodrastis", sukurta: dabarIso(), keista: dabarIso(),
       kvietimas: { pirkejas: { pav: org ? org.pavadinimas || "LITGRID AB" : "LITGRID AB", kodas: rekv ? rekv.kodas : "" }, pavadinimas: is ? is.kvietimas.pavadinimas : "", aprasymas: is ? is.kvietimas.aprasymas : "",
         pozicijos: is ? is.kvietimas.pozicijos : [], terminas: "", pristatymoVieta: is ? is.kvietimas.pristatymoVieta : "", pristatymoTerminas: is ? is.kvietimas.pristatymoTerminas : "",
-        apmokejimas: is ? is.kvietimas.apmokejimas : "", kontaktas: kt },
+        apmokejimas: is ? is.kvietimas.apmokejimas : "", kontaktas: kt, pavadinimasEn: is ? is.kvietimas.pavadinimasEn || "" : "", galiojaMin: is ? is.kvietimas.galiojaMin : undefined },
       vidaus: { verte: is ? is.vidaus.verte : null, lesos: null, bvpz: is ? is.vidaus.bvpz : "", padalinys: vd.padalinys || "", pareigos: vd.pareigos || "", mazaiTiekeju: "" },
       tiekejai: is ? is.tiekejai.map(function (t) { return { t: A.zetonas(), pav: t.pav, pastas: t.pastas, kalba: t.kalba }; }) : [], pasiulymai: [], zurnalas: [] });
   }
@@ -233,9 +233,12 @@
       (o.uzuomina ? '<span class="ea-uzuomina" id="' + id + '-uz">' + o.uzuomina + '</span>' : '') +
       '<span class="ea-klaida" id="' + id + '-kl"' + (kl ? "" : " hidden") + '>' + esc(kl ? kl.tekstas : "") + '</span></div>';
   }
-  function pozicijuEilute(p, i) {
+  /* Angliški laukai (T5) rodomi, kai bent vienam tiekėjui kvietimas siunčiamas anglų kalba arba jie jau užpildyti. */
+  function reikiaEn(a) { var k = a.kvietimas; return a.tiekejai.some(function (t) { return t.kalba === "en"; }) || !!k.pavadinimasEn || k.pozicijos.some(function (p) { return !!p.pavEn; }); }
+  function pozicijuEilute(p, i, en) {
     return '<tr data-poz="' + i + '"><td data-e="Nr.">' + (i + 1) + '</td>' +
       '<td class="ea-su-lauku" data-e="Pavadinimas"><input type="text" data-p="pav" value="' + esc(p.pav) + '" maxlength="300" autocomplete="off" placeholder="pvz., Biuro kėdė, ergonominė" aria-label="' + (i + 1) + ' pozicijos pavadinimas"></td>' +
+      (en ? '<td class="ea-su-lauku" data-e="Pavadinimas anglų kalba"><input type="text" data-p="pavEn" value="' + esc(p.pavEn || "") + '" maxlength="300" autocomplete="off" lang="en" placeholder="pvz., Ergonomic office chair" aria-label="' + (i + 1) + ' pozicijos pavadinimas anglų kalba (neprivaloma)"></td>' : '') +
       '<td class="ea-su-lauku" data-e="Kiekis"><input type="text" class="ea-skaicius" data-p="kiekis" value="' + esc(typeof p._kiekis === "string" ? p._kiekis : typeof p.kiekis === "number" ? fmt(p.kiekis, 0, 4).replace(/\u00a0/g, " ") : "") + '" inputmode="decimal" autocomplete="off" placeholder="pvz., 12" aria-label="' + (i + 1) + ' pozicijos kiekis"></td>' +
       '<td class="ea-su-lauku" data-e="Mato vnt."><input type="text" data-p="mat" value="' + esc(p.mat) + '" maxlength="20" autocomplete="off" placeholder="pvz., vnt." aria-label="' + (i + 1) + ' pozicijos mato vienetas"></td>' +
       '<td class="ea-su-lauku" data-e="Pastaba tiekėjui"><input type="text" data-p="pastaba" value="' + esc(p.pastaba) + '" maxlength="300" autocomplete="off" placeholder="pvz., spalva, modelis ar lygiavertis" aria-label="' + (i + 1) + ' pozicijos pastaba tiekėjui"></td>' +
@@ -245,23 +248,26 @@
     return '<tr data-tk="' + i + '"><td data-e="Nr.">' + (i + 1) + '</td>' +
       '<td class="ea-su-lauku" data-e="Tiekėjas"><input type="text" data-t="pav" value="' + esc(t.pav) + '" maxlength="200" autocomplete="off" list="ea-tk-sar" placeholder="pvz., UAB „Tiekėjas“" aria-label="' + (i + 1) + ' tiekėjo pavadinimas" data-veiksmas-change="eaTiekejoPav"></td>' +
       '<td class="ea-su-lauku" data-e="El. paštas"><input type="email" data-t="pastas" value="' + esc(t.pastas) + '" maxlength="120" autocomplete="off" placeholder="pvz., info@tiekejas.lt" aria-label="' + (i + 1) + ' tiekėjo el. paštas"></td>' +
-      '<td class="ea-su-lauku" data-e="Kvietimo kalba"><select data-t="kalba" aria-label="' + (i + 1) + ' tiekėjo kvietimo kalba"><option value="lt"' + (t.kalba !== "en" ? " selected" : "") + '>Lietuvių</option><option value="en"' + (t.kalba === "en" ? " selected" : "") + '>Anglų</option></select></td>' +
+      '<td class="ea-su-lauku" data-e="Kvietimo kalba"><select data-t="kalba" aria-label="' + (i + 1) + ' tiekėjo kvietimo kalba" data-veiksmas-change="eaTiekejoKalba"><option value="lt"' + (t.kalba !== "en" ? " selected" : "") + '>Lietuvių</option><option value="en"' + (t.kalba === "en" ? " selected" : "") + '>Anglų</option></select></td>' +
       '<td><button type="button" class="ea-btn ea-btn--maz ea-btn--tylus" data-veiksmas="eaTkSalink" data-i="' + i + '" aria-label="Pašalinti ' + (i + 1) + ' tiekėją">✕</button></td></tr>';
   }
   function kurimoHtml() {
     var a = S.darbinis, k = a.kvietimas, vd = a.vidaus;
     if (!k.pozicijos.length) k.pozicijos = [{ pav: "", mat: "", kiekis: null, pastaba: "" }];
     if (!a.tiekejai.length) a.tiekejai = [0, 1, 2].map(function () { return { t: A.zetonas(), pav: "", pastas: "", kalba: "lt" }; });
+    var en = reikiaEn(a);
     var s = '<div class="ea-virsus"><div><h2>' + (gauk(a.id) ? "Apklausos juodraštis" : "Nauja apklausa") + '</h2><p class="ea-sub">' + esc(a.id) + ' · tiekėjai matys tik tai, kas pažymėta „tiekėjams“.</p></div>' +
       '<div class="ea-eile"><button type="button" class="ea-btn" data-veiksmas="eaISarasa">&larr; Apklausų sąrašas</button></div></div>';
     s += '<div id="ea-klaidos" tabindex="-1">' + klaiduHtml() + '</div>';
     s += '<section class="ea-card" aria-labelledby="ea-h1"><h3 id="ea-h1">1. Ką perkate</h3><p class="ea-sub">Šią dalį matys tiekėjai.</p><div class="ea-laukai">' +
       lauk("ea-pav", "Pirkimo pavadinimas", k.pavadinimas, { privaloma: true, visas: true, max: 200, pvz: "pvz., Biuro kėdžių pirkimas" }) +
+      (en ? lauk("ea-pav-en", "Pirkimo pavadinimas anglų kalba (neprivaloma)", k.pavadinimasEn || "", { visas: true, max: 200, pvz: "pvz., Purchase of office chairs",
+        uzuomina: "Jį ir pozicijų pavadinimus anglų kalba matys tiekėjai, kuriems kvietimas siunčiamas angliškai. Neįrašius - lietuviški, ir tiekėjui tai pasakoma." }) : '') +
       lauk("ea-apr", "Aprašymas ir reikalavimai", k.aprasymas, { textarea: true, visas: true, pvz: "pvz., techniniai reikalavimai, garantija, ką tiekėjas turi pateikti kartu su pasiūlymu" }) + '</div>' +
       '<div class="ea-etikete" style="margin:16px 0 6px">Pozicijos <span class="ea-uzuomina">- tiekėjas kiekvienai įrašys vieneto kainą. Galite įklijuoti eilutes iš „Excel“ (pavadinimas, kiekis, mato vienetas).</span></div>' +
-      '<div class="ea-lent-remas"><table class="ea-lent ea-lent--kort" id="ea-poz" data-veiksmas-paste="eaPozIklijuok"><thead><tr><th scope="col">Nr.</th><th scope="col" style="min-width:220px">Pavadinimas</th><th scope="col" style="width:110px">Kiekis</th>' +
+      '<div class="ea-lent-remas"><table class="ea-lent ea-lent--kort" id="ea-poz" data-veiksmas-paste="eaPozIklijuok"><thead><tr><th scope="col">Nr.</th><th scope="col" style="min-width:220px">Pavadinimas</th>' + (en ? '<th scope="col" style="min-width:200px">Pavadinimas anglų kalba</th>' : '') + '<th scope="col" style="width:110px">Kiekis</th>' +
       '<th scope="col" style="width:110px">Mato vnt.</th><th scope="col" style="min-width:180px">Pastaba tiekėjui</th><th scope="col"><span class="visually-hidden" style="position:absolute;clip:rect(0 0 0 0)">Veiksmai</span></th></tr></thead><tbody>' +
-      k.pozicijos.map(pozicijuEilute).join("") + '</tbody></table></div>' +
+      k.pozicijos.map(function (p, i) { return pozicijuEilute(p, i, en); }).join("") + '</tbody></table></div>' +
       '<span class="ea-klaida" id="ea-poz-kl"' + (S.klaidos.some(function (x) { return x.id === "ea-poz"; }) ? "" : " hidden") + '>' + esc((S.klaidos.filter(function (x) { return x.id === "ea-poz"; })[0] || {}).tekstas || "") + '</span>' +
       '<div class="ea-eile" style="margin-top:8px"><button type="button" class="ea-btn ea-btn--maz" data-veiksmas="eaPozPridek">+ Pridėti poziciją</button></div></section>';
     s += '<section class="ea-card" aria-labelledby="ea-h2"><h3 id="ea-h2">2. Numatoma vertė</h3><p class="ea-sub">Tiekėjams nerodoma. Pagal vertę įrankis patikrina, ar apklausą galima vykdyti šiuo būdu.</p><div class="ea-laukai">' +
@@ -273,6 +279,8 @@
       lauk("ea-vieta-l", "Pristatymo ar atlikimo vieta", k.pristatymoVieta, { max: 300, pvz: "pvz., Vilnius" }) +
       lauk("ea-ptermin", "Pristatymo ar atlikimo terminas", k.pristatymoTerminas, { max: 300, pvz: "pvz., per 30 dienų nuo užsakymo" }) +
       lauk("ea-apmok", "Apmokėjimo sąlygos", k.apmokejimas, { max: 300, pvz: "pvz., per 30 dienų nuo sąskaitos gavimo" }) +
+      lauk("ea-galmin", "Mažiausias pasiūlymo galiojimas, dienomis nuo pasiūlymų termino (neprivaloma)", typeof k._galiojaMin === "string" ? k._galiojaMin : k.galiojaMin || "", { rezimas: "numeric", max: 3, pvz: "pvz., 60",
+        uzuomina: "Tiekėjas negalės nurodyti trumpesnio galiojimo. Neįrašius - tiekėjas nurodo pats." }) +
       lauk("ea-dok", "Ką tiekėjas prideda prie laiško (neprivaloma)", k.dokumentai || "", { textarea: true, visas: true, eil: 2, max: 1000, pvz: "pvz., prekės techninis aprašas ar katalogo lapas",
         uzuomina: "Tiekėjas pridės šiuos dokumentus prie laiško su pasiūlymo kodu; jam bus priminta juose kainų nenurodyti." }) + '</div>' +
       '<div id="ea-nacsaug-pastaba" aria-live="polite"></div></section>';
@@ -364,16 +372,23 @@
     var a = S.darbinis; if (!a || !$("ea-pav")) return a;
     var k = a.kvietimas, vd = a.vidaus, val = function (id) { var e = $(id); return e ? e.value : ""; };
     k.pavadinimas = val("ea-pav"); k.aprasymas = val("ea-apr");
+    if ($("ea-pav-en")) k.pavadinimasEn = val("ea-pav-en");
+    var senosPoz = k.pozicijos || [];
     k.pozicijos = [];
-    doc.querySelectorAll("#ea-poz tbody tr").forEach(function (tr) {
+    doc.querySelectorAll("#ea-poz tbody tr").forEach(function (tr, i) {
       var g = function (n) { return tr.querySelector('[data-p="' + n + '"]').value; }, kt = g("kiekis").trim(), kv = kt ? kiekisIsTeksto(kt) : null;
-      k.pozicijos.push({ pav: g("pav"), mat: g("mat"), kiekis: typeof kv === "number" && isFinite(kv) ? kv : (kt ? NaN : null), pastaba: g("pastaba"), _kiekis: kt });
+      var enEl = tr.querySelector('[data-p="pavEn"]'), pavEn = enEl ? enEl.value : (senosPoz[i] && senosPoz[i].pavEn) || "";
+      var poz = { pav: g("pav"), mat: g("mat"), kiekis: typeof kv === "number" && isFinite(kv) ? kv : (kt ? NaN : null), pastaba: g("pastaba"), _kiekis: kt };
+      if (pavEn) poz.pavEn = pavEn;
+      k.pozicijos.push(poz);
     });
     vd.verte = suma(val("ea-verte")); vd._verte = val("ea-verte").trim();
     vd.bvpz = val("ea-bvpz");
     k.terminas = A.vilniausIUtc(val("ea-terminas")); k._terminas = val("ea-terminas");
     k.pristatymoVieta = val("ea-vieta-l"); k.pristatymoTerminas = val("ea-ptermin"); k.apmokejimas = val("ea-apmok");
     if (val("ea-dok").trim()) k.dokumentai = val("ea-dok"); else delete k.dokumentai;
+    k._galiojaMin = val("ea-galmin").trim();
+    if (/^\d{1,3}$/.test(k._galiojaMin) && +k._galiojaMin >= 1 && +k._galiojaMin <= 365) k.galiojaMin = +k._galiojaMin; else delete k.galiojaMin;
     var seni = a.tiekejai; a.tiekejai = [];
     doc.querySelectorAll("#ea-tk tbody tr").forEach(function (tr, i) {
       var g = function (n) { return tr.querySelector('[data-t="' + n + '"]').value; };
@@ -387,7 +402,7 @@
   /* Juodraščio kopija saugyklai: tik tinkamos reikšmės (netinkamas kiekis - tuščias). */
   function svarus(a) {
     var c = JSON.parse(JSON.stringify(a));
-    c.kvietimas.pozicijos = c.kvietimas.pozicijos.filter(function (p) { return p.pav || p.mat || p.pastaba || p.kiekis; }).map(function (p) { return { pav: p.pav, mat: p.mat, kiekis: typeof p.kiekis === "number" ? p.kiekis : null, pastaba: p.pastaba }; });
+    c.kvietimas.pozicijos = c.kvietimas.pozicijos.filter(function (p) { return p.pav || p.mat || p.pastaba || p.kiekis; }).map(function (p) { var x = { pav: p.pav, mat: p.mat, kiekis: typeof p.kiekis === "number" ? p.kiekis : null, pastaba: p.pastaba }; if (p.pavEn) x.pavEn = p.pavEn; return x; });
     c.tiekejai = c.tiekejai.filter(function (t) { return t.pav.trim() || t.pastas; });
     return A.apklausosForma(c);
   }
@@ -405,6 +420,7 @@
     if (!vd._verte) b("ea-verte", "Numatoma pirkimo vertė: įrašykite sumą be PVM");
     else if (vd.verte === null) b("ea-verte", "Numatoma pirkimo vertė: suma turi būti skaičius, didesnis už nulį");
     else if (vd.verte > RIBA_CVPIS) b("ea-verte", "Numatoma pirkimo vertė viršija 15 000 Eur be PVM - toks pirkimas vykdomas CVP IS priemonėmis");
+    if (k._galiojaMin && k.galiojaMin === undefined) b("ea-galmin", "Mažiausias pasiūlymo galiojimas: įrašykite dienų skaičių nuo 1 iki 365 arba palikite tuščią");
     if (!k._terminas) b("ea-terminas", "Pasiūlymų terminas: nurodykite datą ir laiką");
     else if (!k.terminas) b("ea-terminas", "Pasiūlymų terminas: tokio laiko nėra");
     else if (A.liko(k.terminas, new Date()).praejo) b("ea-terminas", "Pasiūlymų terminas: laikas jau praėjęs");
@@ -422,6 +438,8 @@
 
   /* ---------- nuorodos ir laiškai tiekėjams ---------- */
   function puslapioAdresas() { var u = new URL("pasiulymas.html", global.location.href); u.search = ""; u.hash = ""; return u.href; }
+  /* mailto gavėjas: „@“ nekoduojamas (RFC 6068 to nereikalauja, dalis pašto programų „%40“ parodo pažodžiui) */
+  function gavejas(p) { return encodeURIComponent(p).replace(/%40/g, "@"); }
   function paruoskNuorodas(a) {
     if (a.busena === "juodrastis" || !a.antspaudas) return Promise.resolve();
     S.nuorodos = S.nuorodos.__id === a.id ? S.nuorodos : { __id: a.id };
@@ -430,14 +448,17 @@
       var kv = JSON.parse(JSON.stringify(a.kvietimas)); kv.tiekejas = { pav: t.pav, pastas: t.pastas }; kv.t = t.t; kv.kalba = t.kalba;
       return A.koduok(kv).then(function (kodas) {
         var nuoroda = puslapioAdresas() + "#k=" + kodas, rodoma = t.trumpa ? TRUMPOS_BAZE + t.trumpa.id : nuoroda, l = A.laiskas(a.kvietimas, rodoma, a.antspaudas, t.kalba);
-        var href = "mailto:" + encodeURIComponent(t.pastas) + "?subject=" + encodeURIComponent(l.tema) + "&body=" + encodeURIComponent(l.tekstas);
+        var href = "mailto:" + gavejas(t.pastas) + "?subject=" + encodeURIComponent(l.tema) + "&body=" + encodeURIComponent(l.tekstas);
         S.nuorodos[t.t] = { nuoroda: nuoroda, rodoma: rodoma, trumpa: !!t.trumpa, kodas: kodas, laiskas: l,
-          mailto: href.length <= MAILTO_RIBA ? href : "mailto:" + encodeURIComponent(t.pastas) + "?subject=" + encodeURIComponent(l.tema), visas: href.length <= MAILTO_RIBA };
+          mailto: href.length <= MAILTO_RIBA ? href : "mailto:" + gavejas(t.pastas) + "?subject=" + encodeURIComponent(l.tema), visas: href.length <= MAILTO_RIBA };
+        /* Trumpai nuorodai serveryje saugomas nesuspaustas kodas: jį perskaito ir senesnės naršyklės (iOS iki 16.4) */
+        return t.trumpa ? null : A.koduok(kv, { suspausti: false }).then(function (k0) { if (S.nuorodos[t.t]) S.nuorodos[t.t].kodas0 = k0; });
       });
     }));
   }
 
   /* ---------- trumpos nuorodos (G-Procure serveris) ---------- */
+  var TRUMPOS_KODO_MAX = 12003;   // serveris priima „g0.“ / „g1.“ ir iki 12 000 ženklų (serveris/nuorodos-logika.js KODO_RE)
   function trumposFetch() {
     if (S.trumposFetch) return S.trumposFetch;
     var o = ""; try { o = global.location.origin; } catch (e) { /* nėra */ }
@@ -463,7 +484,8 @@
     var tk = a.tiekejai.filter(function (t) { return !t.trumpa && S.nuorodos[t.t] && S.nuorodos[t.t].kodas; });
     if (!f || !tk.length) return Promise.resolve(false);
     S.trumpos[a.id] = { busena: "kuriama" };
-    return trumposUzklausa(f, "", { iki: a.kvietimas.terminas, kodai: tk.map(function (t) { return S.nuorodos[t.t].kodas; }) }).then(function (x) {
+    var kodai = tk.map(function (t) { var n = S.nuorodos[t.t]; return n.kodas0 && n.kodas0.length <= TRUMPOS_KODO_MAX ? n.kodas0 : n.kodas; });
+    return trumposUzklausa(f, "", { iki: a.kvietimas.terminas, kodai: kodai }).then(function (x) {
       var n = x.j && Array.isArray(x.j.nuorodos) ? x.j.nuorodos : [];
       var gerai = x.ok && n.length === tk.length && n.every(function (y) { return y && TRUMPOS_ID_RE.test(y.id) && TRYNIMO_RE.test(y.trynimas); }) && typeof x.j.galioja === "string" && isFinite(Date.parse(x.j.galioja));
       if (!gerai) { S.trumpos[a.id] = { busena: "klaida", tekstas: trumposKlaida(x.status, x.j) }; return false; }
@@ -633,6 +655,7 @@
       if (e.busena === "neatitinka") zymos += '<span class="ea-zyma ea-zyma--klaida">Neatitinka poreikio</span>';
       if (e.virsLesu) zymos += '<span class="ea-zyma ea-zyma--demesio">Viršija numatomą vertę</span>';
       if (e.nmk) zymos += '<span class="ea-zyma ea-zyma--demesio">Neįprastai maža kaina</span>';
+      if (e.trumpasGaliojimas) zymos += '<span class="ea-zyma ea-zyma--demesio">Galioja trumpiau, nei reikalauta kvietime</span>';
       if (e.kitasTiekejas) zymos += '<span class="ea-zyma ea-zyma--demesio">Kviestas kitas tiekėjas: ' + esc(e.kitasTiekejas) + '</span>';
       if (e.nepatvirtinta && e.nepatvirtinta.length) zymos += '<span class="ea-zyma ea-zyma--demesio">Tiekėjas nepatvirtino: ' + esc(e.nepatvirtinta.map(function (x) { return PATV_PAV[x]; }).join(", ")) + '</span>';
       s += '<div class="ea-pas"' + (pirmas ? ' data-b="pirmas"' : '') + ' data-tiekejas="' + esc(e.t) + '"><div class="ea-vieta"' + (e.vieta ? ' aria-label="' + e.vieta + ' vieta"' : ' aria-hidden="true"') + '>' + (e.vieta || "-") + '</div>' +
@@ -771,6 +794,8 @@
       '<dt>Pozicijos</dt><dd>' + k.pozicijos.map(function (p, i) { return (i + 1) + ". " + esc(p.pav) + " - " + fmt(p.kiekis, 0, 4) + (p.mat ? " " + esc(p.mat) : "") + (p.pastaba ? " (" + esc(p.pastaba) + ")" : ""); }).join("<br>") + '</dd>' +
       (k.pristatymoVieta ? '<dt>Pristatymo ar atlikimo vieta</dt><dd>' + esc(k.pristatymoVieta) + '</dd>' : '') + (k.pristatymoTerminas ? '<dt>Pristatymo ar atlikimo terminas</dt><dd>' + esc(k.pristatymoTerminas) + '</dd>' : '') +
       (k.apmokejimas ? '<dt>Apmokėjimo sąlygos</dt><dd>' + esc(k.apmokejimas) + '</dd>' : '') +
+      (k.galiojaMin ? '<dt>Mažiausias pasiūlymo galiojimas</dt><dd>' + k.galiojaMin + ' d. nuo pasiūlymų termino</dd>' : '') +
+      (k.pavadinimasEn ? '<dt>Pavadinimas anglų kalba</dt><dd lang="en">' + esc(k.pavadinimasEn) + '</dd>' : '') +
       '<dt>Kontaktinis asmuo</dt><dd>' + esc([k.kontaktas.vardas, k.kontaktas.pastas, k.kontaktas.tel].filter(Boolean).join(", ")) + '</dd>' +
       '<dt>Numatoma vertė be PVM</dt><dd>' + esc(eur(vd.verte)) + ' <span class="ea-uzuomina">(tiekėjams nerodoma)</span></dd>' + (vd.lesos !== null ? '<dt>Skirtos lėšos be PVM</dt><dd>' + esc(eur(vd.lesos)) + ' <span class="ea-uzuomina">(tiekėjams nerodoma)</span></dd>' : '') +
       (vd.bvpz ? '<dt>BVPŽ kodas</dt><dd>' + esc(vd.bvpz) + '</dd>' : '') + (vd.mazaiTiekeju ? '<dt>Kodėl mažiau kaip 3 tiekėjai</dt><dd>' + esc(vd.mazaiTiekeju) + '</dd>' : '') +
@@ -966,6 +991,10 @@
     },
     eaTkPridek: function () { skaitykKurima(); if (S.darbinis.tiekejai.length < A.RIBOS.tiekejai) S.darbinis.tiekejai.push({ t: A.zetonas(), pav: "", pastas: "", kalba: "lt" }); perpieskKurima('#ea-tk tbody tr:last-child [data-t="pav"]'); },
     eaTkSalink: function (el) { skaitykKurima(); S.darbinis.tiekejai.splice(+el.getAttribute("data-i"), 1); perpieskKurima('[data-veiksmas="eaTkPridek"]'); },
+    eaTiekejoKalba: function (el) {
+      var tr = el.closest("tr"), i = tr ? tr.getAttribute("data-tk") : null;
+      if (reikiaEn(skaitykKurima()) !== !!$("ea-pav-en")) perpieskKurima(i !== null ? '#ea-tk tr[data-tk="' + i + '"] [data-t="kalba"]' : null);
+    },
     eaTiekejoPav: function (el) {
       var tr = el.closest("tr"), p = tr.querySelector('[data-t="pastas"]'), z = ankstesniTiekejai().filter(function (t) { return t.pav.toLowerCase() === el.value.trim().toLowerCase(); })[0];
       if (z && !p.value.trim()) { p.value = z.pastas; tr.querySelector('[data-t="kalba"]').value = z.kalba; }
