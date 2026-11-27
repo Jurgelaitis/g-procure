@@ -28,6 +28,10 @@
   var ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // be O, I, 0, 1 - kad kodą būtų galima perskaityti ir padiktuoti
   var ID_RE = /^GP-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/, ZETONO_RE = /^[A-HJ-NP-Z2-9]{16}$/, HEX64 = /^[0-9a-f]{64}$/;
   var PATVIRTINIMAI = ["atitinka", "kaina", "igaliotas"];
+  /* Nacionalinio saugumo patvirtinimas (2026-11-27, naudotojo sprendimas): kai numatoma vertė viršija 5 000 Eur be PVM, tiekėjas pasiūlymo
+     formoje patvirtina atitiktį Aprašo 27.2.3 ir 31.4 p. nurodytiems reikalavimams - atskiros deklaracijos pildyti nereikia. */
+  var NACSAUG = "nacsaugumas";
+  function reikiaPatvirtinti(k) { return k && k.nacsaugumas ? PATVIRTINIMAI.concat([NACSAUG]) : PATVIRTINIMAI.slice(); }
   var NMK_DALIS = 0.30;   // neįprastai maža kaina: 30 ir daugiau proc. mažesnė už vidurkį (shared/teises-nuorodos.js „nmk_riba“ - tekstas iš e-tar)
   var ZYME = { pasiulymas: "G-PROCURE OFFER", kvietimas: "G-PROCURE INVITATION" };
 
@@ -49,7 +53,9 @@
   }
   function isB64(t) {
     if (!/^[A-Za-z0-9_-]*$/.test(t)) throw klaida("kodas");
-    var s = global.atob(t.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((t.length + 3) % 4)), b = new Uint8Array(s.length);
+    var s;
+    try { s = global.atob(t.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((t.length + 3) % 4)); } catch (e) { throw klaida("kodas"); }
+    var b = new Uint8Array(s.length);
     for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
     return b;
   }
@@ -96,18 +102,50 @@
     for (var i = 0; i < kodas.length; i += 64) eil.push(kodas.slice(i, i + 64));
     return "-----BEGIN " + z + "-----\n" + eil.join("\n") + "\n-----END " + z + "-----";
   }
-  /* Įklijuotas laiškas, nuoroda („...#p=kodas“, „...#k=kodas“), grynas kodas arba pasiūlymo failo tekstas -> { rusis, kodas } sąrašas. */
+  /* Įklijuotas laiškas, nuoroda („...#p=kodas“, „...#k=kodas“), grynas kodas arba pasiūlymo failo tekstas -> { rusis, kodas, kiti } sąrašas.
+     Laiškų realybė: pašto programos ilgas eilutes laužo ir cituoja („> “), „--“ kartais pakeičia brūkšniu, nuorodų tikrinimo paslaugos
+     „#k=“ užkoduoja („%23k%3D“). Todėl žymės atpažįstamos ir su brūkšnių variantais, o nuorodos kodui grąžinami keli KANDIDATAI
+     (kodas - iki pirmo tarpo; kiti - prijungus tolesnes eilutes ar žodžius): tinkamą parenka atkoduok() - netinkamas neišsiskleidžia. */
+  var BR = "[-\\u2010-\\u2015]";
+  function kandidatai(likutis) {
+    var out = [], kodas = "", zodziai = likutis.split(/[\s ]+/);
+    for (var i = 0; i < zodziai.length && out.length < 80; i++) {
+      var z = zodziai[i].replace(/^>+/, "");
+      if (!z) continue;                                           // citavimo ženklas „>“ eilutės pradžioje
+      if (!(kodas ? /^[A-Za-z0-9_-]+$/ : /^g[01]\.[A-Za-z0-9_-]+$/).test(z)) {
+        if (!kodas) { var pr = /^g[01]\.[A-Za-z0-9_-]+/.exec(z); if (pr) out.push(pr[0]); }   // „...kodas).“ - skyryba po nuorodos
+        break;
+      }
+      kodas += z; out.push(kodas);
+    }
+    return out;
+  }
   function isSarvo(tekstas) {
     tekstas = String(tekstas || "");
-    var rasta = [], re = /-----BEGIN (G-PROCURE OFFER|G-PROCURE INVITATION)-----([\s\S]*?)-----END \1-----/g, m;
-    while ((m = re.exec(tekstas))) rasta.push({ rusis: m[1] === ZYME.kvietimas ? "kvietimas" : "pasiulymas", kodas: m[2].replace(/[^A-Za-z0-9_.-]/g, "") });
+    var rasta = [], m, re = new RegExp(BR + "+\\s*BEGIN (G" + BR + "PROCURE (?:OFFER|INVITATION))\\s*" + BR + "+([\\s\\S]*?)" + BR + "+\\s*END G" + BR + "PROCURE (?:OFFER|INVITATION)\\s*" + BR + "+", "gi");
+    while ((m = re.exec(tekstas))) rasta.push({ rusis: /INVITATION/i.test(m[1]) ? "kvietimas" : "pasiulymas", kodas: m[2].replace(/[^A-Za-z0-9_.-]/g, "") });
     if (rasta.length) return rasta;
-    var re2 = /#([kp])=(g[01]\.[A-Za-z0-9_-]+)/g;
-    while ((m = re2.exec(tekstas))) rasta.push({ rusis: m[1] === "k" ? "kvietimas" : "pasiulymas", kodas: m[2] });
+    var t = tekstas.replace(/%23/gi, "#").replace(/%3D/gi, "="), re2 = /#([kp])=(?=g[01]\.)/g;
+    while ((m = re2.exec(t))) {
+      var k = kandidatai(t.slice(m.index + m[0].length, m.index + m[0].length + RIBOS.kodas + 2000));
+      if (k.length) { var r = { rusis: m[1] === "k" ? "kvietimas" : "pasiulymas", kodas: k[0] }; if (k.length > 1) r.kiti = k.slice(1); rasta.push(r); }
+    }
     if (rasta.length) return rasta;
     var g = /^\s*(g[01]\.[A-Za-z0-9_\s-]+?)\s*$/.exec(tekstas);
     if (g) rasta.push({ rusis: null, kodas: g[1].replace(/\s+/g, "") });
     return rasta;
+  }
+  /* isSarvo() radinio atkodavimas: bandomas kodas ir, jei jis neišsiskleidžia, kiti kandidatai (perlaužta nuoroda). Grąžina { kodas, obj }. */
+  function atkoduok(x) {
+    var visi = [x.kodas].concat(x.kiti || []), pirma = null;
+    function bandyk(i) {
+      return iskoduok(visi[i]).then(function (obj) { return { kodas: visi[i], obj: obj }; }, function (e) {
+        if (!pirma) pirma = e;
+        if (i + 1 < visi.length) return bandyk(i + 1);
+        throw pirma;
+      });
+    }
+    return bandyk(0);
   }
 
   /* ---------- nepatikimų duomenų patikra ---------- */
@@ -142,6 +180,9 @@
       apmokejimas: eilute(x.apmokejimas, RIBOS.trumpas),
       kontaktas: { vardas: eilute(kt.vardas, 120), pastas: pastas(kt.pastas), tel: eilute(kt.tel, 40) }
     };
+    var dok = tekstas(x.dokumentai, 1000);
+    if (dok) k.dokumentai = dok;          // dokumentai, kuriuos tiekėjas prideda prie laiško (neprivaloma)
+    if (x.nacsaugumas === true) k.nacsaugumas = true;   // tik kai taikoma - anksčiau paskelbtų kvietimų antspaudas nesikeičia
     if (x.tiekejas !== undefined || x.t !== undefined) {
       k.tiekejas = { pav: eilute(tk.pav, RIBOS.pavadinimas), pastas: pastas(tk.pastas) };
       k.t = ZETONO_RE.test(x.t) ? x.t : "";
@@ -175,7 +216,7 @@
       pristatymas: eilute(x.pristatymas, RIBOS.trumpas),
       galioja: typeof x.galioja === "number" && Math.floor(x.galioja) === x.galioja && x.galioja >= 1 && x.galioja <= 365 ? x.galioja : null,
       pastabos: tekstas(x.pastabos, 2000),
-      patvirtinta: (Array.isArray(x.patvirtinta) ? x.patvirtinta : []).filter(function (a, i, s) { return PATVIRTINIMAI.indexOf(a) >= 0 && s.indexOf(a) === i; }),
+      patvirtinta: (Array.isArray(x.patvirtinta) ? x.patvirtinta : []).filter(function (a, i, s) { return (PATVIRTINIMAI.indexOf(a) >= 0 || a === NACSAUG) && s.indexOf(a) === i; }),
       pateikta: laikas(x.pateikta), kalba: x.kalba === "en" ? "en" : "lt"
     };
     if (!p.apklausa || !p.kvietimas || !p.t || !p.tiekejas.pav || !p.pateikta) return { ok: false, klaida: "forma" };
@@ -210,6 +251,15 @@
     var pvmSuma = p.pvm && typeof tarifas === "number" ? apvalink(viso * tarifas) : 0;
     return { eilutes: eil, truksta: truksta, viso: viso, pvmSuma: pvmSuma, suPvm: p.pvm && typeof tarifas !== "number" ? null : apvalink(viso + pvmSuma) };
   }
+  /* Ar pasiūlymą pateikė kitas tiekėjas nei kviestas (persiųsta nuoroda): palyginami pavadinimai be teisinės formos, kabučių ir tarpų. */
+  function pavKamienas(v) {
+    return String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/(^|[^a-z0-9])(uab|ab|mb|ii|vsi|ou|as|sia|uab|ltd|llc|gmbh|oy|sp\.? ?z\.? ?o\.? ?o\.?|s\.?a\.?)(?=[^a-z0-9]|$)/g, " ").replace(/[^a-z0-9]+/g, "");
+  }
+  function kitasPavadinimas(kviestas, pateike) {
+    var a = pavKamienas(kviestas), b = pavKamienas(pateike);
+    return !!(a && b && a.indexOf(b) < 0 && b.indexOf(a) < 0);
+  }
   /* Pasiūlymų palyginimas. o: { kvietimas, tiekejai: [{ t, pav }], pasiulymai: [{ t, duomenys, gauta }], lesos, tarifas, neatitinka: { t: priežastis } }.
      Į eilę patenka tik laiku gauti pasiūlymai su visų pozicijų įkainiais, kurių žmogus nepažymėjo neatitinkančiais poreikio; eilė - pagal kainą
      be PVM, vienodos kainos - anksčiau gautas pirmesnis. Požymiai (viršija lėšas, neįprastai maža kaina) pasiūlymo nepašalina - juos įvertina
@@ -225,12 +275,17 @@
       var busena = veluoja ? "pavėluotas" : s.truksta ? "nepilnas" : Object.prototype.hasOwnProperty.call(neat, tk.t) ? "neatitinka" : "tinkamas";
       return { t: tk.t, tiekejas: x.duomenys.tiekejas.pav || tk.pav, gauta: x.gauta, sumos: s, viso: s.viso, suPvm: s.suPvm, pvm: x.duomenys.pvm,
         busena: busena, truksta: s.truksta, priezastis: busena === "neatitinka" ? String(neat[tk.t] || "") : "",
-        nepatvirtinta: PATVIRTINIMAI.filter(function (a) { return x.duomenys.patvirtinta.indexOf(a) < 0; }) };
+        nepatvirtinta: reikiaPatvirtinti(k).filter(function (a) { return x.duomenys.patvirtinta.indexOf(a) < 0; }),
+        kitasTiekejas: kitasPavadinimas(tk.pav, x.duomenys.tiekejas.pav) ? tk.pav : "", parengta: x.duomenys.pateikta || "" };
     });
     var tinkami = eil.filter(function (e) { return e.busena === "tinkamas"; }).sort(function (a, b) {
       return a.viso - b.viso || new Date(a.gauta) - new Date(b.gauta) || (a.t < b.t ? -1 : 1);
     });
     tinkami.forEach(function (e, i) { e.vieta = i + 1; });
+    /* Vienodos kainos (Aprašo 30.17 p.): pirmesnis - pasiūlymas, pateiktas anksčiausiai, t. y. anksčiau gautas. Grupės pažymimos, kad
+       iniciatorius patikrintų gavimo laikus pagal savo el. paštą. */
+    var lygios = [];
+    tinkami.forEach(function (e, i) { if (i && tinkami[i - 1].viso === e.viso) { var g = lygios[lygios.length - 1]; if (g && g.indexOf(tinkami[i - 1].t) >= 0) g.push(e.t); else lygios.push([tinkami[i - 1].t, e.t]); } });
     var virsLesu = [], nmk = [], lyginami = tinkami.filter(function (e) { return lesos === null || e.viso <= lesos; }), vidurkis = null;
     if (lesos !== null) tinkami.forEach(function (e) { if (e.viso > lesos) { e.virsLesu = true; virsLesu.push(e.t); } });
     if (lyginami.length >= 2) {
@@ -244,7 +299,8 @@
       return { i: i, maziausias: maz };
     });
     return { eilutes: eil, eile: tinkami.map(function (e) { return e.t; }), siulomas: tinkami.length ? tinkami[0].t : null,
-      virsLesu: virsLesu, nmk: nmk, vidurkis: vidurkis, matrica: matrica, lesos: lesos,
+      virsLesu: virsLesu, nmk: nmk, vidurkis: vidurkis, matrica: matrica, lesos: lesos, lygios: lygios,
+      nmkNetikrinta: tinkami.length >= 2 && lyginami.length < 2,
       gauta: eil.filter(function (e) { return e.busena !== "negautas"; }).length, kviesta: eil.length };
   }
 
@@ -281,7 +337,9 @@
       sprendimas: null, pazyma: laikas(x.pazyma), importuota: eilute(x.importuota, 200),
       zurnalas: (Array.isArray(x.zurnalas) ? x.zurnalas : []).slice(-500).map(function (e) {
         e = objektas(e);
-        return { laikas: laikas(e.laikas), ivykis: eilute(e.ivykis, 60), detales: eilute(e.detales, 500), h: /^[0-9a-f]{24}$/.test(e.h) ? e.h : "" };
+        var z = { laikas: laikas(e.laikas), ivykis: eilute(e.ivykis, 60), detales: eilute(e.detales, 500), h: /^[0-9a-f]{24}$/.test(e.h) ? e.h : "" }, r = refForma(e.ref);
+        if (r) z.ref = r;
+        return z;
       }).filter(function (e) { return e.laikas && e.ivykis; })
     };
     var matyta = {};
@@ -307,6 +365,8 @@
       Object.keys(q3).forEach(function (t) { if (tokenai[t] && q3[t] === true) a2[t] = true; });
       a.sprendimas = { rezultatas: "", laimetojas: "", neatitinka: n2, atitinka: a2, pastaba: tekstas(sp.pastaba, 1000), patvirtinta: "" };
     }
+    var kdok = tekstas(kv.dokumentai, 1000); if (kdok) a.kvietimas.dokumentai = kdok;
+    if (kv.nacsaugumas === true) a.kvietimas.nacsaugumas = true;
     if (busena !== "juodrastis" && (!a.antspaudas || !kvietimoForma(a.kvietimas).ok)) return null;
     if (!a.sukurta) a.sukurta = a.keista || "";
     return a;
@@ -342,14 +402,60 @@
     });
     return p.then(function () { return tikrinkZurnala(a.zurnalas); }).then(function (z) {
       rez.zurnalas = z.ok; rez.zurnaloVieta = z.ok ? null : z.vieta;
-      rez.ok = rez.kvietimas !== false && rez.zurnalas && rez.pasiulymai.every(function (x) { return x.ok; });
+      var dz = duomenysPrieZurnalo(a); rez.duomenys = dz.problemos; rez.duomenysTikrinti = dz.tikrinta;
+      var g = (a.zurnalas || [])[(a.zurnalas || []).length - 1]; rez.galas = g ? { laikas: g.laikas, ivykis: g.ivykis, h: g.h } : null;
+      rez.ok = rez.kvietimas !== false && rez.zurnalas && rez.pasiulymai.every(function (x) { return x.ok; }) && !rez.duomenys.length;
       return rez;
     });
   }
 
+  /* Apklausos duomenys prieš žurnalą: kvietimo antspaudas, vertė ir lėšos, kiekvienas pasiūlymas (antspaudas ir gavimo laikas), būsena ir
+     sprendimas turi sutapti su tuo, kas įrašyta žurnale. Taip randamas pakeistas gavimo laikas, pašalintas pasiūlymas, grąžinta būsena ar
+     pakeista vertė. Kartu pakeistus ir žurnalą, ir duomenis rodo tik paskutinio įrašo antspaudas, palygintas su pažyma (rez.galas). */
+  var IVYKIO_BUSENA = { paskelbta: "paskelbta", atverta: "atverta", negauta: "ivertinta", sprendimas: "ivertinta", atsaukta: "atverta", nutraukta: "nutraukta", pazyma: "uzbaigta" };
+  function duomenysPrieZurnalo(a) {
+    var zr = a.zurnalas || [], pr = [], tikrinta = zr.some(function (e) { return e.ref; });
+    if (!tikrinta) return { problemos: pr, tikrinta: false };
+    var vardas = function (t) { var tk = (a.tiekejai || []).filter(function (x) { return x.t === t; })[0]; return tk ? tk.pav : t; };
+    var exp = {}, busena = "", sp = null, neperskaityti = {};
+    zr.forEach(function (e) {
+      var r = e.ref || {};
+      if (e.ivykis === "paskelbta" && e.ref) {
+        if (r.k !== a.antspaudas) pr.push("Kvietimo antspaudas nesutampa su įrašytu paskelbiant");
+        var vd = a.vidaus || {};
+        if (r.v !== (vd.verte === null || vd.verte === undefined ? "" : String(vd.verte))) pr.push("Numatoma vertė pakeista po paskelbimo");
+        if (r.l !== (vd.lesos === null || vd.lesos === undefined ? "" : String(vd.lesos))) pr.push("Pirkimui skirtos lėšos pakeistos po paskelbimo");
+      }
+      if ((e.ivykis === "gauta" || e.ivykis === "pakeista") && r.t) exp[r.t] = { h: r.h, g: r.g };
+      if (e.ivykis === "atverta" && r.x) r.x.split(",").forEach(function (t) { if (t) neperskaityti[t] = true; });
+      if (e.ivykis === "sprendimas") sp = { r: r.r, w: r.w || "" };
+      if (e.ivykis === "atsaukta") sp = null;
+      if (IVYKIO_BUSENA[e.ivykis]) busena = IVYKIO_BUSENA[e.ivykis];
+    });
+    (a.pasiulymai || []).forEach(function (p) {
+      var x = exp[p.t];
+      if (!x) pr.push(vardas(p.t) + ": pasiūlymo gavimas žurnale neįrašytas");
+      else if (x.h !== p.h || x.g !== p.gauta) pr.push(vardas(p.t) + ": pasiūlymo antspaudas ar gavimo laikas nesutampa su žurnalu");
+    });
+    Object.keys(exp).forEach(function (t) {
+      if (!neperskaityti[t] && !(a.pasiulymai || []).some(function (p) { return p.t === t; })) pr.push(vardas(t) + ": žurnale įrašytas gautas pasiūlymas, kurio apklausoje nėra");
+    });
+    if (busena && busena !== a.busena) pr.push("Apklausos būsena nesutampa su žurnalu");
+    if (sp && a.sprendimas && (sp.r !== a.sprendimas.rezultatas || sp.w !== (a.sprendimas.laimetojas || ""))) pr.push("Sprendimas nesutampa su įrašytu žurnale");
+    return { problemos: pr, tikrinta: true };
+  }
+
   /* ---------- žurnalas su grandine ---------- */
-  function zurnaloIrasas(ankstesnis, ivykis, detales, laikasIso) {
+  /* ref - įvykio duomenys patikrai (antspaudai, gavimo laikas, vertė, sprendimas): tik trumpos tekstinės reikšmės. Įrašai be ref
+     (iki 2026-11-27) tikrinami kaip iki tol. */
+  function refForma(r) {
+    var o = {}, n = 0;
+    Object.keys(objektas(r)).sort().forEach(function (k) { if (/^[a-z]{1,3}$/.test(k) && typeof r[k] === "string" && n < 12) { o[k] = r[k].slice(0, 300); n++; } });
+    return n ? o : null;
+  }
+  function zurnaloIrasas(ankstesnis, ivykis, detales, laikasIso, ref) {
     var e = { laikas: laikasIso || new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), ivykis: String(ivykis), detales: detales === undefined ? "" : String(detales).slice(0, 500) };
+    var r = refForma(ref); if (r) e.ref = r;
     return sha((ankstesnis && ankstesnis.h || "") + kanonas(e)).then(function (h) { e.h = h.slice(0, 24); return e; });
   }
   function tikrinkZurnala(sar) {
@@ -358,6 +464,7 @@
       p = p.then(function (b) {
         if (!b.ok) return b;
         var be = { laikas: e.laikas, ivykis: e.ivykis, detales: e.detales };
+        if (e.ref) be.ref = e.ref;
         return sha((b.ankstesnis && b.ankstesnis.h || "") + kanonas(be)).then(function (h) {
           return h.slice(0, 24) === e.h ? { ok: true, ankstesnis: e } : { ok: false, vieta: i };
         });
@@ -430,8 +537,8 @@
   }
 
   global.GP_APKLAUSA = {
-    RIBOS: RIBOS, PATVIRTINIMAI: PATVIRTINIMAI, NMK_DALIS: NMK_DALIS, ID_RE: ID_RE, ZETONO_RE: ZETONO_RE,
-    id: id, zetonas: zetonas, koduok: koduok, iskoduok: iskoduok, sarvas: sarvas, isSarvo: isSarvo,
+    RIBOS: RIBOS, PATVIRTINIMAI: PATVIRTINIMAI, NACSAUG: NACSAUG, reikiaPatvirtinti: reikiaPatvirtinti, kitasPavadinimas: kitasPavadinimas, NMK_DALIS: NMK_DALIS, ID_RE: ID_RE, ZETONO_RE: ZETONO_RE,
+    id: id, zetonas: zetonas, koduok: koduok, iskoduok: iskoduok, sarvas: sarvas, isSarvo: isSarvo, atkoduok: atkoduok,
     kvietimoForma: kvietimoForma, pasiulymoForma: pasiulymoForma, bendra: bendra, kanonas: kanonas, antspaudas: antspaudas, trumpas: trumpas,
     apvalink: apvalink, sumos: sumos, vertink: vertink, zurnaloIrasas: zurnaloIrasas, tikrinkZurnala: tikrinkZurnala,
     vilniausIUtc: vilniausIUtc, utcIVilniaus: utcIVilniaus, rodykLaika: rodykLaika, liko: liko, forma: forma,
