@@ -158,7 +158,8 @@
   }
   function eilute(v, max) { return tekstas(v, max).replace(/\s*\n\s*/g, " "); }
   function skaicius(v, min, max) { return typeof v === "number" && isFinite(v) && v >= min && v <= max ? v : null; }
-  function pastas(v) { v = eilute(v, 120); return /^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[^\s@<>"'(),;:\\.]{2,}$/.test(v) ? v : ""; }
+  /* El. pašto adresas: be „?“, „&“, „=“, „#“, „%“ ir „/“ - kitaip į mailto nuorodą patektų tema ar kiti parametrai (2026-11-27, tiekėjo patikra V3) */
+  function pastas(v) { v = eilute(v, 120); return /^[^\s@<>"'(),;:\\?&=#%\/]+@[^\s@<>"'(),;:\\?&=#%\/]+\.[^\s@<>"'(),;:\\.?&=#%\/]{2,}$/.test(v) ? v : ""; }
   function laikas(v) {
     if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/.test(v)) return "";
     var d = new Date(v);
@@ -229,6 +230,8 @@
       pateikta: laikas(x.pateikta), kalba: x.kalba === "en" ? "en" : "lt"
     };
     if (tk.fizinis === true) p.tiekejas.fizinis = true;   // fizinis asmuo (individuali veikla) - tik kai pažymėta, kitų pasiūlymų antspaudas nesikeičia
+    /* Kitas PVM tarifas procentais (T1) - tik kai PVM pridedamas ir tiekėjas jį įrašė; anksčiau parengtų pasiūlymų antspaudas nesikeičia */
+    if (p.pvm && typeof x.pvmTarifas === "number" && x.pvmTarifas > 0 && x.pvmTarifas < 100 && Math.abs(Math.round(x.pvmTarifas * 100) - x.pvmTarifas * 100) < 1e-6) p.pvmTarifas = Math.round(x.pvmTarifas * 100) / 100;
     if (!p.apklausa || !p.kvietimas || !p.t || !p.tiekejas.pav || !p.pateikta) return { ok: false, klaida: "forma" };
     return { ok: true, pasiulymas: p };
   }
@@ -258,8 +261,10 @@
       return { i: i, ikainis: ik, suma: suma, pastaba: e && e.pastaba ? String(e.pastaba) : "" };
     });
     viso = apvalink(viso);
+    /* Tiekėjo nurodytas kitas (lengvatinis) PVM tarifas - pirmesnis už standartinį (2026-11-27, naudotojo sprendimas T1) */
+    if (p.pvm && typeof p.pvmTarifas === "number") tarifas = p.pvmTarifas / 100;
     var pvmSuma = p.pvm && typeof tarifas === "number" ? apvalink(viso * tarifas) : 0;
-    return { eilutes: eil, truksta: truksta, viso: viso, pvmSuma: pvmSuma, suPvm: p.pvm && typeof tarifas !== "number" ? null : apvalink(viso + pvmSuma) };
+    return { eilutes: eil, truksta: truksta, viso: viso, pvmSuma: pvmSuma, suPvm: p.pvm && typeof tarifas !== "number" ? null : apvalink(viso + pvmSuma), tarifas: p.pvm && typeof tarifas === "number" ? tarifas : null };
   }
   /* Ar pasiūlymą pateikė kitas tiekėjas nei kviestas (persiųsta nuoroda): palyginami pavadinimai be teisinės formos, kabučių ir tarpų. */
   function pavKamienas(v) {
@@ -287,7 +292,7 @@
         busena: busena, truksta: s.truksta, priezastis: busena === "neatitinka" ? String(neat[tk.t] || "") : "",
         nepatvirtinta: reikiaPatvirtinti(k).filter(function (a) { return x.duomenys.patvirtinta.indexOf(a) < 0; }),
         kitasTiekejas: kitasPavadinimas(tk.pav, x.duomenys.tiekejas.pav) ? tk.pav : "", parengta: x.duomenys.pateikta || "",
-        trumpasGaliojimas: !!(k.galiojaMin && typeof x.duomenys.galioja === "number" && x.duomenys.galioja < k.galiojaMin) };
+        trumpasGaliojimas: !!(k.galiojaMin && typeof x.duomenys.galioja === "number" && x.duomenys.galioja < k.galiojaMin), pakeista: x.pakeista || 0 };
     });
     var tinkami = eil.filter(function (e) { return e.busena === "tinkamas"; }).sort(function (a, b) {
       return a.viso - b.viso || new Date(a.gauta) - new Date(b.gauta) || (a.t < b.t ? -1 : 1);
@@ -554,15 +559,17 @@
   /* Tiekėjo atsakymas: kainos - tik bloke su kodu (atviru tekstu laiške jų nėra), antspaudo laiške nebėra (jis - tiekėjo kopijoje). */
   function atsakymas(k, p, kodas, h, kalba) {
     var en = kalba === "en", pas = p.tiekejas.pav + (p.tiekejas.asmuo ? ", " + p.tiekejas.asmuo : "");
+    /* Priedai - laiško tekste, kad tiekėjas juos pridėtų, kol laiškas atvertas (2026-11-27, tiekėjo patikra V1) */
+    var pr = k.dokumentai ? [(en ? "Attached documents: " : "Pridedami dokumentai: ") + k.dokumentai.replace(/\s*\n\s*/g, "; ")] : [];
     if (en) return {
       tema: "Quotation: " + pavadinimas(k, "en") + " (" + k.id + ") - " + p.tiekejas.pav,
       tekstas: ["Hello,", "", "Please find our quotation for the procurement “" + pavadinimas(k, "en") + "” below.",
-        "The quotation data is in the block below - please do not change it; the buyer's tool will read it.", "", sarvas(kodas, "pasiulymas"), "", pas].join("\n")
+        "The quotation data is in the block below - please do not change it; the buyer's tool will read it."].concat(pr).concat(["", sarvas(kodas, "pasiulymas"), "", pas]).join("\n")
     };
     return {
       tema: "Pasiūlymas: " + k.pavadinimas + " (" + k.id + ") - " + p.tiekejas.pav,
       tekstas: ["Laba diena,", "", "Siunčiame pasiūlymą pirkimui „" + k.pavadinimas + "“.",
-        "Pasiūlymo duomenys - žemiau esančiame bloke; jo nekeiskite, jį perskaitys pirkimo vykdytojo įrankis.", "", sarvas(kodas, "pasiulymas"), "", pas].join("\n")
+        "Pasiūlymo duomenys - žemiau esančiame bloke; jo nekeiskite, jį perskaitys pirkimo vykdytojo įrankis."].concat(pr).concat(["", sarvas(kodas, "pasiulymas"), "", pas]).join("\n")
     };
   }
 

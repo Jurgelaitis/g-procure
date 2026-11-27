@@ -280,7 +280,7 @@ async function testaiApklausa() {
     o = o || {};
     const t = a.tiekejai[i];
     const f = A.pasiulymoForma({ v: 1, tipas: 'pasiulymas', apklausa: o.apklausa || a.id, kvietimas: o.kvietimas || a.antspaudas, t: o.t || t.t,
-      tiekejas: { pav: o.pav || t.pav, kodas: '30000000' + i, asmuo: 'Asmuo ' + i, pastas: t.pastas }, pvm: o.pvm !== false,
+      tiekejas: { pav: o.pav || t.pav, kodas: '30000000' + i, asmuo: 'Asmuo ' + i, pastas: t.pastas }, pvm: o.pvm !== false, pvmTarifas: o.pvmTarifas,
       eilutes: kainos.map((k, j) => ({ i: j, ikainis: k, pastaba: o.pastaba || '' })), pristatymas: 'per 14 dienų', galioja: 30, pastabos: o.pastabos || '',
       patvirtinta: o.patvirtinta || A.PATVIRTINIMAI.slice(), pateikta: iso(o.pateikta === undefined ? -5000 + i : o.pateikta), kalba: t.kalba });
     if (!f.ok) throw new Error('pasiūlymo forma: ' + f.klaida);
@@ -378,7 +378,7 @@ async function testaiApklausa() {
     lygu([v.vidurkis, v.nmk, v.virsLesu], [2000, ['T1'], []], 'kaina lygi lėšoms - neviršija ir į vidurkį įskaičiuojama');
     v = A.vertink({ kvietimas: k1, tiekejai: tk, lesos: 3000, neatitinka: { T4: 'x' }, pasiulymai: [ps('T1', [1400]), ps('T2', [2600]), ps('T3', [90000]), ps('T4', [1])] });
     lygu([v.vidurkis, v.nmk], [2000, ['T1']], 'lėšas viršijantis ir neatitinkantis į vidurkį neįskaičiuojami');
-    lygu(A.sumos({ pozicijos: [{ kiekis: 3 }, { kiekis: 0.5 }] }, { pvm: true, eilutes: [{ i: 0, ikainis: 0.335 }, { i: 1, ikainis: 2.01 }] }, 0.21), { eilutes: [{ i: 0, ikainis: 0.335, suma: 1.01, pastaba: '' }, { i: 1, ikainis: 2.01, suma: 1.01, pastaba: '' }], truksta: 0, viso: 2.02, pvmSuma: 0.42, suPvm: 2.44 }, 'apvalinimas');
+    lygu(A.sumos({ pozicijos: [{ kiekis: 3 }, { kiekis: 0.5 }] }, { pvm: true, eilutes: [{ i: 0, ikainis: 0.335 }, { i: 1, ikainis: 2.01 }] }, 0.21), { eilutes: [{ i: 0, ikainis: 0.335, suma: 1.01, pastaba: '' }, { i: 1, ikainis: 2.01, suma: 1.01, pastaba: '' }], truksta: 0, viso: 2.02, pvmSuma: 0.42, suPvm: 2.44, tarifas: 0.21 }, 'apvalinimas');
   });
 
   await testas('Laikas: Lietuvos laikas -> UTC žiemą ir vasarą, neegzistuojantis laikas - tuščia; „liko“ tekstai', async () => {
@@ -549,7 +549,7 @@ async function testaiApklausa() {
     lygu([v.eile, v.eilutes.map(e => e.busena)], [[a.tiekejai[0].t], ['tinkamas', 'pavėluotas', 'negautas']], 'pigesnis, bet pavėluotas - ne eilėje');
     await kol(() => q('.ea-pas'));
     turi(q('#ea-vieta').textContent, 'Gautas po termino - nevertinamas', 'ekrane');
-    lygu(q('#ea-laisko-tekstas'), null, 'atvėrus įkelti nebegalima');
+    lygu(q('#ea-ps-h').textContent, 'Laiškai, gauti atvėrus pasiūlymus', 'atvėrus - laukas tik vėliau gautiems laiškams (jie nepriimami, įrašomi žurnale)');
     // vykdoma apklausa, pateikė ne visi - atverti negalima nei anksčiau, nei įprastai
     const c = await kurk(); await U.rodyk('apklausa', c.id);
     const cp = await pasiulymas(c, 0, [1, 1]); rasyk(q('#ea-laisko-tekstas'), cp.laiskas); q('[data-veiksmas="eaIkelk"]').click(); await kol(() => U.gauk(c.id).pasiulymai.length === 1);
@@ -810,15 +810,16 @@ async function testaiApklausa() {
     lygu([w.document.documentElement.lang, /REQUEST FOR QUOTATION/.test(w.document.querySelector('.ea-hero').textContent)], ['en', true], 'kvietimo kalba - anglų');
     const senas = await kurk({ terminas: -60000 }); await U.paruoskNuorodas(senas);
     w = await atverkTiekeja('#' + U.busenaS().nuorodos[senas.tiekejai[0].t].nuoroda.split('#')[1]); await kol(() => w.document.querySelector('#pslForma'));
-    lygu([w.document.querySelector('[data-veiksmas="pslParenk"]').disabled, /terminas praėjo/.test(w.document.querySelector('#pslForma').textContent), await w.GP_PASIULYMAS.parenk()], [true, true, false], 'po termino');
-    // terminas praeina, kol tiekėjas pildo: užpildytas pasiūlymas nebeparengiamas (rėmelio laikrodis pasukamas į priekį)
+    // Po termino forma neužrakinama (2026-11-27, antra tiekėjo patikra M5): kompiuterio laikrodis gali skubėti - įspėjama, terminą lemia laiško gavimas
+    lygu([w.document.querySelector('[data-veiksmas="pslParenk"]').disabled, /terminas praėjo/.test(w.document.querySelector('#pslForma').textContent), /lemia, kada laišką gauna pirkimo vykdytojas/.test(w.document.querySelector('#pslPraejoF').textContent)], [false, true, true], 'po termino - įspėjimas, forma neužrakinta');
+    // terminas praeina, kol tiekėjas pildo: pasiūlymą parengti galima, kortelė įspėja (rėmelio laikrodis pasukamas į priekį)
     w = await atverkTiekeja('#' + N[a.tiekejai[1].t].nuoroda.split('#')[1]); d = w.document; await kol(() => d.querySelector('#pslForma'));
     d.querySelectorAll('[data-ik]').forEach(el => { ras(el, '10'); ras(el, '10', 'change'); }); ras(d.querySelector('#psl-galioja'), '30'); ras(d.querySelector('#psl-kodas'), '123456789'); ras(d.querySelector('#psl-asmuo'), 'Jonas Jonaitis');
     if (!d.querySelector('[data-f="pvm"]:checked')) d.querySelector('#psl-pvm-ne').click(); d.querySelectorAll('#pslPatv input').forEach(c => c.click());
     const TikraData = w.Date;
     w.Date = class extends TikraData { constructor(...x) { if (x.length) super(...x); else super(TikraData.now() + 3 * 864e5); } static now() { return TikraData.now() + 3 * 864e5; } };
-    lygu([await w.GP_PASIULYMAS.parenk(), w.GP_PASIULYMAS.busena().rezultatas], [false, null], 'terminas praėjo pildant - užpildytas pasiūlymas neparengiamas');
-    turi(d.querySelector('#pslForma').textContent, 'terminas praėjo', 'forma tai pasako');
+    lygu([await w.GP_PASIULYMAS.parenk(), !!w.GP_PASIULYMAS.busena().rezultatas], [true, true], 'terminas praėjo pildant - parengiama (M5)');
+    tiesa(/Pasiūlymų terminas praėjo/.test(d.querySelector('#pslRzH').textContent) && /po termino gautas pasiūlymas nevertinamas/.test(d.querySelector('#pslRezultatas').textContent) && d.querySelector('#pslRezultatas details summary').textContent === 'Siųsti vis tiek', 'kortelė įspėja, siųsti - tik „Siųsti vis tiek“');
     w.Date = TikraData;
   });
 
@@ -1073,7 +1074,8 @@ async function testaiApklausa() {
     lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(503, {}), eik: u => eik.push(u) }), 'rysys');
     lygu([/Nepavyko atverti/.test(kw.document.querySelector('#kH').textContent), kw.document.querySelector('#kKartoti').hidden], [true, false], 'serverio klaida - „Bandyti dar kartą“, ne „nėra“');
     lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(0), eik: u => eik.push(u) }), 'rysys', 'ryšys');
-    lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(200, { kodas: '"><img src=x onerror=alert(1)>' }), eik: u => eik.push(u) }), 'rysys', 'netinkamas kodas neatveriamas');
+    lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(200, { kodas: '"><img src=x onerror=alert(1)>' }), eik: u => eik.push(u) }), 'netinkamas', 'netinkamas kodas neatveriamas');
+    lygu([/netinkamą atsakymą/.test(kw.document.querySelector('#kLt').textContent), kw.document.querySelector('#kKartoti').hidden, kw.document.querySelector('#kBusena').getAttribute('aria-live'), /\/ Could not open/.test(kw.document.querySelector('#kH').textContent)], [true, false, 'polite', true], 'netinkamas atsakymas - ne ryšio klaida, su „Bandyti dar kartą“; gyva sritis, antraštė abiem kalbomis');
     lygu(await kw.GP_TRUMPA.atverk('#ABC', { fetch: kf(200, { kodas }), eik: u => eik.push(u) }), 'neteisinga', 'per trumpas ID - be užklausos');
     lygu([eik.length, kur.length], [1, 5], 'nukreipta vieną kartą, neteisingam ID užklausos nėra');
     // tiekėjo puslapyje įklijuota trumpa nuoroda atpažįstama
@@ -1118,7 +1120,7 @@ async function testaiApklausa() {
     try {
       d.querySelector('[data-kalba="lt"]').click(); await laukti(60);
       const t = d.querySelector('#pslRezultatas').textContent;
-      tiesa(/Pasiūlymų terminas praėjo/.test(d.querySelector('#pslRzH').textContent) && /gali nebevertinti/.test(t) && !d.querySelector('a[data-veiksmas="pslIssiusta"]') && !d.querySelector('[data-veiksmas="pslKeisk"]'), 'po termino - įspėjimas, be „Atverti dar kartą“: ' + t.slice(0, 160));
+      tiesa(/Pasiūlymų terminas praėjo/.test(d.querySelector('#pslRzH').textContent) && /nevertinamas/.test(t) && !d.querySelector('#pslRezultatas a.ea-btn--pagr[data-veiksmas="pslIssiusta"]') && d.querySelector('#pslRezultatas details a[data-veiksmas="pslIssiusta"]') && !d.querySelector('[data-veiksmas="pslKeisk"]'), 'po termino - įspėjimas, laiškas - tik „Siųsti vis tiek“: ' + t.slice(0, 160));
       d.querySelector('[data-veiksmas="pslPazymek"][data-ka="iki"]').click(); await laukti(50);
       tiesa(/išsiuntėte iki termino/.test(d.querySelector('#pslRezultatas').textContent) && !d.querySelector('#pslRezultatas .ea-pastaba--klaida'), 'išsiųsta iki termino - be klaidos');
     } finally { w.Date = TikraData; }
@@ -1130,7 +1132,7 @@ async function testaiApklausa() {
     const w = await atverkTiekeja(nuorodaTk(0)), d = w.document;
     const ras = await pildyk(w, { pvm: null });
     const ik0 = d.querySelector('[data-ik="0"]'); ras(ik0, '2,375'); ras(ik0, '2,375', 'change');
-    tiesa(!d.querySelector('[data-f="pvm"]:checked') && d.querySelectorAll('#psl-pvm input[type="radio"]').length === 2 && d.querySelector('#psl-pvm legend'), 'PVM - klausimas su dviem atsakymais, iš anksto nepažymėtas');
+    tiesa(!d.querySelector('[data-f="pvm"]:checked') && d.querySelectorAll('#psl-pvm input[type="radio"]').length === 3 && d.querySelector('#psl-pvm legend'), 'PVM - klausimas su trimis atsakymais, iš anksto nepažymėtas');
     lygu(d.querySelector('#pslSumSu').textContent, '-', 'be PVM atsakymo bendra suma nerodoma');
     lygu(await w.GP_PASIULYMAS.parenk(), false, 'be PVM atsakymo ir neišspręstos kainos - neparengiama');
     const kl = [...d.querySelectorAll('#pslKlaidos li')].map(x => x.textContent).join(' | ');
@@ -1229,8 +1231,8 @@ async function testaiApklausa() {
     d.querySelector('#pslNuoroda').value = laiskas; d.querySelector('[data-veiksmas="pslAtverk"]').click(); await laukti(80);
     turi(d.querySelector('#pslTurinys [role="alert"]').textContent, 'Įklijavote pasiūlymo laišką', 'paaiškinimas');
     const T = w.GP_PASIULYMAS.trumposId;
-    lygu([T('https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fg-procure.com%2Fk%2F%237F3K9QX2MZ&data=05%7C02'), T('7F3K-9QX2MZ'), T(' 7f3k9qx2mz. '), T('Laba diena'), T('ABCDEFGHIJ')],
-      ['7F3K9QX2MZ', '7F3K9QX2MZ', '7F3K9QX2MZ', null, null], 'trumpa nuoroda per Safe Links ir vien ID');
+    lygu([T('https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fg-procure.com%2Fk%2F%237F3K9QX2MZ&data=05%7C02'), T('7F3K-9QX2MZ'), T(' 7f3k9qx2mz. '), T('Laba diena'), T('ABCDEFGHJK'), T('abcdefghio'), T('ABCDEFGHJ')],
+      ['7F3K9QX2MZ', '7F3K9QX2MZ', '7F3K9QX2MZ', null, 'ABCDEFGHJK', 'ABCDEFGH10', null], 'trumpa nuoroda per Safe Links ir vien ID (ir be skaitmenų - M1)');
     // senesnė naršyklė (be DecompressionStream): nesuspaustas kvietimas atveriamas, suspaustas - aiškus paaiškinimas
     const kv = JSON.parse(JSON.stringify(a.kvietimas)); kv.tiekejas = { pav: a.tiekejai[0].pav, pastas: a.tiekejai[0].pastas }; kv.t = a.tiekejai[0].t; kv.kalba = 'lt';
     const k0 = await A.koduok(kv, { suspausti: false }), k1 = await A.koduok(kv);
@@ -1247,6 +1249,131 @@ async function testaiApklausa() {
       kw.GP_TRUMPA.isTeksto('7F3K9QX2MZ'), kw.GP_TRUMPA.idIs('#7F3K9QX2MZ).'), kw.GP_TRUMPA.isTeksto('labas')], [{ id: '7F3K9QX2MZ' }, true, { id: '7F3K9QX2MZ' }, '7F3K9QX2MZ', null], 'k/ atpažįsta įklijuotą tekstą');
     kw.document.querySelector('#kNuoroda').value = 'labas'; kw.document.querySelector('#kAtverti').click(); await laukti(30);
     turi(kw.document.querySelector('#kFormaKl').textContent, 'Nuoroda neatpažinta', 'neatpažinta - klaida, be užklausos');
+  });
+
+  /* ---------- antra patikra tiekėjo akimis ir naudotojo sprendimai T1-T4 (2026-11-27) ---------- */
+  await testas('Antra tiekėjo patikra (2026-11-27): atvėrus pasiūlymus pakeitimas nepriimamas, bet įrašomas žurnale (D1); tiekėjui - išlyga ir pakeisto pasiūlymo gavimo laikas (T3); vienodų kainų eilėje - „pasiūlymas keistas“', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ tk: TK.slice(0, 1), verte: 4000 }); await U.paruoskNuorodas(a);
+    const p1 = await pasiulymas(a, 0, [10, 10], { pateikta: -6e5 });
+    lygu((await U.ikelkTeksta(p1.laiskas, '', a.id)).map(x => x.ok), [true], 'įkeltas');
+    lygu(await U.atverkPasiulymus(true, a.id), true, 'visi pateikė - atverta anksčiau');
+    const p2 = await pasiulymas(a, 0, [9, 9], { pateikta: -1000 });
+    const rez = await U.ikelkTeksta(p2.laiskas, '', a.id), x = U.gauk(a.id);
+    lygu([rez.length, rez[0].ok, /pasiūlymai jau atverti - pakeitimas nepriimtas/.test(rez[0].tekstas), x.pasiulymai[0].h, x.zurnalas[x.zurnalas.length - 1].ivykis], [1, false, true, p1.h, 'nepriimta'], 'pakeitimas nepriimtas, žurnale - įrašas');
+    lygu((await A.tikrinkZurnala(x.zurnalas)).ok, true, 'žurnalo grandinė nepažeista');
+    await U.rodyk('apklausa', a.id);
+    lygu(q('#ea-ps-h').textContent, 'Laiškai, gauti atvėrus pasiūlymus', 'atvėrus - įkėlimo laukas vėliau gautiems laiškams');
+    lygu((await U.ikelkTeksta(p1.laiskas, '', a.id)).map(x => [x.ok, /jau įkeltas/.test(x.tekstas)]), [[true, true]], 'tas pats pasiūlymas - „jau įkeltas“');
+    // tiekėjui
+    const w = await atverkTiekeja(nuorodaTk(0)), d = w.document; await kol(() => d.querySelector('#pslAtkurti'));
+    const at = d.querySelector('#pslAtkurti').textContent;
+    tiesa(/dar nebus atvėręs pasiūlymų/.test(at) && /naujo laiško gavimo laikas/.test(at), 'pakeitimo išlyga ir gavimo laikas: ' + at.slice(0, 200));
+    // vienodos kainos: pakeistas pasiūlymas pažymimas
+    const b = await kurk({ tk: TK.slice(0, 2), verte: 4000 });
+    for (const [i, o] of [[0, { pateikta: -9e5 }], [1, { pateikta: -8e5 }], [0, { pateikta: -7e5, pastabos: 'pakeista' }]]) await U.ikelkTeksta((await pasiulymas(b, i, [10, 10], o)).laiskas, '', b.id);
+    lygu(await U.atverkPasiulymus(true, b.id), true, 'atverta');
+    await U.rodyk('apklausa', b.id); await kol(() => q('.ea-pas'));
+    tiesa(/Vienodos kainos/.test(q('#ea-vieta').textContent) && /pasiūlymas keistas - gavimo laikas pagal paskutinį laišką/.test(q('#ea-vieta').textContent), 'vienodos kainos - pakeistas pasiūlymas pažymėtas');
+  });
+
+  await testas('Antra tiekėjo patikra (2026-11-27): PVM - trys atsakymai, kitas tarifas (T1) sumose, pasiūlyme ir iniciatoriaus vertinime; ne Lietuvos PVM kodas su „Taip“ - įspėjimas (D3); fizinis asmuo - langelis prieš kodą, kodas išvalomas, asmens kodas neleidžiamas (D2)', async () => {
+    U.naudokSaugykla(atm());
+    const a = await kurk({ verte: 4000 }); await U.paruoskNuorodas(a);
+    let w = await atverkTiekeja(nuorodaTk(0)), d = w.document;
+    const ras = await pildyk(w, { pvm: null });
+    const fs = d.querySelector('#psl-pvm');
+    lygu([fs.getAttribute('role'), fs.getAttribute('aria-required'), d.querySelectorAll('#psl-pvm input[type="radio"]').length, w.getComputedStyle(d.getElementById('psl-pvmTarifas-l')).display, /PVM taikymo nevertina/.test(fs.textContent)], ['radiogroup', 'true', 3, 'none', true], 'PVM grupė (tarifo laukas paslėptas)');
+    d.querySelector('#psl-pvm-kitas').click(); await laukti(20);
+    tiesa(w.getComputedStyle(d.getElementById('psl-pvmTarifas-l')).display !== 'none', 'pasirinkus kitą tarifą - laukas');
+    lygu(await w.GP_PASIULYMAS.parenk(), false, 'be tarifo - neparengiama');
+    turi([...d.querySelectorAll('#pslKlaidos li')].map(x => x.textContent).join(' '), 'PVM tarifas: įrašykite tarifą procentais', 'klaida');
+    ras(d.querySelector('#psl-pvmTarifas'), '9');
+    lygu([d.querySelector('#pslSumPvmProc').textContent.replace(/ /g, ' '), d.querySelector('#pslSumPvm').textContent.replace(/ /g, ' '), d.querySelector('#pslSumSu').textContent.replace(/ /g, ' ')], [' (9 %)', '11,70 Eur', '141,70 Eur'], 'sumos su 9 %');
+    lygu(await w.GP_PASIULYMAS.parenk(), true, 'parengta');
+    const rz = w.GP_PASIULYMAS.busena().rezultatas;
+    lygu([rz.pasiulymas.pvm, rz.pasiulymas.pvmTarifas, rz.sumos.suPvm], [true, 9, 141.7], 'pasiūlyme - tarifas');
+    turi(d.querySelector('#pslRezultatas .ea-dl').textContent.replace(/ /g, ' '), 'Kaina su PVM (9 %)', 'kortelėje');
+    lygu((await U.ikelkTeksta(rz.laiskas.tekstas, '', a.id)).map(x => x.ok), [true], 'iniciatorius įkelia');
+    w.addEventListener('click', e => { if (e.target.closest && e.target.closest('a[href^="mailto:"]')) e.preventDefault(); }, true);
+    // ne Lietuvos PVM kodas
+    d.querySelector('[data-veiksmas="pslKeisk"]').click(); await laukti(40);
+    d.querySelector('#psl-pvm-taip').click(); ras(d.querySelector('#psl-pvmKodas'), 'DE123456789');
+    tiesa(!d.getElementById('psl-pvm-pst').hidden && /ne Lietuvos PVM mokėtojo kodą/.test(d.getElementById('psl-pvm-pst').textContent), 'ne LT kodas su „Taip“ - įspėjimas');
+    d.querySelector('#psl-pvm-ne').click(); await laukti(20);
+    tiesa(d.getElementById('psl-pvm-pst').hidden, 'ne LT kodas su „Ne“ - be įspėjimo');
+    ras(d.querySelector('#psl-pvmKodas'), 'LT100001234567');
+    tiesa(!d.getElementById('psl-pvm-pst').hidden && /Lietuvos PVM mokėtojo kodą/.test(d.getElementById('psl-pvm-pst').textContent), 'LT kodas su „Ne“ - įspėjimas');
+    // fizinis asmuo
+    const fz = d.querySelector('[data-f="fizinis"]');
+    tiesa(fz.compareDocumentPosition(d.querySelector('#psl-kodas')) & 4, 'langelis - prieš kodo lauką');
+    ras(d.querySelector('#psl-kodas'), '38001010000'); fz.click(); await laukti(30);
+    lygu([d.querySelector('#psl-kodas').value, /verslo liudijimo/.test(d.querySelector('label[for="psl-kodas"]').textContent)], ['', true], 'pažymėjus - kodas išvalytas');
+    ras(d.querySelector('#psl-kodas'), '38001010000');
+    lygu(await w.GP_PASIULYMAS.parenk(), false, 'asmens kodas - neparengiama');
+    turi([...d.querySelectorAll('#pslKlaidos li')].map(x => x.textContent).join(' '), 'atrodo kaip asmens kodas', 'klaida');
+    ras(d.querySelector('#psl-kodas'), 'IV-123456');
+    lygu([await w.GP_PASIULYMAS.parenk(), w.GP_PASIULYMAS.busena().rezultatas.pasiulymas.tiekejas.kodas], [true, 'IV-123456'], 'pažymos numeris - tinka');
+    // iniciatorius: kitas tarifas vertinime
+    const x = U.gauk(a.id); lygu(A.sumos(x.kvietimas, (await A.pasiulymoForma(await A.iskoduok(x.pasiulymai[0].kodas))).pasiulymas, 0.21).suPvm, 141.7, 'iniciatoriaus sumos - pagal tiekėjo tarifą');
+  });
+
+  await testas('Antra tiekėjo patikra (2026-11-27): priedų priminimas prieš siunčiant ir laiške (V1, T2), „turėjo atsiverti“ (V2), el. pašto adresas be „?“ ir domeno įspėjimas (V3, T4), dalinė suma (M2), dviprasmiška kaina rašant (M3), visų kainų 0 (M4), po termino išsiųsto kortelė be „Keisti“ ir be pasikartojančių id (D4), kopija savo įrašams (M6)', async () => {
+    U.naudokSaugykla(atm());
+    lygu([A.pastas('a@gmail.com?subject=x'), A.pastas('a@b.lt&x=1'), A.pastas('a?subject=x@b.lt'), A.pastas('vardas@litgrid.eu')], ['', '', '', 'vardas@litgrid.eu'], 'el. pašto adresas be „?“, „&“');
+    const a = await kurk({ verte: 4000, kv: { dokumentai: 'Techninis aprašas' } }); await U.paruoskNuorodas(a);
+    let w = await atverkTiekeja(nuorodaTk(0)), d = w.document; await kol(() => d.querySelector('#pslForma'));
+    tiesa(d.querySelector('#pslDomenas') && /litgrid\.eu/.test(d.querySelector('#pslDomenas').textContent), 'kontaktas ne pirkimo vykdytojo domeno - įspėjimas');
+    const pr = d.querySelector('#pslPriedai');
+    tiesa(pr && /Techninis aprašas\./.test(pr.textContent) && (pr.compareDocumentPosition(d.querySelector('[data-veiksmas="pslParenk"]')) & 4), 'priedų priminimas - prieš mygtuką, sakinys su tašku');
+    const ras = await pildyk(w);
+    const ik0 = d.querySelector('[data-ik="0"]'), ik1 = d.querySelector('[data-ik="1"]');
+    ras(ik1, ''); ras(ik1, '', 'change');
+    lygu(d.querySelector('#pslSumBe').textContent, 'trūksta kainų: 1 poz.', 'dalinė suma nerodoma kaip galutinė');
+    ras(ik1, '2,375');
+    const dv = d.getElementById('psl-ik1-dv');
+    tiesa(!dv.hidden && dv.getAttribute('aria-live') === 'polite' && /2 Eur 37,5 ct/.test(dv.textContent.replace(/ /g, ' ')), 'dviprasmiška kaina - klausimas rašant, gyva sritis: ' + dv.textContent);
+    ras(ik0, '0'); ras(ik0, '0', 'change'); ras(ik1, '0'); ras(ik1, '0', 'change');
+    lygu(await w.GP_PASIULYMAS.parenk(), false, 'visų kainų 0 - neparengiama');
+    turi([...d.querySelectorAll('#pslKlaidos li')].map(x => x.textContent).join(' '), 'visų pozicijų kaina 0 Eur', 'klaida');
+    ras(ik0, '10'); ras(ik0, '10', 'change');
+    w.addEventListener('click', e => { if (e.target.closest && e.target.closest('a[href^="mailto:"]')) e.preventDefault(); }, true);
+    lygu(await w.GP_PASIULYMAS.parenk(), true, 'parengta');
+    const rz = w.GP_PASIULYMAS.busena().rezultatas;
+    tiesa(/Pridedami dokumentai: Techninis aprašas/.test(rz.laiskas.tekstas), 'laiške - priedų eilutė');
+    const t = d.querySelector('#pslRezultatas').textContent;
+    tiesa(/turėjo atsiverti/.test(t) && /Techninis aprašas\. Kainos jau yra laiško bloke; jei pridedate kainų dokumentą/.test(t), 'kortelės tekstai: ' + t.slice(0, 300));
+    d.querySelector('[data-veiksmas="pslPazymek"][data-ka="taip"]').click(); await laukti(40);
+    const TikraData = w.Date;
+    w.Date = class extends TikraData { constructor(...x) { if (x.length) super(...x); else super(TikraData.now() + 3 * 864e5); } static now() { return TikraData.now() + 3 * 864e5; } };
+    try {
+      d.querySelector('[data-kalba="lt"]').click(); await laukti(40);
+      const t2 = d.querySelector('#pslRezultatas').textContent;
+      tiesa(/pasiūlymo pakeisti nebegalima/.test(t2) && !/spauskite „Keisti pasiūlymą“/.test(t2), 'po termino išsiųsto - be pakeitimo sakinio');
+      const ids = [...d.querySelectorAll('[id]')].map(e => e.id), dub = ids.filter((x, i) => ids.indexOf(x) !== i);
+      lygu(dub, [], 'pasikartojančių id nėra');
+    } finally { w.Date = TikraData; }
+    // kopija savo įrašams
+    const kop = w.GP_PASIULYMAS.kopija();
+    d.querySelector('[data-veiksmas="pslPazymek"][data-ka="ne"]') && d.querySelector('[data-veiksmas="pslPazymek"][data-ka="ne"]').click(); await laukti(30);
+    w = await atverkTiekeja(nuorodaTk(0)); d = w.document; await kol(() => d.querySelector('#pslAtkurti'));
+    d.querySelector('#pslAtkurti').open = true; d.querySelector('#pslAtkurtiT').value = kop; d.querySelector('[data-veiksmas="pslAtkurk"]').click(); await laukti(60);
+    turi(d.querySelector('#pslAtkurtiB').textContent, 'kopiją savo įrašams', 'kopija formos neužpildo - paaiškinta');
+    d.querySelector('[data-kalba="en"]').click(); await laukti(40);
+    const ras2 = await pildyk(w);
+    lygu(await w.GP_PASIULYMAS.parenk(), true, 'EN parengta');
+    const kopEn = w.GP_PASIULYMAS.kopija();
+    tiesa(/^﻿?G-PROCURE: SUPPLIER'S COPY - DO NOT SEND TO THE BUYER/.test(kopEn), 'EN kopijos žymė angliškai');
+    turi((await U.ikelkTeksta(kopEn, '', a.id))[0].tekstas, 'tiekėjo kopija savo įrašams', 'iniciatorius atpažįsta ir anglišką kopiją');
+    // domenas sutampa - įspėjimo nėra; ir subdomenas
+    for (const pastas of ['v@litgrid.eu', 'v@pirkimai.litgrid.eu']) {
+      const b = await kurk({ verte: 4000, kv: { kontaktas: { vardas: 'V', pastas, tel: '' } } }); await U.paruoskNuorodas(b);
+      w = await atverkTiekeja('#' + U.busenaS().nuorodos[b.tiekejai[0].t].nuoroda.split('#')[1]); await kol(() => w.document.querySelector('#pslForma'));
+      tiesa(!w.document.querySelector('#pslDomenas'), 'pirkimo vykdytojo domenas - be įspėjimo: ' + pastas);
+    }
+    // spausdinant - parengta forma nepaslepiama; žvaigždutė ekrano skaitytuvui neskaitoma
+    const css = await (await fetch('apklausa.css?b=' + Date.now())).text();
+    tiesa(!/body\.ea-psl #pslForma/.test(css) && /content: " \*" \/ ""/.test(css), 'spausdinimas ir žvaigždutė');
   });
 
   tr.remove();

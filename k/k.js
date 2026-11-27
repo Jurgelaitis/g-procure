@@ -7,13 +7,17 @@
   "use strict";
   var API = "https://api.g-procure.com/api/k/";
   var ID_RE = /^[0-9A-HJKMNP-TV-Z]{10}$/, KODO_RE = /^g[01]\.[A-Za-z0-9_-]{16,12000}$/;
+  /* [antraštė LT, antraštė EN, tekstas LT, tekstas EN] (2026-11-27, tiekėjo patikra M6: antraštė abiem kalbomis) */
   var TEKSTAI = {
-    neteisinga: ["Nuoroda neteisinga", "Patikrinkite, ar nukopijavote visą nuorodą iš kvietimo laiško. Jei nepavyks, paprašykite pirkimo vykdytojo atsiųsti kvietimą iš naujo.",
+    neteisinga: ["Nuoroda neteisinga", "The link is incorrect", "Patikrinkite, ar nukopijavote visą nuorodą iš kvietimo laiško. Jei nepavyks, paprašykite pirkimo vykdytojo atsiųsti kvietimą iš naujo.",
       "The link is incorrect. Check that you copied the whole link from the invitation email. If it still does not work, ask the buyer to send the invitation again."],
-    nera: ["Nuoroda nebegalioja", "Kvietimas nebegalioja (pasiūlymų terminas seniai praėjo arba pirkimo vykdytojas jį atšaukė) arba nuoroda neteisinga. Jei manote, kad tai klaida, susisiekite su pirkimo vykdytoju.",
+    nera: ["Nuoroda nebegalioja", "The link is no longer valid", "Kvietimas nebegalioja (pasiūlymų terminas seniai praėjo arba pirkimo vykdytojas jį atšaukė) arba nuoroda neteisinga. Jei manote, kad tai klaida, susisiekite su pirkimo vykdytoju.",
       "The invitation is no longer valid (the deadline passed long ago or the buyer withdrew it) or the link is incorrect. If you think this is a mistake, contact the buyer."],
-    rysys: ["Nepavyko atverti kvietimo", "Nepavyko pasiekti G-Procure serverio. Patikrinkite interneto ryšį ir bandykite dar kartą po minutės.",
-      "Could not reach the G-Procure server. Check your internet connection and try again in a minute."]
+    rysys: ["Nepavyko atverti kvietimo", "Could not open the invitation", "Nepavyko pasiekti G-Procure serverio. Patikrinkite interneto ryšį ir bandykite dar kartą po minutės.",
+      "Could not reach the G-Procure server. Check your internet connection and try again in a minute."],
+    /* Serveris atsakė, bet kvietimo kodas netinkamas - ne ryšio klaida (M6) */
+    netinkamas: ["Nepavyko atverti kvietimo", "Could not open the invitation", "G-Procure serveris pateikė netinkamą atsakymą. Bandykite dar kartą; jei nepavyks, paprašykite pirkimo vykdytojo atsiųsti kvietimą iš naujo.",
+      "The G-Procure server returned an invalid response. Try again; if it still does not work, ask the buyer to send the invitation again."]
   };
   /* ID iš adreso dalies po „#“: tarpai ir brūkšneliai nepaisomi, skyrybos ženklai gale (nukopijuota su tašku ar skliaustu) - irgi */
   function idIs(hash) {
@@ -31,13 +35,14 @@
     return x ? { id: x } : null;
   }
   function rodyk(rusis) {
-    var t = TEKSTAI[rusis], h = document.getElementById("kH");
-    h.textContent = t[0]; document.getElementById("kLt").textContent = t[1]; document.getElementById("kEn").textContent = t[2];
-    document.getElementById("kKartoti").hidden = rusis !== "rysys";
-    document.getElementById("kForma").hidden = rusis === "rysys";
+    var t = TEKSTAI[rusis];
+    document.getElementById("kHLt").textContent = t[0]; document.getElementById("kHEn").textContent = " / " + t[1];
+    document.getElementById("kLt").textContent = t[2]; document.getElementById("kEn").textContent = t[3];
+    document.getElementById("kKartoti").hidden = rusis !== "rysys" && rusis !== "netinkamas";
+    document.getElementById("kForma").hidden = rusis === "rysys" || rusis === "netinkamas";
     document.title = t[0] + " - G-Procure";
   }
-  /* atverk(hash, { fetch, eik }) -> Promise<"atverta" | "neteisinga" | "nera" | "rysys"> (testams - netikri fetch ir eik) */
+  /* atverk(hash, { fetch, eik }) -> Promise<"atverta" | "neteisinga" | "nera" | "rysys" | "netinkamas"> (testams - netikri fetch ir eik) */
   function atverk(hash, o) {
     o = o || {};
     var f = o.fetch || window.fetch.bind(window), eik = o.eik || function (u) { location.replace(u); };
@@ -46,8 +51,8 @@
     return f(API + id, { credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store" }).then(function (r) {
       if (r.status === 404) return "nera";
       if (!r.ok) return "rysys";
-      return r.json().then(function (j) {
-        if (!j || typeof j.kodas !== "string" || !KODO_RE.test(j.kodas)) return "rysys";
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (!j || typeof j.kodas !== "string" || !KODO_RE.test(j.kodas)) return "netinkamas";
         eik("../PP-report/pasiulymas.html#k=" + j.kodas);
         return "atverta";
       });

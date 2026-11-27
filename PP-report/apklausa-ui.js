@@ -538,6 +538,8 @@
     if (a.busena === "nutraukta") s += '';
     if (atv) s += vertinimoHtml(a);
     if (!atv && a.busena !== "nutraukta") s += pasiulymuHtml(a);
+    /* Atvėrus pasiūlymus vėliau gautas laiškas (pakeitimas) nebepriimamas, bet įregistruojamas žurnale (2026-11-27, tiekėjo patikra D1) */
+    if (atv && (a.busena === "atverta" || a.busena === "ivertinta")) s += pasiulymuHtml(a, true);
     s += kvietimuHtml(a, atv || a.busena === "nutraukta" || a.tiekejai.every(function (t) { return t.issiusta; }), atv || a.busena === "nutraukta");
     s += duomenuHtml(a) + zurnaloHtml(a);
     return s;
@@ -607,10 +609,12 @@
     });
     return s + '</div></details></section>';
   }
-  function pasiulymuHtml(a) {
+  function pasiulymuHtml(a, poAtverimo) {
     var po = praejo(a);
-    var s = '<section class="ea-card" aria-labelledby="ea-ps-h"><h3 id="ea-ps-h">Pasiūlymai (' + a.pasiulymai.length + ' iš ' + a.tiekejai.length + ')</h3>' +
-      '<p class="ea-sub">Įklijuokite tiekėjo laiško tekstą arba įkelkite išsaugotą laišką (.eml ar .txt). Įrankis patikrina, kuriam tiekėjui ir kuriai apklausai pasiūlymas skirtas; kainų nerodo, kol pasiūlymai neatverti. Pasiūlymo kodas suspaustas, bet neužšifruotas - tai darbo tvarka, ne apsauga nuo kainų perskaitymo.</p>' +
+    var s = '<section class="ea-card' + (poAtverimo ? ' ea-nespausdinti' : '') + '" aria-labelledby="ea-ps-h">' + (poAtverimo
+      ? '<h3 id="ea-ps-h">Laiškai, gauti atvėrus pasiūlymus</h3><p class="ea-sub">Atvėrus pasiūlymus nauji pasiūlymai ir jų pakeitimai nebepriimami. Jei tiekėjas vėliau atsiuntė pasiūlymą ar jo pakeitimą, įkelkite laišką čia - jis įrašomas į žurnalą kaip nepriimtas, o vertinamas ankstesnis pasiūlymas.</p>'
+      : '<h3 id="ea-ps-h">Pasiūlymai (' + a.pasiulymai.length + ' iš ' + a.tiekejai.length + ')</h3>' +
+      '<p class="ea-sub">Įklijuokite tiekėjo laiško tekstą arba įkelkite išsaugotą laišką (.eml ar .txt). Įrankis patikrina, kuriam tiekėjui ir kuriai apklausai pasiūlymas skirtas; kainų nerodo, kol pasiūlymai neatverti. Pasiūlymo kodas suspaustas, bet neužšifruotas - tai darbo tvarka, ne apsauga nuo kainų perskaitymo.</p>') +
       '<div class="ea-zona ea-nespausdinti" id="ea-zona" data-veiksmas-dragover="eaVirs" data-veiksmas-dragleave="eaNeVirs" data-veiksmas-drop="eaNumesk" data-darbas-ne>' +
       '<div class="ea-laukas"><label for="ea-laisko-tekstas">Tiekėjo laiško tekstas</label><textarea id="ea-laisko-tekstas" rows="4" spellcheck="false" autocomplete="off" data-darbas-ne placeholder="pvz., visas laiško tekstas su eilutėmis -----BEGIN G-PROCURE OFFER----- ... -----END G-PROCURE OFFER-----"></textarea></div>';
     s += '<div class="ea-laukas" style="margin-top:12px;max-width:420px"><label for="ea-gauta"' + (po ? ' class="ea-privaloma"' : '') + '>Kada laiškas gautas (Lietuvos laiku)' + (po ? '' : ' - neprivaloma') + '</label><input type="datetime-local" id="ea-gauta" data-darbas-ne aria-describedby="ea-gauta-uz">' +
@@ -619,7 +623,9 @@
     s += '<div class="ea-eile" style="margin-top:12px"><button type="button" class="ea-btn ea-btn--pagr" data-veiksmas="eaIkelk">Įkelti pasiūlymą</button>' +
       '<button type="button" class="ea-btn" data-veiksmas="eaFailas">Pasirinkti failą</button><input type="file" id="ea-pasiulymo-failas" accept=".txt,.eml,text/plain,message/rfc822" multiple hidden data-veiksmas-change="eaFailasPasirinktas" aria-label="Pasiūlymo failas">' +
       '<span class="ea-uzuomina">Failus galima ir įtempti į šį langelį.</span></div></div>' +
-      '<div id="ea-ikelimo-rez" role="status" aria-live="polite">' + ikelimoHtml() + '</div><div class="ea-tiek" style="margin-top:12px">';
+      '<div id="ea-ikelimo-rez" role="status" aria-live="polite">' + ikelimoHtml() + '</div>';
+    if (poAtverimo) return s + '</section>';
+    s += '<div class="ea-tiek" style="margin-top:12px">';
     a.tiekejai.forEach(function (t) {
       var p = pasiulymas(a, t.t), veluoja = p && new Date(p.gauta) > new Date(a.kvietimas.terminas);
       s += '<div class="ea-tk" data-b="' + (p ? (veluoja ? "veluoja" : "gauta") : "laukiama") + '"><div><div class="ea-tk-pav">' + esc(t.pav) + '</div><div class="ea-tk-meta">' +
@@ -633,6 +639,8 @@
   }
 
   /* ---------- vertinimas ---------- */
+  /* Tiekėjo nurodytas kitas nei standartinis PVM tarifas (T1) */
+  function pvmKitas(e) { var t = tarifas(); return !!(e && e.pvm && e.sumos && typeof e.sumos.tarifas === "number" && (t === null || Math.abs(e.sumos.tarifas - t) > 1e-9)); }
   var PATV_PAV = { atitinka: "atitiktis reikalavimams", kaina: "visos išlaidos kainoje", igaliotas: "teisė teikti pasiūlymą" };
   function vertinimoHtml(a) {
     var v = vertink(a), sp = a.sprendimas || { neatitinka: {}, atitinka: {} }, baigta = !!(a.sprendimas && a.sprendimas.patvirtinta), k = a.kvietimas;
@@ -642,7 +650,8 @@
     v.lygios.forEach(function (g) {
       s += '<div class="ea-pastaba ea-pastaba--demesio"><strong>Vienodos kainos</strong>Pirmesnis - anksčiau gautas pasiūlymas (Aprašo 30.17 p.): ' + g.map(function (t) {
         var e = v.eilutes.filter(function (x) { return x.t === t; })[0], p = pasiulymas(a, t);
-        return esc(e.tiekejas) + ' - gautas ' + esc(A.rodykLaika(e.gauta)) + (p && p.gautaKaip === "nurodyta" ? " (laiką nurodėte jūs)" : " (įkėlimo laikas)");
+        return esc(e.tiekejas) + ' - gautas ' + esc(A.rodykLaika(e.gauta)) + (p && p.gautaKaip === "nurodyta" ? " (laiką nurodėte jūs)" : " (įkėlimo laikas)") +
+          (e.pakeista ? " (pasiūlymas keistas - gavimo laikas pagal paskutinį laišką)" : "");
       }).join("; ") + '. Jei laiškus gavote kitu laiku, nei jie įkelti, eilę patikrinkite pagal savo el. paštą ir tai nurodykite pastaboje prie sprendimo.</div>';
     });
     s += '<div class="ea-eilej">';
@@ -659,13 +668,14 @@
       if (e.kitasTiekejas) zymos += '<span class="ea-zyma ea-zyma--demesio">Kviestas kitas tiekėjas: ' + esc(e.kitasTiekejas) + '</span>';
       if (e.nepatvirtinta && e.nepatvirtinta.length) zymos += '<span class="ea-zyma ea-zyma--demesio">Tiekėjas nepatvirtino: ' + esc(e.nepatvirtinta.map(function (x) { return PATV_PAV[x]; }).join(", ")) + '</span>';
       s += '<div class="ea-pas"' + (pirmas ? ' data-b="pirmas"' : '') + ' data-tiekejas="' + esc(e.t) + '"><div class="ea-vieta"' + (e.vieta ? ' aria-label="' + e.vieta + ' vieta"' : ' aria-hidden="true"') + '>' + (e.vieta || "-") + '</div>' +
-        '<div class="ea-pas-pav">' + esc(e.tiekejas) + '</div><div class="ea-pas-kaina"><b>' + esc(eur(e.viso)) + '</b><span>be PVM' + (e.pvm ? " · su PVM " + esc(eur(e.suPvm)) : " · ne PVM mokėtojas") + '</span></div>' +
+        '<div class="ea-pas-pav">' + esc(e.tiekejas) + '</div><div class="ea-pas-kaina"><b>' + esc(eur(e.viso)) + '</b><span>be PVM' + (e.pvm ? " · su PVM" + (pvmKitas(e) ? " (" + esc(fmt(e.sumos.tarifas * 100, 0, 2)) + "\u00a0%)" : "") + " " + esc(eur(e.suPvm)) : " · PVM nepridedamas") + '</span></div>' +
         '<div class="ea-pas-meta">' + zymos + '<span>gauta ' + esc(A.rodykLaika(e.gauta)) + '</span><span>antspaudas <span class="ea-antsp">' + esc(A.trumpas(p.h)) + '</span></span></div>';
       s += '<div class="ea-pas-sprend">';
       if (d) s += '<details><summary style="font-size:13px">Pasiūlymo sąlygos ir tiekėjo duomenys</summary><dl class="ea-dl" style="margin-top:8px">' +
         '<dt>Pasiūlymas galioja</dt><dd>' + (d.galioja ? kiek(d.galioja, "dieną", "dienas", "dienų") : "nenurodyta") + '</dd>' +
         (d.pristatymas ? '<dt>Pristatymo ar atlikimo terminas</dt><dd>' + esc(d.pristatymas) + '</dd>' : '') + (d.pastabos ? '<dt>Tiekėjo pastabos</dt><dd style="white-space:pre-line">' + esc(d.pastabos) + '</dd>' : '') +
-        '<dt>Tiekėjas</dt><dd>' + esc([d.tiekejas.pav, d.tiekejas.kodas && "kodas " + d.tiekejas.kodas, d.tiekejas.pvmKodas && "PVM kodas " + d.tiekejas.pvmKodas, d.tiekejas.adresas].filter(Boolean).join(", ")) + '</dd>' +
+        '<dt>PVM</dt><dd>' + (d.pvm ? "pridedamas" + (typeof d.pvmTarifas === "number" ? ", tiekėjo nurodytas tarifas " + esc(fmt(d.pvmTarifas, 0, 2)) + "\u00a0%" : "") : "nepridedamas") + '</dd>' +
+        '<dt>Tiekėjas</dt><dd>' + esc([d.tiekejas.pav + (d.tiekejas.fizinis ? " (fizinis asmuo)" : ""), d.tiekejas.kodas && (d.tiekejas.fizinis ? "pažymos nr. " : "kodas ") + d.tiekejas.kodas, d.tiekejas.pvmKodas && "PVM kodas " + d.tiekejas.pvmKodas, d.tiekejas.adresas].filter(Boolean).join(", ")) + '</dd>' +
         '<dt>Pasiūlymą pateikė</dt><dd>' + esc([d.tiekejas.asmuo, d.tiekejas.pastas, d.tiekejas.tel].filter(Boolean).join(", ")) + '</dd></dl></details>';
       if ((e.busena === "tinkamas" || e.busena === "neatitinka") && !baigta) {
         var at = sp.atitinka && sp.atitinka[e.t] ? "taip" : Object.prototype.hasOwnProperty.call(sp.neatitinka || {}, e.t) ? "ne" : "";
@@ -757,7 +767,7 @@
     if (v.nmk.length) info.push("Kaina 30 ir daugiau procentų mažesnė už vertinamų pasiūlymų kainų vidurkį (" + fmt(v.vidurkis, 2, 2) + " Eur): " + v.nmk.map(function (t) { return (tiekejas(a, t) || {}).pav; }).join(", ") + ".");
     if (a.vidaus.mazaiTiekeju) info.push("Kreiptasi į mažiau kaip 3 tiekėjus: " + a.vidaus.mazaiTiekeju);
     if (k.nacsaugumas) info.push("Tiekėjai pasiūlymo formoje patvirtino atitiktį Aprašo 27.2.3 ir 31.4 p. nurodytiems nacionalinio saugumo reikalavimams (vietoje atskiros atitikties deklaracijos).");
-    v.lygios.forEach(function (g) { info.push("Vienodos kainos: pirmesnis - anksčiau gautas pasiūlymas (Aprašo 30.17 p.): " + g.map(function (t) { var e = v.eilutes.filter(function (x) { return x.t === t; })[0]; return e.tiekejas + " (gautas " + A.rodykLaika(e.gauta) + ")"; }).join(", ") + "."); });
+    v.lygios.forEach(function (g) { info.push("Vienodos kainos: pirmesnis - anksčiau gautas pasiūlymas (Aprašo 30.17 p.): " + g.map(function (t) { var e = v.eilutes.filter(function (x) { return x.t === t; })[0]; return e.tiekejas + " (gautas " + A.rodykLaika(e.gauta) + (e.pakeista ? ", pasiūlymas keistas - pagal paskutinį laišką" : "") + ")"; }).join(", ") + "."); });
     var kit = v.eilutes.filter(function (e) { return e.kitasTiekejas && e.busena !== "negautas"; });
     if (kit.length) info.push("Pasiūlymą pateikė ne kviestas tiekėjas: " + kit.map(function (e) { return e.tiekejas + " (kviestas " + e.kitasTiekejas + ")"; }).join(", ") + ".");
     if (sp.pastaba) info.push(sp.pastaba);
@@ -802,7 +812,7 @@
       (a.importuota ? '<dt>Įkelta iš failo</dt><dd>' + esc(a.importuota) + '</dd>' : '') + '</dl></details></section>';
   }
   var IVYKIAI = { paskelbta: "Apklausa paskelbta", issiusta: "Kvietimas pažymėtas išsiųstu", atzymeta: "Kvietimo išsiuntimo žyma nuimta", gauta: "Pasiūlymas įkeltas", pakeista: "Pasiūlymas pakeistas naujesniu", atverta: "Pasiūlymai atverti",
-    atitiktis: "Atitiktis poreikiui įvertinta", sprendimas: "Sprendimas patvirtintas", atsaukta: "Sprendimas atšauktas", pazyma: "Pirkimo pažyma užpildyta", nutraukta: "Apklausa nutraukta", negauta: "Užfiksuota: pasiūlymų negauta", importuota: "Apklausa įkelta iš bylos failo", nepriimta: "Pakeistas pasiūlymas gautas po termino - nepriimtas" };
+    atitiktis: "Atitiktis poreikiui įvertinta", sprendimas: "Sprendimas patvirtintas", atsaukta: "Sprendimas atšauktas", pazyma: "Pirkimo pažyma užpildyta", nutraukta: "Apklausa nutraukta", negauta: "Užfiksuota: pasiūlymų negauta", importuota: "Apklausa įkelta iš bylos failo", nepriimta: "Pasiūlymas ar jo pakeitimas nepriimtas" };
   function zurnaloHtml(a) {
     var pt = S.patikra && S.patikra.id === a.id ? S.patikra.rez : null, s = '<section class="ea-card" aria-labelledby="ea-zr-h"><details><summary id="ea-zr-h">Žurnalas ir vientisumo patikra (' + a.zurnalas.length + ')</summary>';
     s += '<p class="ea-sub" style="margin-bottom:8px">Kiekvienas žurnalo įrašas apima ankstesnio įrašo antspaudą, o įrašuose - kvietimo ir pasiūlymų antspaudai, gavimo laikai, vertė ir sprendimas. Patikra palygina apklausos duomenis su žurnalu, todėl randamas pakeistas gavimo laikas, pašalintas pasiūlymas ar grąžinta būsena. Jei kartu būtų pakeistas ir žurnalas, tai parodo tik paskutinio įrašo antspaudas, palygintas su pažymoje įrašytuoju. Kvietimo ir pasiūlymų antspaudus turi ir tiekėjai - savo laiškuose.</p>';
@@ -821,13 +831,14 @@
   }
 
   /* ---------- pasiūlymų įkėlimas ---------- */
-  var KOPIJOS_ZYME = "G-PROCURE: TIEKĖJO KOPIJA";
+  var KOPIJOS_ZYME = /G-PROCURE: (TIEKĖJO KOPIJA|SUPPLIER'S COPY)/;
   /* Pasiūlymo įkėlimas. gautaIso - laiško gavimo laikas iš iniciatoriaus el. pašto: po termino privalomas, iki termino - neprivalomas
      (nenurodžius - įkėlimo laikas). Jis lemia, ar pasiūlymas pateiktas laiku, ir vienodų kainų eilę (Aprašo 30.17 p.). */
   function ikelkTeksta(tekstas, gautaIso, id) {
     var a = gauk(id || S.id), rez = [];
-    if (!a || a.busena !== "paskelbta") return Promise.resolve(rez);
-    if (String(tekstas).indexOf(KOPIJOS_ZYME) >= 0) {
+    if (!a || ["paskelbta", "atverta", "ivertinta"].indexOf(a.busena) < 0) return Promise.resolve(rez);
+    var atverta = a.busena !== "paskelbta";
+    if (KOPIJOS_ZYME.test(String(tekstas))) {
       rez.push({ ok: false, tekstas: "Tai tiekėjo kopija savo įrašams, ne pasiūlymo laiškas: pasiūlymo kodo joje nėra, o kainos matomos atviru tekstu. Paprašykite tiekėjo atsiųsti laišką su pasiūlymo kodu." });
       return Promise.resolve(rez);
     }
@@ -849,6 +860,11 @@
           return A.antspaudas(p).then(function (h) {
             var senas = pasiulymas(a, p.t), senasLaiku = senas && !(new Date(senas.gauta) > terminas);
             if (senas && senas.h === h) { rez.push({ ok: true, tekstas: tk.pav + ": šis pasiūlymas jau įkeltas (antspaudas " + A.trumpas(h) + ")." }); return; }
+            // Pasiūlymai jau atverti (D1): naujas pasiūlymas ar pakeitimas nepriimamas, bet įrašomas į žurnalą - kad nebūtų tylus
+            if (atverta) {
+              rez.push({ ok: false, tekstas: tk.pav + ": pasiūlymai jau atverti - " + (senas ? "pakeitimas nepriimtas, vertinamas ankstesnis pasiūlymas (antspaudas " + A.trumpas(senas.h) + ")" : "pasiūlymas nepriimtas") + ". Įrašyta žurnale." });
+              return irasas(a, "nepriimta", tk.pav + ", antspaudas " + A.trumpas(h) + ", gauta " + A.rodykLaika(gauta) + ", atvėrus pasiūlymus - " + (senas ? "galioja ankstesnis" : "nepriimtas"), { t: p.t, h: h, g: gauta }).then(function () { a.__keista = true; });
+            }
             // Po termino gautas pakeitimas laiku pateikto pasiūlymo nekeičia (Aprašo 31.2 p. - terminas): galioja laiku pateiktas, įvykis įrašomas į žurnalą
             if (senasLaiku && velai) {
               rez.push({ ok: false, tekstas: tk.pav + ": pakeistas pasiūlymas gautas po termino - nepriimtas, galioja laiku pateiktas pasiūlymas (antspaudas " + A.trumpas(senas.h) + ")." });
