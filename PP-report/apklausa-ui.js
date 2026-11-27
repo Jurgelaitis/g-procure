@@ -639,6 +639,8 @@
   }
 
   /* ---------- vertinimas ---------- */
+  /* Nepriimti pasiūlymai ar pakeitimai - iš žurnalo (trečia patikra V3, naudotojo sprendimas T2: pažymoje ir vertinime) */
+  function nepriimti(a) { return (a.zurnalas || []).filter(function (e) { return e.ivykis === "nepriimta"; }).map(function (e) { return e.detales; }); }
   /* Tiekėjo nurodytas kitas nei standartinis PVM tarifas (T1) */
   function pvmKitas(e) { var t = tarifas(); return !!(e && e.pvm && e.sumos && typeof e.sumos.tarifas === "number" && (t === null || Math.abs(e.sumos.tarifas - t) > 1e-9)); }
   var PATV_PAV = { atitinka: "atitiktis reikalavimams", kaina: "visos išlaidos kainoje", igaliotas: "teisė teikti pasiūlymą" };
@@ -654,6 +656,8 @@
           (e.pakeista ? " (pasiūlymas keistas - gavimo laikas pagal paskutinį laišką)" : "");
       }).join("; ") + '. Jei laiškus gavote kitu laiku, nei jie įkelti, eilę patikrinkite pagal savo el. paštą ir tai nurodykite pastaboje prie sprendimo.</div>';
     });
+    var np = nepriimti(a);
+    if (np.length) s += '<div class="ea-pastaba ea-pastaba--demesio"><strong>Nepriimti pasiūlymai ar jų pakeitimai</strong>' + np.map(esc).join("<br>") + '<br>Jie nurodomi pažymoje; tiekėjus informuokite, kad jų laiškai nepriimti.</div>';
     s += '<div class="ea-eilej">';
     rik.forEach(function (e) {
       var p = pasiulymas(a, e.t), d = p && p.duomenys, zymos = "", pirmas = e.vieta === 1;
@@ -766,6 +770,9 @@
     info.push("Pasiūlymų eilė sudaryta automatiškai pagal kainą be PVM (taisyklėmis, dirbtinis intelektas nenaudotas); atitiktį poreikiui įvertino ir sprendimą " + A.rodykLaika(sp.patvirtinta) + " patvirtino pirkimo iniciatorius.");
     if (v.nmk.length) info.push("Kaina 30 ir daugiau procentų mažesnė už vertinamų pasiūlymų kainų vidurkį (" + fmt(v.vidurkis, 2, 2) + " Eur): " + v.nmk.map(function (t) { return (tiekejas(a, t) || {}).pav; }).join(", ") + ".");
     if (a.vidaus.mazaiTiekeju) info.push("Kreiptasi į mažiau kaip 3 tiekėjus: " + a.vidaus.mazaiTiekeju);
+    /* Tiekėjo nurodytas kitas PVM tarifas (T1, trečia patikra V2) - pažymos patikra šį sakinį atpažįsta ir kainos su PVM nelaiko neatitikimu */
+    gauta.forEach(function (e) { if (pvmKitas(e)) info.push(e.tiekejas + " kainą su PVM nurodė taikydamas " + fmt(e.sumos.tarifas * 100, 0, 2) + " % PVM tarifą."); });
+    var np = nepriimti(a); if (np.length) info.push("Nepriimti pasiūlymai ar jų pakeitimai (įrašyta apklausos žurnale): " + np.join("; ") + ".");
     if (k.nacsaugumas) info.push("Tiekėjai pasiūlymo formoje patvirtino atitiktį Aprašo 27.2.3 ir 31.4 p. nurodytiems nacionalinio saugumo reikalavimams (vietoje atskiros atitikties deklaracijos).");
     v.lygios.forEach(function (g) { info.push("Vienodos kainos: pirmesnis - anksčiau gautas pasiūlymas (Aprašo 30.17 p.): " + g.map(function (t) { var e = v.eilutes.filter(function (x) { return x.t === t; })[0]; return e.tiekejas + " (gautas " + A.rodykLaika(e.gauta) + (e.pakeista ? ", pasiūlymas keistas - pagal paskutinį laišką" : "") + ")"; }).join(", ") + "."); });
     var kit = v.eilutes.filter(function (e) { return e.kitasTiekejas && e.busena !== "negautas"; });
@@ -862,7 +869,7 @@
             if (senas && senas.h === h) { rez.push({ ok: true, tekstas: tk.pav + ": šis pasiūlymas jau įkeltas (antspaudas " + A.trumpas(h) + ")." }); return; }
             // Pasiūlymai jau atverti (D1): naujas pasiūlymas ar pakeitimas nepriimamas, bet įrašomas į žurnalą - kad nebūtų tylus
             if (atverta) {
-              rez.push({ ok: false, tekstas: tk.pav + ": pasiūlymai jau atverti - " + (senas ? "pakeitimas nepriimtas, vertinamas ankstesnis pasiūlymas (antspaudas " + A.trumpas(senas.h) + ")" : "pasiūlymas nepriimtas") + ". Įrašyta žurnale." });
+              rez.push({ ok: false, tekstas: tk.pav + ": pasiūlymai jau atverti - " + (senas ? "pakeitimas nepriimtas, vertinamas ankstesnis pasiūlymas (antspaudas " + A.trumpas(senas.h) + ")" : "pasiūlymas nepriimtas") + ". Įrašyta žurnale ir bus nurodyta pažymoje; informuokite tiekėją." });
               return irasas(a, "nepriimta", tk.pav + ", antspaudas " + A.trumpas(h) + ", gauta " + A.rodykLaika(gauta) + ", atvėrus pasiūlymus - " + (senas ? "galioja ankstesnis" : "nepriimtas"), { t: p.t, h: h, g: gauta }).then(function () { a.__keista = true; });
             }
             // Po termino gautas pakeitimas laiku pateikto pasiūlymo nekeičia (Aprašo 31.2 p. - terminas): galioja laiku pateiktas, įvykis įrašomas į žurnalą
@@ -870,7 +877,9 @@
               rez.push({ ok: false, tekstas: tk.pav + ": pakeistas pasiūlymas gautas po termino - nepriimtas, galioja laiku pateiktas pasiūlymas (antspaudas " + A.trumpas(senas.h) + ")." });
               return irasas(a, "nepriimta", tk.pav + ", antspaudas " + A.trumpas(h) + ", gauta " + A.rodykLaika(gauta) + ", po termino - galioja laiku pateiktas", { t: p.t, h: h, g: gauta }).then(function () { a.__keista = true; });
             }
-            if (senas && !(senasLaiku === false && !velai) && !(new Date(p.pateikta) > new Date(senas.pateikta))) { rez.push({ ok: false, tekstas: tk.pav + ": jau įkeltas vėliau parengtas šio tiekėjo pasiūlymas - senesnis neįkeltas." }); return; }
+            /* Naujesnis - vėliau parengtas; kai iniciatorius nurodė gavimo laiką ir jis vėlesnis už įkelto - vėliau gautas (tiekėjo laikrodis galėjo atsilikti; trečia patikra M8) */
+            var veliauGautas = !!(senas && gautaIso && new Date(gauta) > new Date(senas.gauta));
+            if (senas && !veliauGautas && !(senasLaiku === false && !velai) && !(new Date(p.pateikta) > new Date(senas.pateikta))) { rez.push({ ok: false, tekstas: tk.pav + ": jau įkeltas vėliau parengtas šio tiekėjo pasiūlymas - senesnis neįkeltas. Jei šį laišką gavote vėliau, nurodykite jo gavimo laiką iš savo el. pašto ir įkelkite dar kartą." }); return; }
             var naujas = { t: p.t, kodas: kodas, h: h, gauta: gauta, gautaKaip: gautaIso ? "nurodyta" : "ikelta", pateikta: p.pateikta, tiekejas: p.tiekejas.pav, pakeista: senas ? (senas.pakeista || 0) + 1 : 0, duomenys: null };
             a.pasiulymai = a.pasiulymai.filter(function (y) { return y.t !== p.t; }).concat([naujas]);
             var kitas = A.kitasPavadinimas(tk.pav, p.tiekejas.pav) ? " Dėmesio: pasiūlymą pateikė „" + p.tiekejas.pav + "“, nors kviestas „" + tk.pav + "“." : "";

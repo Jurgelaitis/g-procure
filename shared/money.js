@@ -20,6 +20,8 @@
  *  - Nevienareiksmis atvejis "1.500" / "1,500" (vienas skyriklis + 3 skaitmenys)
  *    traktuojamas kaip TUKSTANCIAI (1500), nes pirkimu sumos buna sveiki eurai,
  *    ne 3 skaiciu po kablelio tikslumas. Tai samoningas pasirinkimas.
+ *  - Tukstanciu grupes turi buti taisyklingos: pirma - 1-3 skaitmenys, kitos - lygiai 3 (nuo 2026-11-27); kitaip null
+ *    („1.250.50“, „10.000.00“, „1,25.5“, „2.5.2026“, „1 2 3 4“ - ne sumos, iki tol buvo perskaitomos kitu dydziu).
  *  - Tarpai ir apostrofai skaiciuje - tukstanciu skyrikliai (1 500 000; 1'500'000);
  *    skyriklis, po kurio dar yra tarpu atskirta grupe ("1.500 000"), - irgi.
  *  - Tekste pinigams imamas PIRMAS skaicius ("EUR 1 500", "1 500 Eur."), skyriklis
@@ -42,7 +44,7 @@
     if (!m) return null;
     var tok = (m[1] || m[0]).replace(/[.,\s\u00a0\u202f]+$/, "");
     var p = Math.max(tok.lastIndexOf("."), tok.lastIndexOf(","));
-    return { s: tok.replace(TARPAS, ""), grupes: p >= 0 && /[\s\u00a0\u202f]/.test(tok.slice(p)) };
+    return { s: tok.replace(TARPAS, ""), t: tok, grupes: p >= 0 && /[\s\u00a0\u202f]/.test(tok.slice(p)) };
   }
 
   // Vienas skyriklis - tukstanciu, jei po jo 3 skaitmenys, o pries ji 1-3 skaitmenys (ne "0") arba po jo dar tarpu atskirta grupe.
@@ -69,6 +71,11 @@
     } else if (lastDot !== -1) {
       if (s.indexOf(".") === lastDot && !tukstanciai(s, lastDot, r.grupes)) dec = ".";
     }
+
+    /* Tūkstančių grupės (2026-11-27, tiekėjo patikra D1): kai sveikojoje dalyje yra skyriklių, pirma grupė - 1-3 skaitmenys, kitos - lygiai 3.
+       Kitaip suma neperskaitoma (null): „1.250.50“ buvo 125 050, „10.000.00“ - 1 000 000, „1,25.5“ - 125,5, data „2.5.2026“ - 252 026. */
+    var cel = dec ? r.t.slice(0, r.t.lastIndexOf(dec)) : r.t, gr = cel.split(/[.,\s\u00a0\u202f]+/);
+    if (gr.length > 1 && (!/^\d{1,3}$/.test(gr[0]) || gr.slice(1).some(function (g) { return !/^\d{3}$/.test(g); }))) return null;
 
     var norm;
     if (dec === ".") norm = s.replace(/,/g, "");                  // kableliai - tukstanciai

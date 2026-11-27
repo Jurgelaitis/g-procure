@@ -16,6 +16,7 @@
     return { ik: {}, past: {}, ikAiskus: {}, pvm: null, pvmKitas: false, pvmTarifas: "", fizinis: false, pristatymas: "", galioja: "", pastabos: "", pav: "", kodas: "", pvmKodas: "", adresas: "", asmuo: "", pastas: "", tel: "", patv: {} };
   }
   var F = naujaF();
+  var DVI_T = {}, DVI_MS = 900;
   var MAILTO_RIBA = 1900;
 
   function L(lt, en) { return KALBA === "en" ? en : lt; }
@@ -67,7 +68,7 @@
   /* Įklijuota trumpa nuoroda (https://g-procure.com/k/#<ID>) - atveriama ji (kodą gauna puslapis k/) */
   /* Ir per „Safe Links“ (koduota „%2F“, „%23“) ar vien ID (2026-11-27, tiekėjo patikra V5, M7) */
   function trumposId(t) {
-    t = String(t || "");
+    t = A.nuorodosTekstas(t);     // ir Proofpoint perrašytos nuorodos (M3)
     var m = /g-procure\.com(?:\/|%(?:25)?2F)k(?:\/|%(?:25)?2F)?(?:#|%(?:25)?23)([0-9A-Za-z-]{10,14})(?![0-9A-Za-z])/i.exec(t);
     if (m) return m[1].replace(/-/g, "").toUpperCase();
     /* Vien 10 ženklų ID - ir be skaitmenų (M1): serveris ID kuria iš 32 ženklų abėcėlės be I, L, O ir U (O laikomas 0, I ir L - 1, kaip puslapyje k/) */
@@ -85,13 +86,15 @@
       K = f.kvietimas; KLAIDA = ""; REZ = null; ATKURTA = "";
       if (PASKUTINIS_T !== K.t) F = naujaF();    // kitas kvietimas - ankstesnio pasiūlymo duomenys ir patvirtinimai neperimami (M2)
       PASKUTINIS_T = K.t;
-      if (K.kalba === "en" && !KALBA_PASIRINKTA) KALBA = "en";
+      if (!KALBA_PASIRINKTA) KALBA = K.kalba === "en" ? "en" : "lt";
       if (!F.pav) F.pav = K.tiekejas.pav;
       if (!F.pastas) F.pastas = K.tiekejas.pastas;
       return A.antspaudas(A.bendra(K)).then(function (h) { H = h; piesk(); });
     }, function (e) { K = null; KLAIDA = e && e.kodas === "narsykle" ? "narsykle" : "kodas"; piesk(); });
   }
   var KALBA_PASIRINKTA = false;
+  /* Be kvietimo (sugadinta nuoroda) - naršyklės kalba: užsienio tiekėjui puslapis angliškai (trečia patikra M8); kvietimas kalbą nustato pats */
+  try { var nk = String(navigator.language || "").toLowerCase(), lz = Intl.DateTimeFormat().resolvedOptions().timeZone; if (!/^lt/.test(nk) && lz !== "Europe/Vilnius") KALBA = "en"; } catch (e) { /* lieka lietuvių */ }
 
   /* ---------- formos būsena ---------- */
   function skaitykForma() {
@@ -116,7 +119,9 @@
     s.eilutes.forEach(function (e) { var el = doc.querySelector('[data-suma="' + e.i + '"]'); if (el) el.textContent = e.suma === null ? "-" : fmt(e.suma, 2, 2); });
     /* Kol ne visos kainos įrašytos ar patikslintos, dalinė suma nerodoma kaip galutinė (M2) */
     var dalis = s.truksta > 0;
-    $("pslSumBe").textContent = dalis ? L("trūksta kainų: " + s.truksta + " poz.", "prices missing: " + s.truksta + " item(s)") : eur(s.viso);
+    $("pslSumBe").textContent = dalis ? trukstaTekstas(s) : eur(s.viso);
+    /* Labai maža bendra kaina - įspėjimas, ne kliūtis (trečia patikra M6): gal kaina įrašyta ne tais vienetais */
+    var mz = $("pslSumPst"); if (mz) { var rodyti = !dalis && s.viso > 0 && s.viso < 1; mz.hidden = !rodyti; mz.textContent = rodyti ? L("Bendra kaina mažesnė nei 1 Eur - patikrinkite, ar kainos įrašytos teisingai.", "The total price is below 1 EUR - check that the prices are entered correctly.") : ""; }
     $("pslSumPvmEil").hidden = $("pslSumPvmEil2").hidden = F.pvm !== true;
     $("pslSumPvmProc").textContent = procTekstas(s.tarifas);
     $("pslSumPvm").textContent = dalis || s.suPvm === null ? "-" : eur(s.pvmSuma);
@@ -125,17 +130,37 @@
     var tl = $("psl-pvmTarifas-l"); if (tl) tl.hidden = !(F.pvm === true && F.pvmKitas);
     pvmPastaba();
   }
+  /* Kiek kainų trūksta ir kiek reikia patikslinti (dviprasmiškos „2,375“ - įrašytos, bet neaiškios; trečia patikra M4) */
+  function neaiskiu() { return K.pozicijos.filter(function (p, i) { return ikainis(i) === "dvi"; }).length; }
+  function trukstaTekstas(s) {
+    var n = neaiskiu(), t = s.truksta - n, d = [];
+    if (t > 0) d.push(L("trūksta kainų: " + t + " poz.", "prices missing: " + t + " item(s)"));
+    if (n > 0) d.push(L("patikslinkite kainą: " + n + " poz.", "clarify the price: " + n + " item(s)"));
+    return d.join(L("; ", "; "));
+  }
   /* PVM kodo ir atsakymo nesutapimas - įspėjimas, ne kliūtis (D3): Lietuvos PVM kodas ir „Ne“ - gal pamiršta pridėti PVM; ne Lietuvos kodas ir
      „Taip“ - „Taip“ reiškia Lietuvos PVM. Įrankis PVM taikymo nevertina - sprendžia tiekėjas, prireikus paklausęs kontaktinio asmens. */
   function pvmPastaba() {
     var el = $("psl-pvm-pst"); if (!el) return;
-    var kodas = String(F.pvmKodas || "").toUpperCase().replace(/[\s.-]/g, ""), lt = /^(LT)?\d/.test(kodas), uzs = /^[A-Z]{2}/.test(kodas) && kodas.slice(0, 2) !== "LT";
-    var t = F.pvm === false && lt ? L("Įrašėte Lietuvos PVM mokėtojo kodą, bet pažymėjote, kad PVM nepridedamas. Jei PVM taikomas, pasirinkite „Taip“ - kitaip jūsų kaina bus laikoma galutine, be PVM.",
+    /* Lietuvos PVM kodas - „LT“ ir 9 arba 12 skaitmenų (ir be „LT“); kiti vien skaitmenys šalies neparodo (trečia patikra M1) */
+    var kodas = String(F.pvmKodas || "").toUpperCase().replace(/[\s.-]/g, ""), lt = /^(LT)?(\d{9}|\d{12})$/.test(kodas), uzs = /^[A-Z]{2}/.test(kodas) && kodas.slice(0, 2) !== "LT", kitas = !!kodas && !lt && !uzs;
+    var t = F.pvm === false && kitas ? L("Įrašėte PVM mokėtojo kodą, bet pažymėjote, kad PVM nepridedamas. Jei esate PVM mokėtojai Lietuvoje ir PVM taikomas, pasirinkite „Taip“.",
+        "You entered a VAT number but chose that VAT is not added. If you are VAT registered in Lithuania and VAT applies, choose “Yes”.")
+      : F.pvm === false && lt ? L("Įrašėte Lietuvos PVM mokėtojo kodą, bet pažymėjote, kad PVM nepridedamas. Jei PVM taikomas, pasirinkite „Taip“ - kitaip jūsų kaina bus laikoma galutine, be PVM.",
         "You entered a Lithuanian VAT number but chose that VAT is not added. If VAT applies, choose “Yes” - otherwise your price will be treated as final, without VAT.")
       : F.pvm === true && uzs ? L("Įrašėte ne Lietuvos PVM mokėtojo kodą. „Taip“ pasirinkite tik tada, kai esate įregistruoti PVM mokėtojais Lietuvoje ir prie kainos pridedate Lietuvos PVM. Jei neaišku, paklauskite kontaktinio asmens.",
         "You entered a non-Lithuanian VAT number. Choose “Yes” only if you are VAT registered in Lithuania and add Lithuanian VAT to the price. If unsure, ask the contact person.") : "";
     el.hidden = !t;
     el.textContent = t;
+  }
+  /* „Įmonės kodas“ lauke 11 skaitmenų, panašių į asmens kodą (trečia patikra D2): įspėjimas, ne kliūtis - Latvijos įmonių kodai irgi 11 skaitmenų */
+  function kodoPastaba() {
+    var el = $("psl-kodas-pst"); if (!el) return false;
+    var rodyti = !F.fizinis && /^[3-6]\d{10}$/.test(String(F.kodas || "").replace(/[\s.-]/g, ""));
+    el.hidden = !rodyti;
+    el.textContent = rodyti ? L("Įrašytas 11 skaitmenų kodas panašus į asmens kodą. Jei pasiūlymą teikiate kaip fizinis asmuo, pažymėkite langelį „Pasiūlymą teikiu kaip fizinis asmuo“ ir asmens kodo nenurodykite. Jei tai užsienio įmonės kodas, šio įspėjimo nepaisykite.",
+      "The 11-digit number entered looks like a personal identification number. If you are submitting as a natural person, tick “I am submitting the quotation as a natural person” and do not enter your personal code. If this is a foreign company code, ignore this warning.") : "";
+    return rodyti;
   }
   /* Dviprasmiškos kainos klausimas prie lauko */
   /* Rodoma jau rašant (M3), sritis gyva - klausimą išgirsta ir ekrano skaitytuvas; tas pats klausimas neperpiešiamas */
@@ -218,7 +243,7 @@
       (K.galiojaMin ? '<dt>' + L("Pasiūlymo galiojimas", "Validity of the quotation") + '</dt><dd>' + L("ne trumpiau kaip " + K.galiojaMin + " d. nuo pasiūlymų termino", "at least " + K.galiojaMin + " days from the deadline") + '</dd>' : '') +
       '<dt>' + L("Pasiūlymų atvėrimas", "Opening of quotations") + '</dt><dd>' + L("Pasibaigus terminui. Jei pasiūlymus pateikia visi kviesti tiekėjai, jie gali būti atverti ir anksčiau - tada pateikto pasiūlymo pakeisti nebegalima.", "After the deadline. If all invited suppliers submit quotations, they may be opened earlier - then a submitted quotation can no longer be changed.") + '</dd>' +
       (K.dokumentai ? '<dt>' + L("Prie laiško pridėkite", "Attach to the email") + '</dt><dd style="white-space:pre-line">' + esc(K.dokumentai) + '</dd>' : '') +
-      '<dt>' + L("Kontaktinis asmuo", "Contact person") + '</dt><dd>' + esc(kt.vardas ? kt.vardas + ", " : "") + '<a href="mailto:' + esc(kt.pastas) + '">' + esc(kt.pastas) + '</a>' + (kt.tel ? ", " + esc(kt.tel) : "") + '</dd>' +
+      '<dt>' + L("Kontaktinis asmuo", "Contact person") + '</dt><dd>' + esc(kt.vardas ? kt.vardas + ", " : "") + '<a href="mailto:' + esc(mailtoAdresas(kt.pastas)) + '">' + esc(kt.pastas) + '</a>' + (kt.tel ? ', <span class="ea-nelauz">' + esc(kt.tel) + '</span>' : "") + '</dd>' +
       '</dl>' +
       '<p class="ea-uzuomina" style="margin-top:12px">' + L("Kvietimas atvertas iš nuorodos - G-Procure netikrina, kas ją išsiuntė. Jei abejojate, ar kvietimas tikras, susisiekite su pirkimo vykdytoju jums žinomais kontaktais.",
         "The invitation was opened from the link - G-Procure does not verify who sent it. If you doubt whether the invitation is genuine, contact the buyer using contact details you already know.") + '</p>' +
@@ -233,7 +258,8 @@
       '<input type="' + (o.tipas || "text") + '" id="psl-' + k + '" data-f="' + k + '" value="' + esc(F[k] || "") + '" autocomplete="' + (o.auto || "off") + '"' +
       (o.pvz ? ' placeholder="' + esc(o.pvz) + '"' : '') + (o.rezimas ? ' inputmode="' + o.rezimas + '"' : '') + (o.max ? ' maxlength="' + o.max + '"' : '') + (o.privaloma ? ' aria-required="true"' : '') +
       (o.veiksmas ? ' data-veiksmas-input="' + o.veiksmas + '"' : '') + (o.isjungta ? ' disabled' : '') + ' aria-describedby="psl-' + k + '-kl' + (o.uzuomina ? " psl-" + k + "-uz" : "") + '">' +
-      (o.uzuomina ? '<span class="ea-uzuomina" id="psl-' + k + '-uz">' + esc(o.uzuomina) + '</span>' : '') + '<span class="ea-klaida" id="psl-' + k + '-kl" hidden></span></div>';
+      (o.uzuomina ? '<span class="ea-uzuomina" id="psl-' + k + '-uz">' + esc(o.uzuomina) + '</span>' : '') + '<span class="ea-klaida" id="psl-' + k + '-kl" hidden></span>' +
+      (o.pst ? '<div class="ea-pastaba ea-pastaba--demesio" id="psl-' + k + '-pst" hidden></div>' : '') + '</div>';
   }
   /* Patvirtinimai - formai ir spausdinamam pasiūlymui */
   function patvirtinimai() {
@@ -285,7 +311,7 @@
         '<span class="ea-klaida" id="psl-pvm-kl" hidden></span><div class="ea-pastaba ea-pastaba--demesio" id="psl-pvm-pst" hidden></div></fieldset>' +
       '<dl class="ea-sumos"><dt>' + L("Iš viso be PVM", "Total excl. VAT") + '</dt><dd id="pslSumBe">-</dd>' +
       '<dt id="pslSumPvmEil">' + L("PVM", "VAT") + '<span id="pslSumPvmProc">' + esc(proc) + '</span></dt><dd id="pslSumPvmEil2"><span id="pslSumPvm">-</span></dd>' +
-      '<dt class="ea-viso" id="pslSumSuEt"></dt><dd class="ea-viso" id="pslSumSu">-</dd></dl><p class="ea-sr" id="pslSumPr" aria-live="polite"></p></section>';
+      '<dt class="ea-viso" id="pslSumSuEt"></dt><dd class="ea-viso" id="pslSumSu">-</dd></dl><div class="ea-pastaba ea-pastaba--demesio" id="pslSumPst" hidden></div><p class="ea-sr" id="pslSumPr" aria-live="polite"></p></section>';
     s += '<section class="ea-card" aria-labelledby="pslSaH"><h3 id="pslSaH">' + L("Pasiūlymo sąlygos", "Terms of the quotation") + '</h3><div class="ea-laukai" style="margin-top:12px">' +
       laukas("galioja", L("Pasiūlymas galioja (dienų nuo pasiūlymų termino)", "The quotation is valid for (days from the deadline)"), { privaloma: true, rezimas: "numeric", pvz: L("pvz., ", "e.g. ") + (K.galiojaMin || 30), max: 3,
         uzuomina: K.galiojaMin ? L("Kvietime reikalaujama ne trumpiau kaip " + K.galiojaMin + " d.", "The invitation requires at least " + K.galiojaMin + " days.") : "" }) +
@@ -299,7 +325,7 @@
       '<div class="ea-laukas ea-laukas--visas"><label class="ea-zymimas"><input type="checkbox" data-f="fizinis" data-veiksmas-change="pslFizinis"' + (F.fizinis ? " checked" : "") + dis + '><span>' +
         L("Pasiūlymą teikiu kaip fizinis asmuo (individuali veikla)", "I am submitting the quotation as a natural person (self-employed)") + '</span></label></div>' +
       (F.fizinis ? laukas("kodas", L("Individualios veiklos pažymos ar verslo liudijimo numeris (neprivaloma)", "Individual activity certificate or business licence number (optional)"), { max: 20, uzuomina: L("Asmens kodo nenurodykite.", "Do not enter your personal identification number.") })
-        : laukas("kodas", L("Įmonės kodas", "Company registration number"), { privaloma: true, max: 20 })) +
+        : laukas("kodas", L("Įmonės kodas", "Company registration number"), { privaloma: true, max: 20, veiksmas: "pslKodas", pst: true })) +
       laukas("pvmKodas", L("PVM mokėtojo kodas", "VAT number"), { max: 20, pvz: L("pvz., LT100001234567", "e.g. LT100001234567"), veiksmas: "pslSumos" }) +
       laukas("adresas", L("Adresas", "Address"), { auto: "street-address", max: A.RIBOS.trumpas }) +
       laukas("asmuo", L("Pasiūlymą teikiantis asmuo", "Person submitting the quotation"), { privaloma: true, auto: "name", max: 120 }) +
@@ -312,10 +338,12 @@
     patv.forEach(function (p) { s += '<label class="ea-zymimas"><input type="checkbox" data-f="' + p[0] + '" aria-required="true"' + (F.patv[p[0]] ? " checked" : "") + dis + '><span>' + esc(p[1]) + '</span></label>'; });
     s += '</fieldset><span class="ea-klaida" id="psl-patv-kl" hidden></span>' +
       (K.nacsaugumas ? '<details class="ea-tech" style="margin-top:12px"><summary>' + L("Ką reiškia nacionalinio saugumo patvirtinimas?", "What does the national security confirmation mean?") + '</summary><p class="ea-uzuomina">' +
-        L("Šiame pirkime pagal pirkimo vykdytojo mažos vertės pirkimų tvarkos aprašo 27.2.3 ir 31.4 punktus taikomi įstatymų nacionalinio saugumo reikalavimai tiekėjams: tiekėjas, jo subtiekėjai ir ūkio subjektai, kurių pajėgumais remiamasi (ir juos kontroliuojantys asmenys), neturi būti registruoti Lietuvos Respublikos Vyriausybės patvirtintame sąraše nurodytose valstybėse ar teritorijose, o prekių gamintojas ar paslaugų teikėjas - registruotas (fizinis asmuo - nuolat gyventi ar turėti pilietybę) tose valstybėse ar teritorijose. Aprašas tam reikalauja atitikties deklaracijos - šiame pirkime ją atstoja šis patvirtinimas. Jei jūsų pasiūlymas bus ekonomiškai naudingiausias, pirkimo vykdytojas gali paprašyti tai patvirtinančių dokumentų (pvz., juridinių asmenų registro išrašo). Tikslūs reikalavimai nustatyti apraše - jei reikia, paprašykite jo kontaktinio asmens.",
-          "Under points 27.2.3 and 31.4 of the buyer's low-value procurement rules, the national security requirements of Lithuanian law apply to suppliers in this procurement: the supplier, its subcontractors and the entities whose capacities are relied upon (and the persons controlling them) must not be registered in the states or territories listed by the Government of the Republic of Lithuania, and the manufacturer of the goods or the service provider must not be registered there (for a natural person - permanently reside there or be a citizen). The rules require a declaration of conformity for this - in this procurement this confirmation replaces it. If your quotation is the most economically advantageous, the buyer may ask for supporting documents (e.g. an extract from the register of legal entities). The exact requirements are set out in the rules - ask the contact person for them if needed.") + '</p></details>' : '') +
+        L("Šiame pirkime pagal pirkimo vykdytojo mažos vertės pirkimų tvarkos aprašo 27.2.3 ir 31.4 punktus taikomi įstatymų nacionalinio saugumo reikalavimai tiekėjams: tiekėjas, jo subtiekėjai ir ūkio subjektai, kurių pajėgumais remiamasi (ir juos kontroliuojantys asmenys), neturi būti registruoti Lietuvos Respublikos Vyriausybės patvirtintame sąraše nurodytose valstybėse ar teritorijose. Tas pats taikoma prekių gamintojui ar paslaugų teikėjui: jis neturi būti ten registruotas, o jei tai fizinis asmuo - ten nuolat gyventi ar turėti tos valstybės pilietybę. Aprašas tam reikalauja atitikties deklaracijos - šiame pirkime ją atstoja šis patvirtinimas. Jei jūsų pasiūlymas bus ekonomiškai naudingiausias, pirkimo vykdytojas gali paprašyti tai patvirtinančių dokumentų (pvz., juridinių asmenų registro išrašo). Tikslūs reikalavimai nustatyti apraše - jei reikia, paprašykite jo kontaktinio asmens.",
+          "Under points 27.2.3 and 31.4 of the buyer's low-value procurement rules, the national security requirements of Lithuanian law apply to suppliers in this procurement: the supplier, its subcontractors and the entities whose capacities are relied upon (and the persons controlling them) must not be registered in the states or territories listed by the Government of the Republic of Lithuania. The same applies to the manufacturer of the goods or the service provider: it must not be registered there, and if it is a natural person, it must not permanently reside there or be a citizen of that state. The rules require a declaration of conformity for this - in this procurement this confirmation replaces it. If your quotation is the most economically advantageous, the buyer may ask for supporting documents (e.g. an extract from the register of legal entities). The exact requirements are set out in the rules - ask the contact person for them if needed.") + '</p></details>' : '') +
       '<div id="pslKlaidos" tabindex="-1"></div>' +
       /* Priedų priminimas - prieš siunčiant: pašto programa atsiveria virš naršyklės, rezultato kortelės tada nesimato (V1) */
+      /* Domeno įspėjimas pakartojamas prie siuntimo (trečia patikra M8) */
+      (domenoPastaba() ? '<div class="ea-pastaba ea-pastaba--demesio" id="pslDomenas2" style="margin-top:16px">' + esc(L("Prieš siųsdami: kontaktinio asmens adresas ne " + K.pirkejas.pav + " domeno - žr. įspėjimą puslapio viršuje.", "Before sending: the contact person's address is not on the " + K.pirkejas.pav + " domain - see the warning at the top of the page.")) + '</div>' : '') +
       (K.dokumentai ? '<div class="ea-pastaba ea-pastaba--demesio" id="pslPriedai" style="margin-top:16px"><strong>' + L("Prie laiško pridėkite", "Attach to the email") + '</strong>' + esc(sakinys(K.dokumentai)) + ' ' +
         L("Atsivėrusiame laiške juos pridėkite prieš paspausdami „Siųsti“.", "Attach them in the email that opens before clicking “Send”.") + '</div>' : '') +
       '<div class="ea-eile" style="margin-top:20px"><button type="button" class="ea-btn ea-btn--pagr" data-veiksmas="pslParenk"' + dis + '>' + L("Siųsti pasiūlymą", "Send the quotation") + '</button>' +
@@ -368,7 +396,7 @@
   }
   function rezultatoHtml(praejo) {
     if (!REZ) return "";
-    var l = REZ.laiskas, href = laiskoHref(), trumpas = href.length <= MAILTO_RIBA, s = REZ.sumos, terminas = '<b>' + esc(A.rodykLaika(K.terminas)) + '</b> ' + L("(Lietuvos laiku)", "(Lithuanian time)");
+    var l = REZ.laiskas, href = laiskoHref(), trumpas = href.length <= MAILTO_RIBA, s = REZ.sumos, terminas = '<b class="ea-nelauz">' + esc(A.rodykLaika(K.terminas)) + '</b> ' + L("(Lietuvos laiku)", "(Lithuanian time)");
     var h, pagr;
     if (REZ.issiusta) {
       var velai = !REZ.ikiTermino && new Date(REZ.issiusta) > new Date(K.terminas);
@@ -381,6 +409,14 @@
               : L("Norėdami pakeisti pasiūlymą, spauskite „Keisti pasiūlymą“, parenkite naują ir išsiųskite naują laišką iki termino - galios vėliau parengtas, jei pirkimo vykdytojas dar nebus atvėręs pasiūlymų. Pakeisto pasiūlymo gavimo laikas - naujo laiško gavimo laikas.",
                 "To change the quotation, click “Change the quotation”, prepare a new one and send a new email before the deadline - the one prepared later will apply if the buyer has not opened the quotations yet. The time a changed quotation is received is the time the new email is received."))) +
         '<div class="ea-eile" style="margin-top:10px"><button type="button" class="ea-btn ea-btn--tylus" data-veiksmas="pslPazymek" data-ka="ne">' + L("Laiško dar neišsiunčiau", "I have not sent the email yet") + '</button></div></div>';
+    } else if (praejo && REZ.poTermino) {
+      /* Parengta jau po termino (pagal tiekėjo laikrodį; trečia patikra V1): laiškas automatiškai neatveriamas, „Laišką išsiunčiau iki termino“ nesiūloma */
+      h = L("Pasiūlymas parengtas po termino", "The quotation was prepared after the deadline");
+      pagr = '<div class="ea-pastaba ea-pastaba--klaida" id="pslPraejo" tabindex="-1"><strong>' + L("Pagal jūsų kompiuterio laikrodį terminas baigėsi ", "According to your computer's clock, the deadline was ") + terminas + '</strong>' +
+        L("Ar pasiūlymas bus vertinamas, lemia, kada laišką gaus pirkimo vykdytojas: po termino gautas pasiūlymas nevertinamas. Jei manote, kad terminas dar nepraėjo, atverkite laišką ir siųskite nedelsdami; jei abejojate - susisiekite su kontaktiniu asmeniu ",
+          "Whether the quotation is evaluated depends on when the buyer receives the email: a quotation received after the deadline is not evaluated. If you believe the deadline has not passed yet, open the email and send it without delay; if in doubt, contact the contact person ") + '<b>' + esc(K.kontaktas.pastas) + '</b>.' +
+        (trumpas ? '<div class="ea-eile" style="margin-top:10px"><a class="ea-btn" href="' + esc(href) + '" data-veiksmas="pslIssiusta">' + L("Atverti laišką vis tiek", "Open the email anyway") + '</a></div>' : '') + kopijavimoHtml(!trumpas) +
+        '<div class="ea-eile" style="margin-top:12px"><span class="ea-uzuomina">' + L("Išsiuntėte?", "Sent it?") + '</span><button type="button" class="ea-btn" data-veiksmas="pslPazymek" data-ka="taip">' + L("Taip, laišką išsiunčiau", "Yes, I sent the email") + '</button></div></div>';
     } else if (praejo) {
       h = L("Pasiūlymų terminas praėjo", "The deadline has passed");
       pagr = '<div class="ea-pastaba ea-pastaba--klaida" id="pslPraejo" tabindex="-1"><strong>' + L("Terminas baigėsi ", "The deadline was ") + terminas + '</strong>' +
@@ -420,7 +456,7 @@
     if (!REZ) return false;
     var href = laiskoHref();
     if (href.length > MAILTO_RIBA) return false;
-    baigta();    // prieš atveriant: kitaip naršyklė paklaustų „Palikti svetainę?“ (D1)
+    laiskasAtvertas();    // prieš atveriant: kitaip naršyklė paklaustų „Palikti svetainę?“ (D1)
     var a = doc.createElement("a"); a.href = href; a.setAttribute("data-psl-laiskas", ""); a.hidden = true;
     doc.body.appendChild(a); a.click(); a.remove();
     return true;
@@ -444,6 +480,11 @@
   }
 
   /* ---------- patikra ir pasiūlymo parengimas ---------- */
+  /* Neperskaityta kaina: netaisyklingai sugrupuoti skaitmenys („1.250.50“, „1 2 3“) - aiškus paaiškinimas (trečia patikra D1) */
+  function kainosKlaida(v) {
+    return /\d[.,\s\u00a0][\d\s\u00a0.,]*[.,\s\u00a0]\d|\d[.,]\d{1,2}[.,]\d/.test(String(v || "").trim()) ? L("netaisyklingai sugrupuoti skaitmenys - rašykite, pvz., 1 250,50", "the digits are not grouped correctly - write, e.g., 1,250.50")
+      : L("kaina turi būti skaičius (pvz., 125,50; jei pozicija įskaičiuota į kitą - 0)", "the price must be a number (e.g. 125.50; if the item is included in another - 0)");
+  }
   function zymek(id, tekstas) {
     var el = $(id), kl = $(id + "-kl");
     if (el) { if (tekstas) el.setAttribute("aria-invalid", "true"); else el.removeAttribute("aria-invalid"); }
@@ -457,7 +498,7 @@
       var ik = v && String(v).trim() ? ikainis(i) : null;
       if (!v || !String(v).trim()) msg = L("įrašykite vieneto kainą", "enter the unit price");
       else if (ik === "dvi") msg = L("patikslinkite, kaip suprasti „" + dviTekstas(v) + "“ - pasirinkite po lauku", "specify how to read “" + dviTekstas(v) + "” - choose below the field");
-      else if (ik === null) msg = L("kaina turi būti skaičius (pvz., 125,50; jei pozicija įskaičiuota į kitą - 0)", "the price must be a number (e.g. 125.50; if the item is included in another - 0)");
+      else if (ik === null) msg = kainosKlaida(v);
       rodykDvi(i);
       var s = $("psl-ik" + i + "-kl");
       if (msg) { el.setAttribute("aria-invalid", "true"); s.hidden = false; s.textContent = msg; if (!el.id) el.id = "psl-ik" + i; kl.push({ id: el.id, tekstas: (i + 1) + ". " + pozPav(p) + ": " + msg }); }
@@ -472,7 +513,8 @@
     var pk0 = $("psl-pvm-kl");
     if (F.pvm === null) { if (pk0) { pk0.hidden = false; pk0.textContent = L("Pasirinkite vieną iš atsakymų.", "Choose one of the answers."); } kl.push({ id: "psl-pvm-taip", tekstas: L("PVM: pasirinkite, ar prie kainos pridedamas PVM", "VAT: choose whether VAT is added to the price") }); }
     else if (pk0) { pk0.hidden = true; pk0.textContent = ""; }
-    if (F.pvm === true && F.pvmKitas && pvmTarifasSk() === null) blogai("psl-pvmTarifas", L("PVM tarifas", "VAT rate"), L("įrašykite tarifą procentais (pvz., 9)", "enter the rate in percent (e.g. 9)"));
+    if (F.pvm === true && F.pvmKitas && pvmTarifasSk() === null) blogai("psl-pvmTarifas", L("PVM tarifas", "VAT rate"), /^0+([.,]0+)?\s*%?$/.test(String(F.pvmTarifas || "").trim())
+      ? L("0 % - jei PVM nepridedamas, pasirinkite „Ne“", "0 % - if VAT is not added, choose “No”") : L("įrašykite tarifą procentais (pvz., 9)", "enter the rate in percent (e.g. 9)"));
     else zymek("psl-pvmTarifas", "");
     var g = String(F.galioja || "").trim();
     if (!/^\d{1,3}$/.test(g) || +g < 1 || +g > 365) blogai("psl-galioja", L("Pasiūlymas galioja", "Validity"), L("įrašykite dienų skaičių nuo 1 iki 365", "enter the number of days from 1 to 365"));
@@ -483,9 +525,9 @@
     });
     /* Fiziniam asmeniui - asmens kodo pavidalo skaičius neleidžiamas (D2; naudotojo sprendimas T3 - asmens kodo neprašoma) */
     if (F.fizinis) {
-      if (/^[1-6]\d{10}$/.test(String(F.kodas || "").replace(/\s/g, ""))) blogai("psl-kodas", L("Pažymos ar verslo liudijimo numeris", "Certificate or business licence number"), L("tai atrodo kaip asmens kodas - jo nenurodykite (laukas neprivalomas)", "this looks like a personal identification number - do not enter it (the field is optional)"));
+      if (/^[1-6]\d{10}$/.test(String(F.kodas || "").replace(/[\s.-]/g, ""))) blogai("psl-kodas", L("Pažymos ar verslo liudijimo numeris", "Certificate or business licence number"), L("tai atrodo kaip asmens kodas - jo nenurodykite (laukas neprivalomas)", "this looks like a personal identification number - do not enter it (the field is optional)"));
       else zymek("psl-kodas", "");
-    }
+    } else kodoPastaba();
     if (!A.pastas(F.pastas || "")) blogai("psl-pastas", L("El. paštas", "Email"), L("įrašykite el. pašto adresą (pvz., vardas@imone.lt)", "enter an email address (e.g. name@company.com)")); else zymek("psl-pastas", "");
     var truksta = A.reikiaPatvirtinti(K).filter(function (a) { return !F.patv[a]; }), pk = $("psl-patv-kl");
     pk.hidden = !truksta.length; pk.textContent = truksta.length ? L("Pažymėkite visus patvirtinimus.", "Tick all confirmations.") : "";
@@ -512,7 +554,7 @@
     if (!f.ok) { rodykKlaidas([{ id: "pslForma", tekstas: L("Pasiūlymo parengti nepavyko - patikrinkite įvestus duomenis", "The quotation could not be prepared - check the data entered") }]); return Promise.resolve(false); }
     var p = f.pasiulymas;
     return Promise.all([A.koduok(p), A.antspaudas(p)]).then(function (r) {
-      REZ = { pasiulymas: p, kodas: r[0], h: r[1], sumos: A.sumos(K, p, tarifas()), laiskas: A.atsakymas(K, p, r[0], r[1], KALBA), issiusta: null }; ATKURTA = "";
+      REZ = { pasiulymas: p, kodas: r[0], h: r[1], sumos: A.sumos(K, p, tarifas()), laiskas: A.atsakymas(K, p, r[0], r[1], KALBA), issiusta: null, poTermino: A.liko(K.terminas, new Date(), KALBA).praejo, saugiklis: 0 }; ATKURTA = "";
       piesk();
       var h = $("pslRzH"); if (h) { h.scrollIntoView({ block: "start" }); h.focus(); }
       return true;
@@ -549,10 +591,18 @@
     baigta();
   }
   function baigta() { if (window.GP_DARBAS) window.GP_DARBAS.atskaita(); }
+  /* Atveriant laišką atskaita nustatoma (be „Palikti svetainę?“), bet po kelių sekundžių apsauga grąžinama, kol laiškas nepažymėtas išsiųstu ar nenukopijuotas:
+     naršyklės pašto naudotojui laiškas neatsiveria, o uždarius skirtuką parengtas pasiūlymas dingtų (trečia patikra M7) */
+  var SAUGIKLIS = null;
+  function laiskasAtvertas() {
+    baigta(); clearTimeout(SAUGIKLIS);
+    SAUGIKLIS = setTimeout(function () { if (REZ && !REZ.issiusta && !REZ.nukopijuota) REZ.saugiklis = (REZ.saugiklis || 0) + 1; }, SAUGIKLIO_MS);
+  }
+  var SAUGIKLIO_MS = 4000;
   function sumuPranesimas() {
     var el = $("pslSumPr"); if (!el || !K) return;
     var s = skaiciuok();
-    el.textContent = s.truksta ? L("Trūksta kainų: " + s.truksta + " poz.", "Prices missing: " + s.truksta + " item(s)")
+    el.textContent = s.truksta ? trukstaTekstas(s).replace(/^./, function (c) { return c.toUpperCase(); })
       : L("Iš viso be PVM: ", "Total excl. VAT: ") + eur(s.viso) + (F.pvm === true && s.suPvm !== null ? L(", su PVM: ", ", incl. VAT: ") + eur(s.suPvm) : "");
   }
   /* Pasiūlymo keitimas (V7): forma užpildoma iš savo išsiųsto laiško; patvirtinimai - iš naujo */
@@ -580,17 +630,29 @@
   window.GP_IVYKIAI.veiksmai({
     pslKalba: function (el) { skaitykForma(); KALBA = el.getAttribute("data-kalba") === "en" ? "en" : "lt"; KALBA_PASIRINKTA = true; if (REZ) REZ.laiskas = A.atsakymas(K, REZ.pasiulymas, REZ.kodas, REZ.h, KALBA); piesk(); },
     pslAtverk: function () { var t = $("pslNuoroda").value; KLAIDA = ""; ikelk(t).then(function () { var h = $("pslKvH") || $("pslIvH"); if (h) { h.setAttribute("tabindex", "-1"); h.focus(); } }); },
-    pslSumos: function (el) { skaitykForma(); rodykSumas(); var i = el && el.getAttribute("data-ik"); if (i !== null && i !== undefined && i !== "") rodykDvi(i); },
+    pslSumos: function (el) {
+      skaitykForma(); rodykSumas();
+      /* Dviprasmiškos kainos klausimas rašant - tik nustojus rašyti (trečia patikra M4: rašant „1.250,50“ ties „1.250“ jis mirksėdavo); dingsta iškart */
+      var i = el && el.getAttribute("data-ik");
+      if (i === null || i === undefined || i === "") return;
+      clearTimeout(DVI_T[i]);
+      if (ikainis(i) === "dvi") DVI_T[i] = setTimeout(function () { rodykDvi(i); }, DVI_MS); else rodykDvi(i);
+    },
+    pslKodas: function () { skaitykForma(); kodoPastaba(); },
     pslPvm: function () { skaitykForma(); rodykSumas(); sumuPranesimas(); },
     pslIkainis: function (el) {
       var i = el.getAttribute("data-ik");
       skaitykForma();
       var v = ikainis(i);
+      var k = $("psl-ik" + i + "-kl");
       if (typeof v === "number") {
         if (!dviprasmiska(el.value)) { el.value = fmt(v, 2, 4, true); F.ik[i] = el.value; }
-        el.removeAttribute("aria-invalid"); var k = $("psl-ik" + i + "-kl"); if (k) { k.hidden = true; k.textContent = ""; }
+        el.removeAttribute("aria-invalid"); if (k) { k.hidden = true; k.textContent = ""; }
+      } else if (v === null && String(el.value).trim()) {
+        /* Neperskaityta kaina - klaida iškart išėjus iš lauko (trečia patikra D1), ne tik siunčiant */
+        el.setAttribute("aria-invalid", "true"); if (k) { k.hidden = false; k.textContent = kainosKlaida(el.value); }
       }
-      rodykDvi(i); rodykSumas(); sumuPranesimas();
+      clearTimeout(DVI_T[i]); rodykDvi(i); rodykSumas(); sumuPranesimas();
     },
     pslDvi: function (el) {
       var i = el.getAttribute("data-i"), r = dviReiksmes(F.ik[i]), v = el.getAttribute("data-v") === "t" ? r.t : r.d, tekstas = fmt(v, 2, 4, true), lauk = doc.querySelector('[data-ik="' + i + '"]');
@@ -604,7 +666,7 @@
     pslParenk: function () {
       if (VYKSTA) return;      // dvigubas paspaudimas - vienas laiškas (M7)
       VYKSTA = true;
-      parenk().then(function (ok) { VYKSTA = false; if (ok) atverkLaiska(); }, function () { VYKSTA = false; });
+      parenk().then(function (ok) { VYKSTA = false; if (ok && !REZ.poTermino) atverkLaiska(); }, function () { VYKSTA = false; });
     },
     pslPazymek: function (el) {
       var ka = el.getAttribute("data-ka");
@@ -617,9 +679,9 @@
     pslKopijuok: function (el) {
       var ka = el.getAttribute("data-ka"), t = ka === "adresas" ? K.kontaktas.pastas : ka === "tema" ? REZ.laiskas.tema : REZ.laiskas.tekstas;
       window.GP_KOPIJA.kopijuok(t, { sekme: ka === "adresas" ? L("Adresas nukopijuotas", "Address copied") : ka === "tema" ? L("Tema nukopijuota", "Subject copied") : L("Laiško tekstas nukopijuotas", "Email text copied") })
-        .then(function (ok) { if (ok && ka === "tekstas") baigta(); });
+        .then(function (ok) { if (ok && ka === "tekstas") { if (REZ) REZ.nukopijuota = true; baigta(); } });
     },
-    pslIssiusta: function () { baigta(); },     // atskaita - prieš naršyklei atveriant laišką
+    pslIssiusta: function () { laiskasAtvertas(); },     // atskaita - prieš naršyklei atveriant laišką
     pslAtsisiusk: function () { atsisiusk(); },
     pslKeisk: function () { REZ = null; piesk(); var h = $("pslKnH"); if (h) { h.setAttribute("tabindex", "-1"); h.focus(); } }
   });
@@ -642,7 +704,7 @@
   /* ---------- paleidimas ---------- */
   function isAdreso() { return ikelk(location.hash.length > 1 ? location.hash : ""); }
   window.addEventListener("hashchange", function () { REZ = null; isAdreso(); });
-  if (window.GP_DARBAS) window.GP_DARBAS.stebek(function () { return REZ ? [REZ.kodas] : []; });
-  window.GP_PASIULYMAS = { ikelk: ikelk, parenk: parenk, trumposId: trumposId, atkurk: atkurk, dviprasmiska: dviprasmiska, busena: function () { return { kvietimas: K, antspaudas: H, rezultatas: REZ, kalba: KALBA, klaida: KLAIDA, forma: F }; }, kopija: function () { return REZ ? kopijaFailui() : ""; } };
+  if (window.GP_DARBAS) window.GP_DARBAS.stebek(function () { return REZ ? [REZ.kodas, REZ.saugiklis || 0] : []; });
+  window.GP_PASIULYMAS = { nustatyk: function (o) { if (o && o.saugiklisMs >= 0) SAUGIKLIO_MS = o.saugiklisMs; if (o && o.dviMs >= 0) DVI_MS = o.dviMs; }, ikelk: ikelk, parenk: parenk, trumposId: trumposId, atkurk: atkurk, dviprasmiska: dviprasmiska, busena: function () { return { kvietimas: K, antspaudas: H, rezultatas: REZ, kalba: KALBA, klaida: KLAIDA, forma: F }; }, kopija: function () { return REZ ? kopijaFailui() : ""; } };
   isAdreso();
 })();

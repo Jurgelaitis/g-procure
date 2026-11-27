@@ -124,8 +124,22 @@
     }
     return out;
   }
+  /* Pašto filtrų perrašytos nuorodos (2026-11-27, tiekėjo patikra M3) atstatomos: Proofpoint v2 (urldefense.proofpoint.com/v2/url?u=https-3A__...:
+     „_“ - „/“, „-XX“ - simbolis) ir v3 (urldefense.com/v3/__URL__;<base64>!!...: kiekviena „*“ URL - kitas simbolis iš base64 sąrašo). Kiti tekstai nekeičiami. */
+  function nuorodosTekstas(t) {
+    t = String(t || "");
+    t = t.replace(/https?:\/\/urldefense\.proofpoint\.com\/v2\/url\?u=([^&\s]+)\S*/gi, function (x, u) {
+      return u.replace(/_/g, "/").replace(/-([0-9A-Fa-f]{2})/g, function (y, h) { return String.fromCharCode(parseInt(h, 16)); });
+    });
+    t = t.replace(/https?:\/\/urldefense\.com\/v3\/__(\S+?)__;([A-Za-z0-9+\/=]*)\S*/gi, function (x, u, b) {
+      var z = ""; try { z = typeof atob === "function" ? atob(b + "===".slice((b.length + 3) % 4)) : ""; } catch (e) { z = ""; }
+      var i = 0;
+      return u.replace(/\*/g, function () { var c = z.charAt(i++); return c || "#"; });
+    });
+    return t;
+  }
   function isSarvo(tekstas) {
-    tekstas = String(tekstas || "");
+    tekstas = nuorodosTekstas(tekstas);
     var rasta = [], m, re = new RegExp(BR + "+\\s*BEGIN (G" + BR + "PROCURE (?:OFFER|INVITATION))\\s*" + BR + "+([\\s\\S]*?)" + BR + "+\\s*END G" + BR + "PROCURE (?:OFFER|INVITATION)\\s*" + BR + "+", "gi");
     while ((m = re.exec(tekstas))) rasta.push({ rusis: /INVITATION/i.test(m[1]) ? "kvietimas" : "pasiulymas", kodas: m[2].replace(/[^A-Za-z0-9_.-]/g, "") });
     if (rasta.length) return rasta;
@@ -158,8 +172,9 @@
   }
   function eilute(v, max) { return tekstas(v, max).replace(/\s*\n\s*/g, " "); }
   function skaicius(v, min, max) { return typeof v === "number" && isFinite(v) && v >= min && v <= max ? v : null; }
-  /* El. pašto adresas: be „?“, „&“, „=“, „#“, „%“ ir „/“ - kitaip į mailto nuorodą patektų tema ar kiti parametrai (2026-11-27, tiekėjo patikra V3) */
-  function pastas(v) { v = eilute(v, 120); return /^[^\s@<>"'(),;:\\?&=#%\/]+@[^\s@<>"'(),;:\\?&=#%\/]+\.[^\s@<>"'(),;:\\.?&=#%\/]{2,}$/.test(v) ? v : ""; }
+  /* El. pašto adresas: be „?“, „=“, „#“, „%“ ir „/“, domene - ir be „'“, „&“ - kitaip į mailto nuorodą patektų tema ar kiti parametrai (2026-11-27,
+     tiekėjo patikra V3); vardo dalyje „'“ ir „&“ leidžiami (o'brien@..., r&d@...; trečia patikra M8) - mailto nuorodose adresas koduojamas */
+  function pastas(v) { v = eilute(v, 120); return /^[^\s@<>"(),;:\\?=#%\/]+@[^\s@<>"'(),;:\\?&=#%\/]+\.[^\s@<>"'(),;:\\.?&=#%\/]{2,}$/.test(v) ? v : ""; }
   function laikas(v) {
     if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/.test(v)) return "";
     var d = new Date(v);
@@ -560,7 +575,7 @@
   function atsakymas(k, p, kodas, h, kalba) {
     var en = kalba === "en", pas = p.tiekejas.pav + (p.tiekejas.asmuo ? ", " + p.tiekejas.asmuo : "");
     /* Priedai - laiško tekste, kad tiekėjas juos pridėtų, kol laiškas atvertas (2026-11-27, tiekėjo patikra V1) */
-    var pr = k.dokumentai ? [(en ? "Attached documents: " : "Pridedami dokumentai: ") + k.dokumentai.replace(/\s*\n\s*/g, "; ")] : [];
+    var pr = k.dokumentai ? [(en ? "Requested attachments: " : "Prašyta pridėti: ") + k.dokumentai.replace(/\s*\n\s*/g, "; ")] : [];
     if (en) return {
       tema: "Quotation: " + pavadinimas(k, "en") + " (" + k.id + ") - " + p.tiekejas.pav,
       tekstas: ["Hello,", "", "Please find our quotation for the procurement “" + pavadinimas(k, "en") + "” below.",
@@ -577,6 +592,7 @@
     RIBOS: RIBOS, PATVIRTINIMAI: PATVIRTINIMAI, NACSAUG: NACSAUG, reikiaPatvirtinti: reikiaPatvirtinti, kitasPavadinimas: kitasPavadinimas, NMK_DALIS: NMK_DALIS, ID_RE: ID_RE, ZETONO_RE: ZETONO_RE,
     id: id, zetonas: zetonas, matEn: matEn, pavadinimas: pavadinimas, koduok: koduok, iskoduok: iskoduok, sarvas: sarvas, isSarvo: isSarvo, atkoduok: atkoduok,
     kvietimoForma: kvietimoForma, pasiulymoForma: pasiulymoForma, bendra: bendra, kanonas: kanonas, antspaudas: antspaudas, trumpas: trumpas,
+    nuorodosTekstas: nuorodosTekstas,
     apvalink: apvalink, sumos: sumos, vertink: vertink, zurnaloIrasas: zurnaloIrasas, tikrinkZurnala: tikrinkZurnala,
     vilniausIUtc: vilniausIUtc, utcIVilniaus: utcIVilniaus, rodykLaika: rodykLaika, liko: liko, forma: forma,
     laiskas: laiskas, atsakymas: atsakymas, pastas: pastas, eilute: eilute, tekstas: tekstas,

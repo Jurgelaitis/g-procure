@@ -2,7 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-OmBJcNuRoKMOvZc5auqQBMi/fiUZH3iDic5ABMAbeEk=' 'sha256-1Bumh75LCEQVMuuOQv/X5bK5fOk52lOwX2vzzwt8ODU=' 'sha256-xSWaTCXMXR1qe2EuxbCC+aVbC3PfWGsST9k03gPFd4A='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self'; form-action 'none'; object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-CcHzY1GZNrNsnFMAbnqK3t4cyqZb6//h5le/qcaZEV4=' 'sha256-1Bumh75LCEQVMuuOQv/X5bK5fOk52lOwX2vzzwt8ODU=' 'sha256-xSWaTCXMXR1qe2EuxbCC+aVbC3PfWGsST9k03gPFd4A='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self'; form-action 'none'; object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tiekėjų apklausos pažyma · G-Procure</title>
 <link rel="icon" href="../favicon.ico" sizes="32x32">
@@ -4869,16 +4869,20 @@ function patikraPriesGeneruojant(data) {
   else { const s = scenarijausNesutapimas(data); if (s) pr(s, '[data-field="sprendimoScenarijus"]'); }
   // K4: sumos be ir su PVM, įrašytos ranka, nesutampa nei su PVM tarifu, nei be PVM (ne PVM mokėtojo - lygios)
   const tarifas = pvmTarifas();
-  const pvmNesutampa = (be, su) => !isNaN(be) && !isNaN(su) && Math.abs(su - be) > 0.01 && Math.abs(su - be * (1 + tarifas)) > 0.02;
+  const pvmNesutampa = (be, su, kitas) => !isNaN(be) && !isNaN(su) && Math.abs(su - be) > 0.01 && Math.abs(su - be * (1 + tarifas)) > 0.02 && !(kitas && Math.abs(su - be * (1 + kitas)) <= 0.02);
+  // Tiekėjo nurodytas kitas PVM tarifas: „X kainą su PVM nurodė taikydamas N % PVM tarifą.“ „Kita informacija“ dalyje (įrašo elektroninė apklausa; 2026-11-27, tiekėjo patikra V2)
+  const kitiTarifai = {};
+  String(f.kitaInfo || '').split('\n').forEach(l => { const m = /^(.+?) kainą su PVM nurodė taikydamas (\d{1,2}(?:[.,]\d{1,2})?) % PVM tarifą\.$/.exec(l.trim()); if (m) kitiTarifai[m[1].trim()] = parseFloat(m[2].replace(',', '.')) / 100; });
   if (tarifas) {
     (data.rows.pasiulymai || []).concat(data.rows.galutiniai || []).forEach(p => {
       const be = parseFloat(p.kainaBePvm != null ? p.kainaBePvm : p.galKainaBePvm), su = parseFloat(p.kainaSuPvm != null ? p.kainaSuPvm : p.galKainaSuPvm);
-      if (!String(p.tiekejas || '').trim() || !pvmNesutampa(be, su)) return;
+      if (!String(p.tiekejas || '').trim() || !pvmNesutampa(be, su, kitiTarifai[String(p.tiekejas).trim()])) return;
       pr(`${p.tiekejas.trim()}: kaina be PVM (${formatEurNum(be)}) ir su PVM (${formatEurNum(su)}) nesutampa nei su ${Math.round(tarifas * 100)} % PVM, nei be PVM - patikrinkite.`, null);
     });
     [['verteBePvm', 'verteSuPvm', 'Numatoma vertė'], ['sutartiesBePvm', 'sutartiesSuPvm', 'Sutarties kaina']].forEach(([kb, ks, pav]) => {
       const be = parseFloat(f[kb]), su = parseFloat(f[ks]);
-      if (pvmNesutampa(be, su)) pr(`${pav}: be PVM (${formatEurNum(be)}) ir su PVM (${formatEurNum(su)}) nesutampa nei su ${Math.round(tarifas * 100)} % PVM, nei be PVM - patikrinkite.`, '[data-field="' + ks + '"]');
+      // sutarties kaina - ir pagal tiekėjo nurodytą kitą PVM tarifą (sutartis sudaroma su vienu iš tiekėjų)
+      if (pvmNesutampa(be, su) && !(ks === 'sutartiesSuPvm' && Object.keys(kitiTarifai).some(k => Math.abs(su - be * (1 + kitiTarifai[k])) <= 0.02))) pr(`${pav}: be PVM (${formatEurNum(be)}) ir su PVM (${formatEurNum(su)}) nesutampa nei su ${Math.round(tarifas * 100)} % PVM, nei be PVM - patikrinkite.`, '[data-field="' + ks + '"]');
     });
   }
   // K2: lėšos

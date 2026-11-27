@@ -15,18 +15,23 @@
       "The invitation is no longer valid (the deadline passed long ago or the buyer withdrew it) or the link is incorrect. If you think this is a mistake, contact the buyer."],
     rysys: ["Nepavyko atverti kvietimo", "Could not open the invitation", "Nepavyko pasiekti G-Procure serverio. Patikrinkite interneto ryšį ir bandykite dar kartą po minutės.",
       "Could not reach the G-Procure server. Check your internet connection and try again in a minute."],
+    /* Serveris atsakė klaida (500, 429, 503) - ne ryšio problema (trečia patikra M2) */
+    serveris: ["Nepavyko atverti kvietimo", "Could not open the invitation", "G-Procure serveris šiuo metu neatsako. Bandykite dar kartą po kelių minučių; jei nepavyks, susisiekite su pirkimo vykdytoju.",
+      "The G-Procure server is not responding right now. Try again in a few minutes; if it still does not work, contact the buyer."],
     /* Serveris atsakė, bet kvietimo kodas netinkamas - ne ryšio klaida (M6) */
     netinkamas: ["Nepavyko atverti kvietimo", "Could not open the invitation", "G-Procure serveris pateikė netinkamą atsakymą. Bandykite dar kartą; jei nepavyks, paprašykite pirkimo vykdytojo atsiųsti kvietimą iš naujo.",
       "The G-Procure server returned an invalid response. Try again; if it still does not work, ask the buyer to send the invitation again."]
   };
   /* ID iš adreso dalies po „#“: tarpai ir brūkšneliai nepaisomi, skyrybos ženklai gale (nukopijuota su tašku ar skliaustu) - irgi */
   function idIs(hash) {
-    var x = String(hash || "").replace(/^#/, "").replace(/[\s-]/g, "").replace(/[.,;:!?)\]}>'"»“”]+$/, "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1");
+    var h = String(hash || "");
+    try { h = decodeURIComponent(h); } catch (e) { /* lieka kaip yra */ }     // prilipusi užkoduota kabutė „%E2%80%9C“ (trečia patikra M2)
+    var x = h.replace(/^#/, "").replace(/[\s-]/g, "").replace(/[.,;:!?)\]}>'"»“”]+$/, "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1");
     return ID_RE.test(x) ? x : null;
   }
   /* Įklijuotas tekstas: trumpa nuoroda (ir per „Safe Links“ - koduota), vien ID arba ilga nuoroda su kvietimo kodu */
   function isTeksto(t) {
-    t = String(t || "");
+    t = window.GP_APKLAUSA ? window.GP_APKLAUSA.nuorodosTekstas(t) : String(t || "");     // ir Proofpoint perrašytos nuorodos (trečia patikra M3)
     var m = /g-procure\.com(?:\/|%(?:25)?2F)k(?:\/|%(?:25)?2F)?(?:#|%(?:25)?23)([0-9A-Za-z-]{10,14})/i.exec(t);
     if (m) { var id = idIs(m[1]); if (id) return { id: id }; }
     var k = /[#&]k=(g[01]\.[A-Za-z0-9_-]{16,})/.exec(t.replace(/%23/gi, "#").replace(/%3D/gi, "="));
@@ -38,11 +43,12 @@
     var t = TEKSTAI[rusis];
     document.getElementById("kHLt").textContent = t[0]; document.getElementById("kHEn").textContent = " / " + t[1];
     document.getElementById("kLt").textContent = t[2]; document.getElementById("kEn").textContent = t[3];
-    document.getElementById("kKartoti").hidden = rusis !== "rysys" && rusis !== "netinkamas";
-    document.getElementById("kForma").hidden = rusis === "rysys" || rusis === "netinkamas";
+    var kartoti = rusis === "rysys" || rusis === "netinkamas" || rusis === "serveris";
+    document.getElementById("kKartoti").hidden = !kartoti;
+    document.getElementById("kForma").hidden = kartoti;
     document.title = t[0] + " - G-Procure";
   }
-  /* atverk(hash, { fetch, eik }) -> Promise<"atverta" | "neteisinga" | "nera" | "rysys" | "netinkamas"> (testams - netikri fetch ir eik) */
+  /* atverk(hash, { fetch, eik }) -> Promise<"atverta" | "neteisinga" | "nera" | "rysys" | "serveris" | "netinkamas"> (testams - netikri fetch ir eik) */
   function atverk(hash, o) {
     o = o || {};
     var f = o.fetch || window.fetch.bind(window), eik = o.eik || function (u) { location.replace(u); };
@@ -50,7 +56,7 @@
     if (!id) { rodyk("neteisinga"); return Promise.resolve("neteisinga"); }
     return f(API + id, { credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store" }).then(function (r) {
       if (r.status === 404) return "nera";
-      if (!r.ok) return "rysys";
+      if (!r.ok) return "serveris";
       return r.json().catch(function () { return null; }).then(function (j) {
         if (!j || typeof j.kodas !== "string" || !KODO_RE.test(j.kodas)) return "netinkamas";
         eik("../PP-report/pasiulymas.html#k=" + j.kodas);
