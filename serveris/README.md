@@ -243,6 +243,51 @@ Diegimas - kaip sankcijų paslaugos: kodas į `/opt/g-procure-sutartys/`, paslau
 
 Testai - `testai.html` grupė „Viešų pirkimų sutarčių duomenys (2026-11-19)“; klientas ir moduliai - `shared/testai.html` ir modulių testai.
 
+## Trumpos kvietimų nuorodos (nuo 2026-11-27, įdiegta 2026-11-27)
+
+Elektroninės apklausos (PP-report) kvietimo nuorodoje `PP-report/pasiulymas.html#k=<kodas>` yra visas kvietimas, todėl ji ilga (~700 ženklų).
+Naudotojo sprendimu (2026-11-27) laiške siunčiama trumpa nuoroda `https://g-procure.com/k/#<ID>`: paslauga saugo kvietimo kodą, puslapis `k/`
+(`k/index.html`, `k/k.js`) jį gauna ir atveria tą patį tiekėjo puslapį. Pasiūlymai serverio nepasiekia - jie, kaip iki tol, siunčiami el. paštu.
+
+### Adresai
+
+| Kelias | Ką daro |
+|---|---|
+| `POST /api/k` | `{ iki, kodai: [...] }` (1-12 kodų `g0.` / `g1.`, terminas ISO UTC, nepraėjęs) -> `{ nuorodos: [{ id, trynimas }], galioja }`; tik G-Procure kilmė (kitaip 403) |
+| `GET /api/k/<ID>` | `{ kodas, galioja }`; nėra ar nebegalioja - 404 |
+| `POST /api/k/trinti` | `{ nuorodos: [{ id, trynimas }] }` -> `{ istrinta }`; tik G-Procure kilmė |
+| `GET /api/k/busena` | versija, galiojančių nuorodų skaičius, paskutinės klaidos laikas ir rūšis |
+
+ID - 10 ženklų Crockford base32 (50 bitų; be I, L, O, U, skaitant O -> 0, I ir L -> 1, mažosios - didžiosios); trynimo raktas - 22 ženklai base64url.
+
+### Saugumas
+
+- Kodas saugomas užšifruotas AES-256-GCM raktu, išvestu iš ID (scrypt N=16384); saugyklos raktas - irgi iš ID, todėl diske nėra nei kodo, nei ID,
+  o be nuorodos kodo perskaityti negalima (ir iš atsarginių kopijų). Trynimo raktas saugomas tik kaip SHA-256, lyginamas pastovaus laiko funkcija.
+- Galioja iki pasiūlymų termino + 30 d. (ne ilgiau kaip 200 d.), kas valandą išvaloma; iniciatoriaus įrankis nuorodas ištrina nutraukus ar ištrynus
+  apklausą. Iš viso ne daugiau 5 000 galiojančių nuorodų.
+- Atskira systemd paslauga (`DynamicUser`, `StateDirectory` 0700, `UMask=0077`, `IPAddressDeny=any` - tik localhost, griežta izoliacija, be raktų),
+  klausosi tik `127.0.0.1:3004`; nginx `location = /api/k` (POST, 200 KB) ir `location ^~ /api/k/` (GET, trinti - POST, 8 KB), abu be prieigos
+  žurnalo (kelyje - ID, kūne - kvietimai), `limit_req` 30 per min.; antroji riba paslaugoje - 30 GET ir 10 POST per min. vienam IP.
+- Žurnale - tik įvykio rūšis ir kiekiai (be ID, kodų, raktų ir IP). Įrašoma atomiškai (laikinas failas ir pervadinimas, 0600); neperskaitoma saugykla
+  neperrašoma - paslauga sustoja.
+
+### Failai
+
+| Failas | Paskirtis |
+|---|---|
+| `nuorodos-logika.js` | gryna logika: ID, galiojimas, kūnų tikrinimas, maršrutai ir atsakymai (veikia ir naršyklėje - testams) |
+| `nuorodos-serveris.js` | Node serveris (be npm): šifravimas, saugykla diske, HTTP |
+| `g-procure-nuorodos.service` | systemd paslauga |
+| `nginx-nuorodos.conf` | nginx `location` blokai ir ribos zona |
+
+Diegimas - kaip kitų paslaugų: kodas į `/opt/g-procure-nuorodos/`, paslauga `g-procure-nuorodos`, ribos zona `conf.d/gp-nuorodos-limit.conf`,
+blokai - į `api.g-procure.com` server bloką prieš `location /`. Žingsniai, patikra ir grįžimas atgal - privačiai (`g-procure-privatu/serveris/nuorodos-diegimas-2026-11.md`).
+Įdiegta 2026-11-27 (naudotojo leidimas): `systemd-analyze security` - 1.3, ~30 MB; patikrinta gyvai - sukūrimas, gavimas (ir mažosiomis, O -> 0),
+trynimas (blogu raktu - 0), 403 be kilmės, išlieka perkrovus paslaugą, diske nėra nei kodo, nei ID, prieigos žurnale - 0 įrašų, kitos paslaugos nepaliestos.
+Stebėsena - `.github/stebesena/tikrink.py` (`/api/k/busena`). Testai - `testai.html` grupė „Trumpos kvietimų nuorodos (2026-11-27)“; klientas -
+`PP-report/testai.html` (kūrimas, klaidos, trynimas, puslapis `k/`).
+
 ## DI užduotys (nuo 2026-11-08, įdiegta 2026-11-08)
 
 Naudotojo sprendimas 2026-11-08 („Neutralūs žingsniai“ - kodo apsauga): DI instrukcijos (sistemos tekstai ir užklausų šablonai)
@@ -312,7 +357,7 @@ Testai - `testai.html` grupė `testaiDiKvota1123` (ir klientas - `shared/testai.
 
 `.github/workflows/stebesena.yml` kas valandą paleidžia `.github/stebesena/tikrink.py` (tik GET, tik Python standartinė biblioteka): svetainė,
 DI serveris, DI dienos riba (`/api/di/busena`), CVP IS duomenų kopija (krenta, kai senesnė nei 24 val. - 2026-11-20 - 2026-11-23 ji neatsinaujino
-ir niekas nepastebėjo), sankcijų sąrašai (krenta, kai nė vienas nepatikrintas; vienas pasenęs - įspėjimas), viešų sutarčių paslauga, o nuo 2026-11-24 -
+ir niekas nepastebėjo), sankcijų sąrašai (krenta, kai nė vienas nepatikrintas; vienas pasenęs - įspėjimas), viešų sutarčių paslauga, nuo 2026-11-27 - trumpų nuorodų paslauga, o nuo 2026-11-24 -
 ir saugumo antraštės kiekviename API atsakyme (`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Referrer-Policy: no-referrer`,
 `X-Content-Type-Options: nosniff`, HSTS; DI serveriui jas prideda nginx, CVP IS, sankcijų ir sutarčių paslaugoms - jos pačios), o nuo 2026-11-25 -
 ir DI instrukcijų šaltinių kopijos: serverio `_teises-nuorodos.js` ir `_organizacijos.js` SHA-256 (`/api/di/busena` `kopijos`) lyginamos su

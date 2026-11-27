@@ -518,7 +518,7 @@ async function testaiApklausa() {
     su.atverta = iso(0); su.busena = 'atverta';
     lygu((A.apklausosForma(su).pasiulymai[0].duomenys || { eilutes: [] }).eilutes.length, 2, 'atvertos - paliekamas');
     const tekstas = q('#ea-vieta').textContent;
-    tiesa(!/125[,.]5|1[\s ]?506|1[\s ]?520|119,00|Asmuo 1/.test(tekstas), 'kainų ir pasiūlymo turinio ekrane nėra');
+    tiesa(!/125[,.]5|1[\s ]?506[,.]|1[\s ]?520[,.]|119,00|Asmuo 1/.test(tekstas), 'kainų ir pasiūlymo turinio ekrane nėra');   // sumos - tik su kableliu: be jo „1520“ gali būti laiko ar antspaudo dalis
     turi(tekstas, A.trumpas(nauj.h), 'rodomas antspaudas');
     turi(q('#ea-kas-toliau').textContent, 'Pasiūlymus pateikė visi kviesti tiekėjai', 'visi pateikė');
     lygu(b.zurnalas.map(e => e.ivykis), ['paskelbta', 'gauta', 'gauta', 'gauta', 'pakeista'], 'žurnalas');
@@ -994,6 +994,86 @@ async function testaiApklausa() {
     const a = await kurk(); await U.rodyk('apklausa', a.id);
     rasyk(q('#ea-laisko-tekstas'), (await pasiulymas(a, 0, [1, 1])).laiskas); rasyk(q('#ea-gauta'), A.utcIVilniaus(iso(-30 * 864e5))); q('[data-veiksmas="eaIkelk"]').click(); await laukti(100);
     turi(q('#ea-ikelimo-rez').textContent, 'anksčiau, nei apklausa paskelbta', 'gavimo laikas prieš paskelbimą');
+  });
+
+  await testas('Trumpos nuorodos (naudotojo sprendimas 2026-11-27): kuriamos G-Procure serveryje paskelbus, laiškuose - g-procure.com/k/#ID; nepavykus - ilgos ir „Bandyti dar kartą“; nutraukus ar ištrynus - ištrinamos; testuose serveris nekviečiamas; puslapis k/ atveria kvietimą', async () => {
+    U.naudokSaugykla(atm());
+    const kv = [], kv0 = [], tikrasFetch = W.fetch;
+    W.fetch = (u, o) => { kv0.push(String(u)); return tikrasFetch(u, o); };
+    let atsakymas = (u, kunas) => /trinti$/.test(u) ? { status: 200, j: { istrinta: kunas.nuorodos.length } }
+      : { status: 200, j: { nuorodos: kunas.kodai.map((x, i) => ({ id: '7F3K9QX2M' + 'ABC'[i], trynimas: 'a'.repeat(21) + i })), galioja: iso(32 * 864e5) } };
+    const f = (u, o) => { const kunas = JSON.parse(o.body); kv.push({ u, kunas, o }); const r = atsakymas(u, kunas);
+      return r.status === 0 ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve({ ok: r.status >= 200 && r.status < 300, status: r.status, json: () => r.j === undefined ? Promise.reject(new Error('ne JSON')) : Promise.resolve(r.j) }); };
+    try {
+      // be įjungimo (testų kilmė - ne g-procure.com) serveris nekviečiamas
+      const z0 = await kurk(); await U.rodyk('apklausa', z0.id); await laukti(200);
+      lygu([kv0.filter(u => /api\.g-procure\.com/.test(u)).length, !!q('.ea-trumpos'), !!U.gauk(z0.id).tiekejai[0].trumpa], [0, false, false], 'testuose nuorodos nekuriamos');
+      U.naudokTrumpas(f);
+      const a0 = await kurk(), a = U.gauk(a0.id); a.tiekejai.forEach(t => { t.issiusta = ''; }); U.issaugok(a);
+      await U.rodyk('apklausa', a.id); await kol(() => U.gauk(a.id).tiekejai.every(t => t.trumpa) && /Laiškuose - trumpos nuorodos/.test((q('.ea-trumpos') || {}).textContent || ''));
+      lygu([kv.length, kv[0].u, kv[0].o.method, kv[0].o.credentials, kv[0].kunas.iki, kv[0].kunas.kodai.length], [1, 'https://api.g-procure.com/api/k', 'POST', 'omit', a.kvietimas.terminas, 3], 'viena užklausa visiems tiekėjams');
+      const N = U.busenaS().nuorodos;
+      tiesa(a.tiekejai.every((t, i) => kv[0].kunas.kodai[i] === N[t.t].nuoroda.split('#k=')[1]), 'siunčiami tik kvietimų kodai (tie patys, kaip ilgose nuorodose)');
+      a.tiekejai.forEach((t, i) => { const n = N[t.t];
+        lygu([n.rodoma, n.laiskas.tekstas.indexOf(n.rodoma) > 0, n.laiskas.tekstas.indexOf('pasiulymas.html#k=') < 0, decodeURIComponent(n.mailto).indexOf(n.rodoma) > 0],
+          ['https://g-procure.com/k/#7F3K9QX2M' + 'ABC'[i], true, true, true], 'laiškas su trumpa nuoroda ' + i); });
+      lygu([U.gauk(a.id).tiekejai[0].trumpa.trynimas, q('#ea-seka-kitas').getAttribute('href'), /Kvietimai G-Procure serveryje saugomi užšifruoti iki \d{4}-\d{2}-\d{2}/.test(q('.ea-trumpos').textContent)],
+        ['a'.repeat(21) + '0', N[a.tiekejai[0].t].mailto, true], 'trynimo raktas įrašytas, siuntimo seka - su trumpa nuoroda, pastaba');
+      await U.rodyk('apklausa', a.id); await laukti(150); lygu(kv.length, 1, 'antrą kartą nekuriama');
+      // nutraukus - nuorodos ištrinamos iš serverio ir iš įrašo
+      W.prompt = () => 'Poreikis pasikeitė';
+      q('[data-veiksmas="eaNutrauk"]').click(); await kol(() => kv.length === 2 && !U.gauk(a.id).tiekejai.some(t => t.trumpa));
+      lygu([kv[1].u, kv[1].kunas], ['https://api.g-procure.com/api/k/trinti', { nuorodos: a.tiekejai.map((t, i) => ({ id: '7F3K9QX2M' + 'ABC'[i], trynimas: 'a'.repeat(21) + i })) }], 'nutraukus - trinama');
+      // nepavyko (paslauga neįdiegta) - ilgos nuorodos, priežastis, „Bandyti dar kartą“; automatiškai nekartojama
+      atsakymas = (u, kunas) => /trinti$/.test(u) ? { status: 200, j: { istrinta: 1 } } : { status: 404, j: undefined };
+      const b0 = await kurk({ tk: [TK[0]] }), b = U.gauk(b0.id); b.tiekejai[0].issiusta = ''; U.issaugok(b);
+      await U.rodyk('apklausa', b.id); await kol(() => /Trumpų nuorodų sukurti nepavyko/.test((q('.ea-trumpos') || {}).textContent || ''));
+      turi(q('.ea-trumpos').textContent, 'paslauga G-Procure serveryje dar neįdiegta', 'priežastis');
+      tiesa(U.busenaS().nuorodos[b.tiekejai[0].t].laiskas.tekstas.indexOf('pasiulymas.html#k=') > 0, 'laiške - ilga nuoroda');
+      const n1 = kv.length; await U.rodyk('apklausa', b.id); await laukti(150); lygu(kv.length, n1, 'nepavykus automatiškai nekartojama');
+      atsakymas = (u, kunas) => /trinti$/.test(u) ? { status: 200, j: { istrinta: 1 } } : { status: 200, j: { nuorodos: [{ id: 'ABCDEFGHJK', trynimas: 'b'.repeat(22) }], galioja: iso(32 * 864e5) } };
+      q('[data-veiksmas="eaTrumpos"]').click();
+      await kol(() => U.gauk(b.id).tiekejai[0].trumpa && (U.busenaS().nuorodos[b.tiekejai[0].t] || {}).rodoma === 'https://g-procure.com/k/#ABCDEFGHJK');
+      tiesa(D.activeElement && D.activeElement.classList.contains('ea-trumpos'), 'po pakartojimo fokusas - būsenos pastaboje');
+      // ryšio klaida ir netinkamas atsakymas - neįrašoma
+      atsakymas = () => ({ status: 0 });
+      const c0 = await kurk({ tk: [TK[1]] }); await U.rodyk('apklausa', c0.id); await kol(() => /nepavyko pasiekti G-Procure serverio/.test((q('.ea-trumpos') || {}).textContent || ''));
+      atsakymas = () => ({ status: 200, j: { nuorodos: [{ id: 'ABCDEFGHJI', trynimas: 'x'.repeat(22) }], galioja: iso(32 * 864e5) } });
+      const pries = kv.length; q('[data-veiksmas="eaTrumpos"]').click();
+      await kol(() => kv.length > pries && /Trumpų nuorodų sukurti nepavyko/.test((q('.ea-trumpos') || {}).textContent || '')); await laukti(200);
+      lygu([kv.length - pries, !!U.gauk(c0.id).tiekejai[0].trumpa, /G-Procure serveris atsakė klaida|nepavyko/.test(q('.ea-trumpos').textContent)], [1, false, true], 'netinkamas atsakymas (blogas ID) - neįrašomas, nekartojamas');
+      // ištrynus apklausą - nuorodos ištrinamos
+      W.confirm = () => true; atsakymas = (u, kunas) => ({ status: 200, j: { istrinta: kunas.nuorodos.length } });
+      await U.rodyk('apklausa', b.id); const nk = kv.length; q('[data-veiksmas="eaTrink"]').click(); await kol(() => kv.length === nk + 1);
+      lygu([kv[nk].u, kv[nk].kunas.nuorodos], ['https://api.g-procure.com/api/k/trinti', [{ id: 'ABCDEFGHJK', trynimas: 'b'.repeat(22) }]], 'ištrynus - trinama');
+      // įrašo forma: tik tinkamas ID ir trynimo raktas
+      const x = JSON.parse(JSON.stringify(U.gauk(c0.id)));
+      x.tiekejai[0].trumpa = { id: 'ABCDEFGHJK', trynimas: 'c'.repeat(22), galioja: iso(864e5) }; lygu(A.apklausosForma(x).tiekejai[0].trumpa.id, 'ABCDEFGHJK', 'tinkama išlieka');
+      x.tiekejai[0].trumpa = { id: 'ABCDEFGHJI', trynimas: 'c'.repeat(22), galioja: iso(864e5) }; tiesa(!A.apklausosForma(x).tiekejai[0].trumpa, 'netinkamas ID atmetamas');
+      x.tiekejai[0].trumpa = { id: 'ABCDEFGHJK', trynimas: '<img>', galioja: iso(864e5) }; tiesa(!A.apklausosForma(x).tiekejai[0].trumpa, 'netinkamas raktas atmetamas');
+    } finally { W.fetch = tikrasFetch; U.naudokTrumpas(null); }
+    // puslapis k/ (https://g-procure.com/k/#ID)
+    await new Promise(r => { tr.onload = r; tr.src = '../k/index.html?n=' + Math.random().toString(36).slice(2); });
+    const kw = tr.contentWindow; await kol(() => kw.GP_TRUMPA && /neteisinga/.test(kw.document.querySelector('#kH').textContent));
+    tiesa(/noindex/.test(kw.document.querySelector('meta[name="robots"]').content), 'k/ - noindex');
+    const kur = [], eik = [], kf = (st, j) => (u, o) => { kur.push([u, o]); return st === 0 ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve({ ok: st === 200, status: st, json: () => Promise.resolve(j) }); };
+    const kodas = 'g1.' + 'A'.repeat(40);
+    lygu(await kw.GP_TRUMPA.atverk('#7f3k-9qx2mo', { fetch: kf(200, { kodas, galioja: iso(864e5) }), eik: u => eik.push(u) }), 'atverta', 'atverta');
+    lygu([kur[0][0], kur[0][1].credentials, kur[0][1].referrerPolicy, eik[0]], ['https://api.g-procure.com/api/k/7F3K9QX2M0', 'omit', 'no-referrer', '../PP-report/pasiulymas.html#k=' + kodas], 'užklausa ir nukreipimas (O -> 0, mažosios, brūkšnelis)');
+    lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(404, { klaida: 'x' }), eik: u => eik.push(u) }), 'nera');
+    lygu([/nebegalioja/.test(kw.document.querySelector('#kH').textContent), kw.document.querySelector('#kKartoti').hidden], [true, true], 'nerasta - nebegalioja, be kartojimo');
+    lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(503, {}), eik: u => eik.push(u) }), 'rysys');
+    lygu([/Nepavyko atverti/.test(kw.document.querySelector('#kH').textContent), kw.document.querySelector('#kKartoti').hidden], [true, false], 'serverio klaida - „Bandyti dar kartą“, ne „nėra“');
+    lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(0), eik: u => eik.push(u) }), 'rysys', 'ryšys');
+    lygu(await kw.GP_TRUMPA.atverk('#7F3K9QX2M0', { fetch: kf(200, { kodas: '"><img src=x onerror=alert(1)>' }), eik: u => eik.push(u) }), 'rysys', 'netinkamas kodas neatveriamas');
+    lygu(await kw.GP_TRUMPA.atverk('#ABC', { fetch: kf(200, { kodas }), eik: u => eik.push(u) }), 'neteisinga', 'per trumpas ID - be užklausos');
+    lygu([eik.length, kur.length], [1, 5], 'nukreipta vieną kartą, neteisingam ID užklausos nėra');
+    // tiekėjo puslapyje įklijuota trumpa nuoroda atpažįstama
+    const pw = await atverkTiekeja('');
+    lygu([pw.GP_PASIULYMAS.trumposId('Nuoroda: https://g-procure.com/k/#7f3k9qx2m0 .'), pw.GP_PASIULYMAS.trumposId('https://g-procure.com/PP-report/pasiulymas.html#k=g1.xx')], ['7F3K9QX2M0', null], 'įklijuota trumpa nuoroda');
+    const nav = []; pw.GP_PASIULYMAS.eik = u => nav.push(u);
+    pw.document.querySelector('#pslNuoroda').value = 'Pateikti pasiūlymą: https://g-procure.com/k/#7f3k9qx2m0'; pw.document.querySelector('[data-veiksmas="pslAtverk"]').click(); await laukti(80);
+    lygu([nav, !!pw.document.querySelector('#pslTurinys [role="alert"]')], [['../k/#7F3K9QX2M0'], false], 'įklijavus trumpą nuorodą - ji atveriama, ne klaida');
   });
 
   tr.remove();

@@ -33,7 +33,11 @@
   }
 
   /* ---------- kvietimo įkėlimas ---------- */
+  /* Įklijuota trumpa nuoroda (https://g-procure.com/k/#<ID>) - atveriama ji (kodą gauna puslapis k/) */
+  function trumposId(t) { var m = /g-procure\.com\/k\/?#([0-9A-Za-z-]{10,14})(?![0-9A-Za-z])/.exec(String(t || "")); return m ? m[1].replace(/-/g, "").toUpperCase() : null; }
   function ikelk(tekstas) {
+    var tid = trumposId(tekstas);
+    if (tid && /^[0-9A-Z]{10}$/.test(tid)) { (window.GP_PASIULYMAS && window.GP_PASIULYMAS.eik || function (u) { location.assign(u); })("../k/#" + tid); return Promise.resolve(); }
     var rasta = A.isSarvo(tekstas).filter(function (x) { return x.rusis !== "pasiulymas"; });
     if (!rasta.length) { K = null; KLAIDA = tekstas ? "kodas" : ""; return Promise.resolve(piesk()); }
     return A.atkoduok(rasta[0]).then(function (r) {
@@ -94,7 +98,7 @@
         "This page opens from the link you received in the invitation email. If the link did not open completely, paste it here.") + '</p>' +
       (kl ? '<div class="ea-pastaba ea-pastaba--klaida" role="alert">' + esc(kl) + '</div>' : '') +
       '<div class="ea-laukas ea-laukas--visas"><label for="pslNuoroda">' + L("Kvietimo nuoroda arba kodas", "Invitation link or code") + '</label>' +
-      '<textarea id="pslNuoroda" rows="3" autocomplete="off" spellcheck="false" placeholder="' + L("pvz., https://g-procure.com/PP-report/pasiulymas.html#k=...", "e.g. https://g-procure.com/PP-report/pasiulymas.html#k=...") + '"></textarea></div>' +
+      '<textarea id="pslNuoroda" rows="3" autocomplete="off" spellcheck="false" placeholder="' + L("pvz., https://g-procure.com/k/#7F3K9QX2MZ", "e.g. https://g-procure.com/k/#7F3K9QX2MZ") + '"></textarea></div>' +
       '<div class="ea-eile" style="margin-top:12px"><button type="button" class="ea-btn ea-btn--pagr" data-veiksmas="pslAtverk">' + L("Atverti kvietimą", "Open the invitation") + '</button></div>' +
       '</section>';
   }
@@ -359,6 +363,6 @@
   function isAdreso() { return ikelk(location.hash.length > 1 ? location.hash : ""); }
   window.addEventListener("hashchange", function () { F.ik = {}; F.past = {}; REZ = null; isAdreso(); });
   if (window.GP_DARBAS) window.GP_DARBAS.stebek(function () { return REZ ? [REZ.kodas] : []; });
-  window.GP_PASIULYMAS = { ikelk: ikelk, parenk: parenk, busena: function () { return { kvietimas: K, antspaudas: H, rezultatas: REZ, kalba: KALBA, klaida: KLAIDA, forma: F }; }, kopija: function () { return REZ ? kopijaFailui() : ""; } };
+  window.GP_PASIULYMAS = { ikelk: ikelk, parenk: parenk, trumposId: trumposId, busena: function () { return { kvietimas: K, antspaudas: H, rezultatas: REZ, kalba: KALBA, klaida: KLAIDA, forma: F }; }, kopija: function () { return REZ ? kopijaFailui() : ""; } };
   isAdreso();
 })();

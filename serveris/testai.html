@@ -44,6 +44,7 @@ užklausos ir sąrašų būsenos (nepasiektas sąrašas - „nepatikrinta“, ne
 <script src="di-uzduotys.js"></script>
 <script src="viesos-sutartys-logika.js"></script>
 <script src="di-kvota.js"></script>
+<script src="nuorodos-logika.js"></script>
 <script>
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
@@ -1302,6 +1303,82 @@ async function testaiDiKvota1123(){
   });
 }
 
+/* Trumpos kvietimų nuorodos (2026-11-27, naudotojo sprendimas): logika ir sargai serverio, systemd ir nginx failams. */
+async function testaiNuorodos1127(){
+  grupe("Trumpos kvietimų nuorodos (2026-11-27)");
+  const N = window.GP_NUORODOS_API, DABAR = Date.parse("2026-11-27T10:00:00Z"), D = 86400000;
+  const kodas = "g1." + "Ab_-".repeat(10);
+  await testas("ID: 10 ženklų Crockford base32; mažosios, tarpai, brūkšneliai, O -> 0, I ir L -> 1; netinkami - null; iš baitų - tolygiai po 5 bitus", () => {
+    lygu(["7f3k9qx2mo", "7F3K 9QX2-M0", "ilil0OABCD", "7F3K9QX2M", "7F3K9QX2M0X", "7F3K9QX2MU", "", null, "7F3K9QX2M0".repeat(5)].map(N.normId),
+      ["7F3K9QX2M0", "7F3K9QX2M0", "11110", null, null, null, null, null, null].map((x, i) => i === 2 ? "1111" + "00ABCD" : x));
+    lygu(N.idIsBaitu([0, 31, 32, 255, 1, 2, 3, 4, 5, 6]), "0Z0Z123456");
+    tiesa(N.ID_RE.test(N.idIsBaitu(Array.from({ length: 10 }, (x, i) => i * 29 % 256))) && N.idIsBaitu([1, 2]) === null, "ID_RE ir per mažai baitų");
+    lygu(N.ABECELE.length, 32, "32 ženklai"); tiesa(!/[ILOU]/.test(N.ABECELE), "be I, L, O, U");
+  });
+  await testas("Galiojimas: termino + 30 d., ne ilgiau kaip 200 d.; praėjęs, netinkamas ar ne ISO terminas - null", () => {
+    lygu(N.galioja("2026-12-01T10:00:00Z", DABAR), Date.parse("2026-12-31T10:00:00Z"), "+30 d.");
+    lygu(N.galioja("2027-12-01T10:00:00Z", DABAR), DABAR + 200 * D, "ne ilgiau 200 d.");
+    lygu(["2026-11-27T09:59:59Z", "2026-11-27", "rytoj", "2026-02-30T10:00:00Z", null, 5].map(x => N.galioja(x, DABAR)), [null, null, null, null, null, null]);
+  });
+  await testas("Kūrimas: { iki, kodai } - 1-12 kodų g0. / g1. formatu, kiti raktai ir netinkami kodai - 400 su parametru", () => {
+    lygu(N.tikrinkKurima({ iki: "2026-12-01T10:00:00Z", kodai: [kodas, kodas] }, DABAR), { ok: true, kodai: [kodas, kodas], galioja: Date.parse("2026-12-31T10:00:00Z") });
+    lygu([{}, null, [], { iki: "2026-12-01T10:00:00Z", kodai: [] }, { iki: "2026-12-01T10:00:00Z", kodai: Array(13).fill(kodas) }, { iki: "2026-12-01T10:00:00Z", kodai: ["g2.abcabcabcabcabcabc"] },
+      { iki: "2026-12-01T10:00:00Z", kodai: [kodas + "<"] }, { iki: "2026-12-01T10:00:00Z", kodai: ["g1." + "a".repeat(12001)] }, { iki: "2026-11-01T10:00:00Z", kodai: [kodas] },
+      { iki: "2026-12-01T10:00:00Z", kodai: [kodas], kita: 1 }].map(x => N.tikrinkKurima(x, DABAR).parametras), ["kodai", "kunas", "kunas", "kodai", "kodai", "kodai", "kodai", "kodai", "iki", "kunas"]);
+  });
+  await testas("Trynimas: { nuorodos: [{ id, trynimas }] } - ID normalizuojamas, raktas 22 ženklai; kitaip 400", () => {
+    lygu(N.tikrinkTrynima({ nuorodos: [{ id: "7f3k9qx2mo", trynimas: "a".repeat(22) }] }), { ok: true, nuorodos: [{ id: "7F3K9QX2M0", trynimas: "a".repeat(22) }] });
+    lygu([{ nuorodos: [] }, { nuorodos: [{ id: "x", trynimas: "a".repeat(22) }] }, { nuorodos: [{ id: "7F3K9QX2M0", trynimas: "a".repeat(21) }] }, { nuorodos: [{ id: "7F3K9QX2M0", trynimas: "a".repeat(22) }], x: 1 }, null]
+      .map(x => N.tikrinkTrynima(x).parametras), ["nuorodos", "nuorodos", "nuorodos", "nuorodos", "nuorodos"]);
+  });
+  await testas("Maršrutai: GET /api/k/<ID> - be kilmės reikalavimo; POST /api/k ir /api/k/trinti - tik G-Procure kilmė (kitaip 403); OPTIONS - 204 su CORS; kiti - 404 / 405; įvestis neatkartojama", () => {
+    lygu(N.marsrutas("GET", "/api/k/7f3k9qx2mo", undefined).darbas, { tipas: "gauk", id: "7F3K9QX2M0" });
+    lygu(N.marsrutas("POST", "/api/k", "https://g-procure.com").darbas, { tipas: "kurk" });
+    lygu(N.marsrutas("POST", "/api/k/trinti", "http://localhost:8000").darbas, { tipas: "trink" });
+    const st = (m, u, k) => { const r = N.marsrutas(m, u, k); return r.atsakymas ? r.atsakymas.status : r.darbas.tipas; };
+    lygu([st("POST", "/api/k", "https://evil.example"), st("POST", "/api/k", undefined), st("POST", "/api/k/trinti", "null"), st("GET", "/api/k", "https://g-procure.com"),
+      st("DELETE", "/api/k/7F3K9QX2M0"), st("GET", "/api/k/zzz"), st("GET", "/api/k/7F3K9QX2M0?x=1"), st("GET", "/api/kita"), st("GET", "/api/k/busena"), st("POST", "/api/k/busena", "https://g-procure.com"), st("GET", "/api/k/%E0%A4%A")],
+      [403, 403, 403, 405, 405, 404, 404, 404, 200, 405, 404]);
+    const op = N.marsrutas("OPTIONS", "/api/k", "https://g-procure.com").atsakymas;
+    lygu([op.status, op.antrastes["Access-Control-Allow-Origin"], op.antrastes["Access-Control-Allow-Methods"], op.antrastes["Access-Control-Allow-Headers"]], [204, "https://g-procure.com", "GET, POST, OPTIONS", "Content-Type"]);
+    const sv = N.marsrutas("GET", "/api/k/7F3K9QX2M0", "https://evil.example");
+    tiesa(sv.darbas && !N.antrastes("https://evil.example")["Access-Control-Allow-Origin"], "svetimai kilmei - be CORS antraštės (naršyklė atsakymo neperskaitys)");
+    const nr = N.marsrutas("GET", "/api/k/<script>", "https://g-procure.com").atsakymas;
+    tiesa(nr.status === 404 && !/script/.test(nr.kunas), "įvestis neatkartojama");
+    const b = N.marsrutas("GET", "/api/k/busena", undefined, { irasu: 3, paskutineKlaida: null }).atsakymas;
+    lygu(JSON.parse(b.kunas), { versija: N.VERSIJA, irasu: 3, paskutineKlaida: null }, "būsena - be įrašų turinio");
+    lygu([b.antrastes["Cache-Control"], b.antrastes["X-Content-Type-Options"], b.antrastes["Referrer-Policy"]], ["no-store", "nosniff", "no-referrer"]);
+  });
+  const srv = await tekstas("nuorodos-serveris.js"), vn = await tekstas("g-procure-nuorodos.service"), ng = await tekstas("nginx-nuorodos.conf"), lg = await tekstas("nuorodos-logika.js");
+  await testas("Serverio failas: tik Node moduliai ir logika, klausosi 127.0.0.1, į internetą nesijungia, kodas užšifruotas AES-256-GCM raktu iš ID (scrypt), trynimo raktas - tik SHA-256, žurnale - be ID, kodų ir IP", () => {
+    new Function("require", "module", "process", "__dirname", srv.replace(/^#!.*\n/, ""));
+    const req = [...srv.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)].map(m => m[1]);
+    lygu(req.filter(x => !/^node:/.test(x) && x !== "./nuorodos-logika.js"), [], "tik node: ir logika");
+    tiesa(!/node:https|fetch\(|child_process|\beval\s*\(|new Function|vm\.run/.test(srv), "jokių išorinių jungčių ir kodo vykdymo");
+    tiesa(/serveris\.listen\(PORTAS, "127\.0\.0\.1"/.test(srv), "tik 127.0.0.1");
+    tiesa(/crypto\.scrypt\(id, DRUSKA, 64, SCRYPT/.test(srv) && /N: 16384/.test(srv) && /"aes-256-gcm"/.test(srv) && /setAAD/.test(srv) && /getAuthTag/.test(srv), "scrypt ir AES-256-GCM");
+    tiesa(/tr: sha\(trynimas\)/.test(srv) && /timingSafeEqual/.test(srv), "trynimo raktas - maiša, palyginimas pastovaus laiko");
+    tiesa(/crypto\.randomBytes\(L\.ID_ILGIS\)/.test(srv) && /crypto\.randomBytes\(16\)\.toString\("base64url"\)/.test(srv), "ID ir raktas - kriptografiškai atsitiktiniai");
+    const zr = [...srv.matchAll(/zurnalas\(([^;]*)\);/g)].map(m => m[1]);
+    tiesa(zr.length >= 8 && zr.every(z => !/\b(id|kodas|kodai|trynimas|ip|kunas|ind)\b/.test(z.replace(/"[^"]*"/g, ""))), "žurnale - be ID, kodų, raktų ir IP: " + zr.filter(z => /\b(id|kodas|ip)\b/.test(z.replace(/"[^"]*"/g, ""))).join(" | "));
+    tiesa(/rename\(laikinas, FAILAS\)/.test(srv) && /mode: 0o600/.test(srv), "įrašoma atomiškai, tik savininkui");
+    tiesa(/e\.code !== "ENOENT"/.test(srv) && /throw e;/.test(srv), "neperskaitoma saugykla neperrašoma (paslauga sustoja)");
+    tiesa(/L\.MAX_IRASU/.test(srv) && /L\.MAX_KUNO/.test(srv) && /RIBA_GAUK_MIN = 30/.test(srv) && /RIBA_KURK_MIN = 10/.test(srv), "ribos");
+    tiesa(/var ID_RE = \/\^\[0-9A-HJKMNP-TV-Z\]\{10\}\$\//.test(lg) && /MAX_PARTIJOJE = 12/.test(lg), "logikos konstantos");
+  });
+  await testas("systemd: DynamicUser, StateDirectory 0700, prievadas 3004, tik localhost, izoliacija, atminties ribos; nginx: tik /api/k, access_log off, limit_req, kūno ribos, be kitų kelių", () => {
+    ["DynamicUser=yes", "StateDirectory=g-procure-nuorodos", "StateDirectoryMode=0700", "UMask=0077", "Environment=PORT=3004", "IPAddressDeny=any", "IPAddressAllow=localhost",
+      "NoNewPrivileges=yes", "ProtectSystem=strict", "PrivateDevices=yes", "SystemCallFilter=@system-service", "MemoryMax=350M", "ExecStart=/usr/bin/node --max-old-space-size=192 /opt/g-procure-nuorodos/nuorodos-serveris.js"]
+      .forEach(e => tiesa(vn.indexOf(e) >= 0, "vienete trūksta: " + e));
+    tiesa(!/LoadCredential|ReadWritePaths/.test(vn), "raktų ir papildomų rašomų katalogų nėra");
+    lygu([...ng.matchAll(/^location ([^{]+)\{/gm)].map(m => m[1].trim()), ["= /api/k", "^~ /api/k/"], "tik du blokai");
+    lygu((ng.match(/access_log off;/g) || []).length, 2, "prieigos žurnalas išjungtas abiem");
+    lygu((ng.match(/proxy_pass http:\/\/127\.0\.0\.1:3004;/g) || []).length, 2, "tik į 3004");
+    tiesa(/limit_except POST OPTIONS \{ deny all; \}/.test(ng) && /limit_except GET HEAD POST OPTIONS \{ deny all; \}/.test(ng) && /client_max_body_size 200k;/.test(ng) && /client_max_body_size 8k;/.test(ng) && /zone=gp_nuorodos/.test(ng), "metodai, kūnas, riba");
+    tiesa(/rate=30r\/m/.test(ng), "ribos zona aprašyta");
+  });
+}
+
 (async function(){
   try {
     if (!L) throw new Error("cvpis-logika.js neįsikėlė");
@@ -1322,6 +1399,8 @@ async function testaiDiKvota1123(){
     if (!window.GP_DI_KVOTA) throw new Error("di-kvota.js neįsikėlė");
     await testaiDiKvota1123();
     await testaiDiServerioVienetas1123();
+    if (!window.GP_NUORODOS_API) throw new Error("nuorodos-logika.js neįsikėlė");
+    await testaiNuorodos1127();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

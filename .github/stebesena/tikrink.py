@@ -105,6 +105,11 @@ def tikrink():
     if k or not isinstance(d, dict): klaidos.append("Viešų sutarčių paslauga neatsako: " + (k or "netinkamas atsakymas"))
     else: eilutes.append("Viešų sutarčių paslauga - veikia")
 
+    # Trumpos kvietimų nuorodos (nuo 2026-11-27): neveikiant - elektroninės apklausos laiškuose ilgos nuorodos, o jau išsiųstos trumpos neatsiveria
+    d, k = gauk(API + "/api/k/busena")
+    if k or not isinstance(d, dict) or not isinstance(d.get("irasu"), int): klaidos.append("Trumpų nuorodų paslauga neatsako: " + (k or "netinkamas atsakymas"))
+    else: eilutes.append("Trumpų nuorodų paslauga - veikia (%d nuorodų)" % d["irasu"])
+
     tikrink_antrastes()
 
 

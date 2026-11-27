@@ -24,6 +24,7 @@
 ;(function (global) {
   "use strict";
 
+  var TRUMPOS_ID_RE = /^[0-9A-HJKMNP-TV-Z]{10}$/, TRYNIMO_RE = /^[A-Za-z0-9_-]{22}$/;   // kaip serveris/nuorodos-logika.js
   var RIBOS = { pozicijos: 40, tiekejai: 12, tekstas: 3000, trumpas: 300, pavadinimas: 200, kodas: 80000, json: 200000, suma: 1e9 };
   var ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // be O, I, 0, 1 - kad kodą būtų galima perskaityti ir padiktuoti
   var ID_RE = /^GP-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/, ZETONO_RE = /^[A-HJ-NP-Z2-9]{16}$/, HEX64 = /^[0-9a-f]{64}$/;
@@ -331,7 +332,10 @@
         mazaiTiekeju: tekstas(vd.mazaiTiekeju, 1000) },
       tiekejai: (Array.isArray(x.tiekejai) ? x.tiekejai : []).slice(0, RIBOS.tiekejai).map(function (t) {
         t = objektas(t);
-        return { t: ZETONO_RE.test(t.t) ? t.t : "", pav: eilute(t.pav, RIBOS.pavadinimas), pastas: pastas(t.pastas), kalba: t.kalba === "en" ? "en" : "lt", issiusta: laikas(t.issiusta) };
+        var tr = objektas(t.trumpa), x = { t: ZETONO_RE.test(t.t) ? t.t : "", pav: eilute(t.pav, RIBOS.pavadinimas), pastas: pastas(t.pastas), kalba: t.kalba === "en" ? "en" : "lt", issiusta: laikas(t.issiusta) };
+        // trumpa nuoroda (2026-11-27): ID ir trynimo raktas iš G-Procure serverio (serveris/nuorodos-logika.js)
+        if (TRUMPOS_ID_RE.test(tr.id) && TRYNIMO_RE.test(tr.trynimas) && laikas(tr.galioja)) x.trumpa = { id: tr.id, trynimas: tr.trynimas, galioja: laikas(tr.galioja) };
+        return x;
       }).filter(function (t) { if (!t.t || tokenai[t.t]) return false; tokenai[t.t] = true; return true; }),
       pasiulymai: [], atverta: laikas(x.atverta), atvertaAnksciau: x.atvertaAnksciau === true,
       sprendimas: null, pazyma: laikas(x.pazyma), importuota: eilute(x.importuota, 200),

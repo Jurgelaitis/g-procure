@@ -15,7 +15,11 @@
   var A = global.GP_APKLAUSA, doc = global.document;
   if (!A || !doc) return;
   var RAKTAS = "gprocure.apklausos", SCHEMA = 1, RIBA_CVPIS = 15000, RIBA_PAZYMA = 5000, MIN_TIEKEJU = 3, MAILTO_RIBA = 1900;
-  var S = { vaizdas: "", id: "", darbinis: null, klaidos: [], ikelimas: [], nuorodos: {}, patikra: null, laikmatis: null, kiti: [], nezinoma: "" };
+  var S = { vaizdas: "", id: "", darbinis: null, klaidos: [], ikelimas: [], nuorodos: {}, patikra: null, laikmatis: null, kiti: [], nezinoma: "", trumpos: {}, trumposFetch: null };
+  /* Trumpos kvietimų nuorodos (2026-11-27, naudotojo sprendimas): G-Procure serveris saugo kvietimo kodą užšifruotą iki termino + 30 d.
+     (serveris/nuorodos-*.js), laiške - „https://g-procure.com/k/#<ID>“. Nepavykus - laiškuose ilgos nuorodos (jos veikia taip pat). */
+  var TRUMPOS_API = "https://api.g-procure.com/api/k", TRUMPOS_BAZE = "https://g-procure.com/k/#";
+  var TRUMPOS_ID_RE = /^[0-9A-HJKMNP-TV-Z]{10}$/, TRYNIMO_RE = /^[A-Za-z0-9_-]{22}$/;
   var $ = function (id) { return doc.getElementById(id); };
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -139,6 +143,7 @@
           if (buvo !== yra) piesk(); else if (el) el.textContent = A.liko(b.kvietimas.terminas, new Date()).tekstas;
         }, 30000);
         v.setAttribute("data-b", busena(a).k);
+        if (trumposReikia(a)) kurkTrumpas(a);
       });
     }
     return Promise.resolve();
@@ -424,11 +429,74 @@
       if (S.nuorodos[t.t]) return null;
       var kv = JSON.parse(JSON.stringify(a.kvietimas)); kv.tiekejas = { pav: t.pav, pastas: t.pastas }; kv.t = t.t; kv.kalba = t.kalba;
       return A.koduok(kv).then(function (kodas) {
-        var nuoroda = puslapioAdresas() + "#k=" + kodas, l = A.laiskas(a.kvietimas, nuoroda, a.antspaudas, t.kalba);
+        var nuoroda = puslapioAdresas() + "#k=" + kodas, rodoma = t.trumpa ? TRUMPOS_BAZE + t.trumpa.id : nuoroda, l = A.laiskas(a.kvietimas, rodoma, a.antspaudas, t.kalba);
         var href = "mailto:" + encodeURIComponent(t.pastas) + "?subject=" + encodeURIComponent(l.tema) + "&body=" + encodeURIComponent(l.tekstas);
-        S.nuorodos[t.t] = { nuoroda: nuoroda, laiskas: l, mailto: href.length <= MAILTO_RIBA ? href : "mailto:" + encodeURIComponent(t.pastas) + "?subject=" + encodeURIComponent(l.tema), visas: href.length <= MAILTO_RIBA };
+        S.nuorodos[t.t] = { nuoroda: nuoroda, rodoma: rodoma, trumpa: !!t.trumpa, kodas: kodas, laiskas: l,
+          mailto: href.length <= MAILTO_RIBA ? href : "mailto:" + encodeURIComponent(t.pastas) + "?subject=" + encodeURIComponent(l.tema), visas: href.length <= MAILTO_RIBA };
       });
     }));
+  }
+
+  /* ---------- trumpos nuorodos (G-Procure serveris) ---------- */
+  function trumposFetch() {
+    if (S.trumposFetch) return S.trumposFetch;
+    var o = ""; try { o = global.location.origin; } catch (e) { /* nėra */ }
+    return (o === "https://g-procure.com" || o === "https://www.g-procure.com" || /^http:\/\/(localhost|127\.0\.0\.1):8000$/.test(o)) && global.fetch ? global.fetch.bind(global) : null;
+  }
+  function trumposReikia(a) {
+    return !!(trumposFetch() && a.busena === "paskelbta" && a.antspaudas && !praejo(a) && !S.trumpos[a.id] && a.tiekejai.some(function (t) { return !t.trumpa; }));
+  }
+  function trumposKlaida(status, j) {
+    if (status === 404 && !(j && j.klaida)) return "paslauga G-Procure serveryje dar neįdiegta";
+    if (status === 429) return "per daug užklausų - bandykite po minutės";
+    if (j && typeof j.klaida === "string") return j.klaida.slice(0, 200);
+    return status ? "G-Procure serveris atsakė klaida (HTTP " + status + ")" : "nepavyko pasiekti G-Procure serverio";
+  }
+  function trumposUzklausa(f, kelias, kunas) {
+    return f(TRUMPOS_API + kelias, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(kunas), credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store" })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, ok: r.ok, j: j }; }); },
+        function () { return { status: 0, ok: false, j: null }; });
+  }
+  /* Kuriamos tik trūkstamos nuorodos; įrašoma į apklausą, perskaitytą iš naujo (kad nebūtų perrašyti tuo metu padaryti pakeitimai). */
+  function kurkTrumpas(a) {
+    var f = trumposFetch();
+    var tk = a.tiekejai.filter(function (t) { return !t.trumpa && S.nuorodos[t.t] && S.nuorodos[t.t].kodas; });
+    if (!f || !tk.length) return Promise.resolve(false);
+    S.trumpos[a.id] = { busena: "kuriama" };
+    return trumposUzklausa(f, "", { iki: a.kvietimas.terminas, kodai: tk.map(function (t) { return S.nuorodos[t.t].kodas; }) }).then(function (x) {
+      var n = x.j && Array.isArray(x.j.nuorodos) ? x.j.nuorodos : [];
+      var gerai = x.ok && n.length === tk.length && n.every(function (y) { return y && TRUMPOS_ID_RE.test(y.id) && TRYNIMO_RE.test(y.trynimas); }) && typeof x.j.galioja === "string" && isFinite(Date.parse(x.j.galioja));
+      if (!gerai) { S.trumpos[a.id] = { busena: "klaida", tekstas: trumposKlaida(x.status, x.j) }; return false; }
+      var b = gauk(a.id); if (!b) return false;
+      tk.forEach(function (t, i) {
+        var bt = tiekejas(b, t.t);
+        if (bt && !bt.trumpa) { bt.trumpa = { id: n[i].id, trynimas: n[i].trynimas, galioja: x.j.galioja.replace(/\.\d{3}Z$/, "Z") }; delete S.nuorodos[t.t]; }
+      });
+      issaugok(b); S.trumpos[a.id] = null;
+      return true;
+    }).then(function (ok) {
+      if (S.vaizdas !== "apklausa" || S.id !== a.id) return ok;
+      var ae = doc.activeElement, v = $("ea-vieta"), sel = S.trumposFokusas ? ".ea-trumpos" : null;
+      S.trumposFokusas = false;
+      if (!sel && ae && v && v.contains(ae)) sel = ae.id ? "#" + ae.id : ae.classList.contains("ea-trumpos") ? ".ea-trumpos" : ae.getAttribute("data-veiksmas") ? '[data-veiksmas="' + ae.getAttribute("data-veiksmas") + '"]' + (ae.getAttribute("data-t") ? '[data-t="' + ae.getAttribute("data-t") + '"]' : "") : null;
+      return piesk().then(function () { if (sel) { var e = v.querySelector(sel); if (e) e.focus(); } return ok; });
+    });
+  }
+  /* Nutraukus ar ištrynus apklausą - nuorodos ištrinamos iš serverio (nepavykus jos baigs galioti pačios). */
+  function trinkTrumpas(a) {
+    var f = trumposFetch(), sar = a.tiekejai.filter(function (t) { return t.trumpa; }).map(function (t) { return { id: t.trumpa.id, trynimas: t.trumpa.trynimas }; });
+    if (!f || !sar.length) return Promise.resolve(false);
+    return trumposUzklausa(f, "/trinti", { nuorodos: sar }).then(function (x) { return !!(x.ok && x.j && typeof x.j.istrinta === "number"); });
+  }
+  function trumposPastabaHtml(a) {
+    if (!trumposFetch()) return "";
+    var b = S.trumpos[a.id], visos = a.tiekejai.length && a.tiekejai.every(function (t) { return t.trumpa; });
+    if (b && b.busena === "klaida") return '<div class="ea-pastaba ea-pastaba--demesio ea-trumpos" role="status" tabindex="-1"><strong>Trumpų nuorodų sukurti nepavyko</strong>' + esc(b.tekstas) +
+      '. Laiškuose bus ilgos nuorodos - jos veikia taip pat.<div class="ea-eile" style="margin-top:8px"><button type="button" class="ea-btn ea-btn--maz" data-veiksmas="eaTrumpos">Bandyti dar kartą</button></div></div>';
+    if (b && b.busena === "kuriama") return '<div class="ea-uzuomina ea-trumpos" role="status" tabindex="-1">Ruošiamos trumpos nuorodos…</div>';
+    if (visos) return '<div class="ea-uzuomina ea-trumpos" tabindex="-1">Laiškuose - trumpos nuorodos (g-procure.com/k/…). Kvietimai G-Procure serveryje saugomi užšifruoti iki ' +
+      esc(A.rodykLaika(a.tiekejai.map(function (t) { return t.trumpa.galioja; }).sort().pop()).slice(0, 10)) + ' ir ištrinami, kai apklausą nutraukiate ar ištrinate.</div>';
+    return "";
   }
 
   /* ---------- apklausos vaizdas ---------- */
@@ -497,11 +565,11 @@
         sekaMygtukas(dabar, 'Atverti dar kartą', "", false) +
         '<button type="button" class="ea-btn ea-btn--tylus" data-veiksmas="eaKopijuok" data-t="' + esc(dabar.t) + '" data-ka="laiskas">Kopijuoti laiško tekstą</button></div>';
     }
-    return s + '<div class="ea-uzuomina" style="margin-top:8px">Kiekvienam tiekėjui - atskiras laiškas su asmenine nuoroda. Visus laiškus galite matyti ir siųsti ir skiltyje „Kvietimai“ žemiau.</div></section>';
+    return s + trumposPastabaHtml(a) + '<div class="ea-uzuomina" style="margin-top:8px">Kiekvienam tiekėjui - atskiras laiškas su asmenine nuoroda. Visus laiškus galite matyti ir siųsti ir skiltyje „Kvietimai“ žemiau.</div></section>';
   }
   function kvietimuHtml(a, suskleista, beVeiksmu) {
     var s = '<section class="ea-card" aria-labelledby="ea-kv-h"><details' + (suskleista ? "" : " open") + '><summary id="ea-kv-h">Kvietimai (' + a.tiekejai.filter(function (t) { return t.issiusta; }).length + ' iš ' + a.tiekejai.length + ' išsiųsta)</summary>' +
-      '<p class="ea-sub" style="margin-bottom:12px">Laišką išsiunčiate iš savo el. pašto: taip kvietimas ir tiekėjo atsakymas lieka jūsų pašte kaip įrodymas. Kvietimo antspaudas: <span class="ea-antsp">' + esc(A.trumpas(a.antspaudas)) + '</span></p><div class="ea-tiek">';
+      '<p class="ea-sub" style="margin-bottom:12px">Laišką išsiunčiate iš savo el. pašto: taip kvietimas ir tiekėjo atsakymas lieka jūsų pašte kaip įrodymas. Kvietimo antspaudas: <span class="ea-antsp">' + esc(A.trumpas(a.antspaudas)) + '</span></p>' + (beVeiksmu ? "" : trumposPastabaHtml(a)) + '<div class="ea-tiek">';
     a.tiekejai.forEach(function (t) {
       var n = S.nuorodos[t.t] || {}, p = pasiulymas(a, t.t);
       s += '<div class="ea-tk" data-b="' + (p ? "gauta" : "laukiama") + '" data-tiekejas="' + esc(t.t) + '"><div><div class="ea-tk-pav">' + esc(t.pav) + '</div><div class="ea-tk-meta">' + esc(t.pastas) + ' · kvietimas ' + (t.kalba === "en" ? "anglų k." : "lietuvių k.") + '</div></div>' +
@@ -929,8 +997,9 @@
     eaLaiskas: function (el) { var n = S.nuorodos[el.getAttribute("data-t")]; if (!n) return false; },
     eaKopijuok: function (el) {
       var n = S.nuorodos[el.getAttribute("data-t")], ka = el.getAttribute("data-ka"); if (!n) return;
-      global.GP_KOPIJA.kopijuok(ka === "nuoroda" ? n.nuoroda : n.laiskas.tema + "\n\n" + n.laiskas.tekstas, { sekme: ka === "nuoroda" ? "Nuoroda nukopijuota" : "Laiško tema ir tekstas nukopijuoti" });
+      global.GP_KOPIJA.kopijuok(ka === "nuoroda" ? n.rodoma : n.laiskas.tema + "\n\n" + n.laiskas.tekstas, { sekme: ka === "nuoroda" ? "Nuoroda nukopijuota" : "Laiško tema ir tekstas nukopijuoti" });
     },
+    eaTrumpos: function () { var a = gauk(S.id); if (!a) return; S.trumpos[a.id] = null; S.trumposFokusas = true; piesk().then(function () { var e = doc.querySelector("#ea-vieta .ea-trumpos"); if (e) e.focus(); }); },
     eaSeka: function (el) {
       var a = gauk(S.id); if (!a) return false;
       var t = el.getAttribute("data-t"), buvo = el.getAttribute("data-buvo"), n = t ? S.nuorodos[t] : null, darbas = Promise.resolve();
@@ -1007,7 +1076,11 @@
       if (kodel === null) return;
       if (!String(kodel).trim()) { pranesk("Apklausa nenutraukta: nenurodyta priežastis.", "ispejimas"); return; }
       a.busena = "nutraukta"; a.sprendimas = { rezultatas: "nutraukta", laimetojas: "", neatitinka: (a.sprendimas || {}).neatitinka || {}, atitinka: (a.sprendimas || {}).atitinka || {}, pastaba: String(kodel).slice(0, 1000), patvirtinta: dabarIso() };
-      irasas(a, "nutraukta", String(kodel).slice(0, 300)).then(function () { issaugok(a); perpiesk("ea-hero-h"); });
+      irasas(a, "nutraukta", String(kodel).slice(0, 300)).then(function () { issaugok(a); perpiesk("ea-hero-h"); return trinkTrumpas(a); }).then(function (ok) {
+        if (!ok) return;
+        var b = gauk(a.id); if (!b) return;
+        b.tiekejai.forEach(function (t) { delete t.trumpa; }); issaugok(b); S.nuorodos = {};
+      });
     },
     eaPazyma: function () {
       var a = gauk(S.id); if (!a || !a.sprendimas || !a.sprendimas.patvirtinta || ["ivertinta", "uzbaigta"].indexOf(a.busena) < 0) return;
@@ -1021,7 +1094,7 @@
     eaTrink: function (el) {
       var id = el.getAttribute("data-id"), a = gauk(id); if (!a) { S.darbinis = null; rodyk("registras"); return; }
       if (!global.confirm(a.busena === "juodrastis" ? "Ištrinti šį apklausos juodraštį?" : "Ištrinti apklausą " + a.id + "?\n\nKartu bus ištrinti įkelti pasiūlymai ir žurnalas. Šio veiksmo atšaukti negalima - jei duomenų dar gali prireikti, pirma atsisiųskite apklausos bylą.")) return;
-      if (salink(id)) { S.darbinis = null; darbasIssaugotas(); pranesk("Apklausa ištrinta."); rodyk("registras"); }
+      if (salink(id)) { trinkTrumpas(a); S.darbinis = null; darbasIssaugotas(); pranesk("Apklausa ištrinta."); rodyk("registras"); }
     },
     eaCsv: function () { atsisiusk(failoVardas(null, "Elektroninių-apklausų-sąrašas", "csv"), csv(), "text/csv;charset=utf-8"); },
     eaBylaIkelk: function () { $("ea-bylos-failas").click(); },
@@ -1036,7 +1109,8 @@
   global.GP_APKLAUSA_UI = {
     RAKTAS: RAKTAS, atnaujinkKortele: atnaujinkKortele, rodyk: rodyk, slepk: slepk, busena: busena, vertink: vertink, pazymosDuomenys: pazymosDuomenys, uzpildykPazyma: uzpildykPazyma,
     skaitykVisas: skaitykVisas, gauk: gauk, issaugok: issaugok, nauja: nauja, ikelkTeksta: ikelkTeksta, atverkPasiulymus: atverkPasiulymus, patvirtink: patvirtink, ikelkByla: ikelkByla, csv: csv,
-    pozIsTeksto: pozIsTeksto, tikrinkKurima: tikrinkKurima, paruoskNuorodas: paruoskNuorodas, busenaS: function () { return S; }, naudokSaugykla: function (s) { S.saugykla = s; }
+    pozIsTeksto: pozIsTeksto, tikrinkKurima: tikrinkKurima, paruoskNuorodas: paruoskNuorodas, busenaS: function () { return S; }, naudokSaugykla: function (s) { S.saugykla = s; },
+    naudokTrumpas: function (f) { S.trumposFetch = f || null; S.trumpos = {}; }, kurkTrumpas: kurkTrumpas, trinkTrumpas: trinkTrumpas
   };
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", atnaujinkKortele); else atnaujinkKortele();
 })(typeof window !== "undefined" ? window : this);
