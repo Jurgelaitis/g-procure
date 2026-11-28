@@ -47,6 +47,15 @@
     }).join("\n");
   }
 
+  /* Word ir Pages tekstą laužo ties tarpu ir brūkšneliu: sumos (6 275 605,17), procentai, „Nr. X“ ir numeriai su skaitmenimis
+     (24VP-SUT-0317, LT-01100) nelaužomi. Tarpams - nelaužomas tarpas (U+00A0), brūkšneliui - jungiamieji ženklai be pločio (U+2060)
+     iš abiejų pusių: Pages Word elemento „noBreakHyphen“ nerodo visai (brūkšnelis dingsta), o U+2060 išlaiko tikrą brūkšnelį ir PDF
+     tekste (paieška pagal numerį veikia). Tik Word failui - kopijuojamas tekstas ir peržiūra nekeičiami. */
+  function nelauzomi(t) {
+    return t.split(/(\s+)/).map(function (w) { return /\d/.test(w) ? w.replace(/([\p{L}\p{N}])-(?=[\p{L}\p{N}])/gu, "$1\u2060-\u2060") : w; }).join("")
+      .replace(/(\d) (?=\d{3}(?!\d))/g, "$1\u00A0").replace(/(\d) (?=%|Eur\b)/g, "$1\u00A0").replace(/\bNr\. (?=\S)/g, "Nr.\u00A0");
+  }
+
   var A4 = { w: 11906, h: 16838 }, PARASTES = { top: 1134, bottom: 1134, left: 1701, right: 567 }, PLOTIS = A4.w - PARASTES.left - PARASTES.right;
 
   /* docx(dok, { pastaba }) -> Promise<Blob>. Reikia docx.js (window.docx) ir GP_DOCX_STILIAI. */
@@ -54,7 +63,7 @@
     o = o || {};
     if (!global.docx || !global.GP_DOCX_STILIAI) return Promise.reject(new Error("Word biblioteka neįsikėlė"));
     var S = global.GP_DOCX_STILIAI, D = S.oficialus(global.docx), ch = [];
-    function run(t, p) { return new D.TextRun(Object.assign({ text: String(t == null ? "" : t) }, p || {})); }
+    function run(t, p) { return new D.TextRun(Object.assign({ text: nelauzomi(String(t == null ? "" : t)) }, p || {})); }
     function par(vaikai, p) { return new D.Paragraph(Object.assign({ children: vaikai, spacing: { after: 120 }, alignment: D.AlignmentType.BOTH }, p || {})); }
     function sunumeruotas(nr, t, kaire, kabanti, p) {
       return par([run(nr + "\t" + t)], Object.assign({ indent: { left: kaire, hanging: kabanti }, tabStops: [{ type: D.TabStopType.LEFT, position: kaire }] }, p || {}));
@@ -99,5 +108,5 @@
     return D.Packer.toBlob(doc);
   }
 
-  global.GP_PAKEITIMU_DOK = { html: html, tekstas: tekstas, docx: docx, PLOTIS: PLOTIS };
+  global.GP_PAKEITIMU_DOK = { html: html, tekstas: tekstas, docx: docx, nelauzomi: nelauzomi, PLOTIS: PLOTIS };
 })(typeof window !== "undefined" ? window : this);

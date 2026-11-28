@@ -43,6 +43,7 @@ Sąsajos testai dirba su saugykla tik atmintyje (?saugykla=testine); į Oficiali
 <script src="../shared/saugykla.js"></script>
 <script src="../shared/money.js"></script>
 <script src="../shared/thresholds.js"></script>
+<script src="../shared/specialiosios-paslaugos.js"></script>
 <script src="../shared/workdays.js"></script>
 <script src="../shared/organizacijos.js"></script>
 <script src="../shared/teises-nuorodos.js"></script>
@@ -79,7 +80,7 @@ function sutartis(forma, keisk){
 }
 function indBlokas(S, keisk){
   const b = G.naujasBlokas("ind", S);
-  b.pradzia = "2024-10"; b.pabaiga = "2026-09"; b.rastoData = "2026-11-03"; b.garantija = b.garantija === "netaikoma" ? "netaikoma" : "ne";
+  b.pradzia = "2024-10"; b.pabaiga = "2026-09"; b.rastoData = "2026-11-03"; b.darbuAktoData = "2026-10-31"; b.garantija = b.garantija === "netaikoma" ? "netaikoma" : "ne";
   if (keisk) keisk(b);
   S.rengiamas.blokai.push(b);
   return b;
@@ -99,7 +100,7 @@ async function testaiSkaiciavimas(){
     lygu(r.nauja, 5226870.9, "nauja Sutarties kaina = kaina iki pakeitimo + skirtumas");
     lygu(r.pokytisEur, 226870.9);
     tiesa(r.slenkstis && r.slenkstis.pasiektas === true && !r.slenkstis.ribinis, "riba pasiekta");
-    lygu(r.laikotarpis, { reikia: 6, men: 23, tinka: true });
+    lygu([r.laikotarpis.reikia, r.laikotarpis.men, r.laikotarpis.tinka, r.laikotarpis.nuo, r.laikotarpis.iki], [6, 23, true, "2024-10-14", "2026-10-31"], "laikotarpis pagal datas: pasiūlymų termino pabaiga - paskutinis atliktų darbų aktas");
     tiesa(r.tinka, "skaičiavimas tinkamas");
     lygu(r.pvm, { pvm: 1097642.89, viso: 6324513.79, tarifas: window.GP_THRESHOLDS.MOKESCIAI.pvmStandartinis }, "PVM iš bendro tarifo");
     tiesa(Math.abs(r.pokytisProc - 4.537418) < 1e-6, "pokytis nuo pradinės kainos");
@@ -143,9 +144,17 @@ async function testaiSkaiciavimas(){
     tiesa(r.slenkstis.pasiektas === false && !r.slenkstis.ribinis && !r.tinka, "4,99 % netinka");
     reiksmes(b, 0, 100, 104.996, 1000000);
     r = G.skaiciuokInd(b, S);
-    tiesa(r.slenkstis.pasiektas === false && r.slenkstis.ribinis, "4,996 % - priklauso nuo apvalinimo");
-    const p = G.blokoPatikros(b, S, 0).filter(x => /apvalinimo/.test(x.tekstas))[0];
-    tiesa(p && p.lygis === "tikrinti" && p.laukas === "b0.slenkstis", "ribinis atvejis - „Patikrinkite“ su nuoroda į ribą");
+    tiesa(r.slenkstis.pasiektas === false && r.slenkstis.ribinis && !r.tinka, "4,996 % - sąlyga tikrinama pagal apskaičiuotą pokytį, todėl neįvykdyta");
+    const p = G.blokoPatikros(b, S, 0).filter(x => /apskaičiuotą pokytį/.test(x.tekstas))[0];
+    tiesa(p && p.lygis === "klaida" && p.laukas === "b0.slenkstis" && /iki 2 skaitmenų suapvalintas pokytis \(5,00 %\) ribą pasiektų/.test(p.tekstas), "ribinis atvejis - klaida su paaiškinimu: " + (p && p.tekstas));
+    tiesa(G.rezultatas(S).nevykdyta && G.kliuciu(S) > 0 && /perskaičiuota Sutarties kaina yra __________ Eur be PVM\./.test(DK.tekstas(G.susitarimas(S))), "kortelė, Word blokavimas ir susitarimo tekstas sutampa - kaina neįrašoma");
+    /* prekių ir paslaugų forma: k = 5,04 % viršija 5 % (SS 5.3.1.2.1), o kainai taikomas suapvalintas k = 5,0 % (5.3.1.2.7) */
+    const S2 = sutartis("PREKES", x => { x.sutartis.isigaliojo = "2024-11-20"; x.sutartis.pradineVerte = 100000; }), b2 = indBlokas(S2, x => { x.pradzia = "2025-03"; x.pabaiga = "2025-10"; x.rastoData = "2025-11-03"; });
+    reiksmes(b2, 0, 100, 105.04, 100000);
+    const r2 = G.skaiciuokInd(b2, S2), p2 = G.blokoPatikros(b2, S2, 0).filter(x => /apskaičiuotą pokytį/.test(x.tekstas))[0];
+    tiesa(r2.slenkstis.pasiektas === true && r2.slenkstis.ribinis && r2.tinka && r2.eilutes[0].K === 5 && r2.nauja === 105000, "5,04 % - sąlyga įvykdyta, kaina +5,0 %: " + JSON.stringify([r2.eilutes[0].K, r2.nauja]));
+    tiesa(p2 && p2.lygis === "tikrinti" && /sąlyga įvykdyta/.test(p2.tekstas) && /suapvalintas pokytis k \(5,0 %\)/.test(p2.tekstas), "paaiškinimas: " + (p2 && p2.tekstas));
+    tiesa(!G.rezultatas(S2).nevykdyta && /perskaičiuota Sutarties kaina yra 105 000,00 Eur be PVM/.test(DK.tekstas(G.susitarimas(S2))), "susitarime - perskaičiuota kaina");
   });
   await testas("Indekso sumažėjimas: su riba lyginamas pokyčio dydis - sumažėjus 8 % kaina mažinama, sumažėjus 3 % - neperskaičiuojama", async () => {
     const S = sutartis("EKS"), b = indBlokas(S);
@@ -159,17 +168,33 @@ async function testaiSkaiciavimas(){
     tiesa(r.slenkstis.pasiektas === false && !r.tinka, "sumažėjimas 3 % ribos nesiekia");
   });
   await testas("Laikotarpis: trumpesnis už nustatytą - klaida; darbų pirkimo-pardavimo sutarties pirmam perskaičiavimui netaikomas", async () => {
-    const S = sutartis("EKS"), b = indBlokas(S, x => { x.pabaiga = "2025-02"; });
+    /* rangos ir eksploatavimo formos: nuo pasiūlymų termino pabaigos iki paskutinio atliktų darbų akto - datomis */
+    const S = sutartis("EKS"), b = indBlokas(S, x => { x.pabaiga = "2025-02"; x.darbuAktoData = "2025-04-13"; });
     reiksmes(b, 0, 100, 110, 1000); reiksmes(b, 1, 100, 110); reiksmes(b, 2, 100, 110);
     let r = G.skaiciuokInd(b, S);
-    lygu(r.laikotarpis, { reikia: 6, men: 4, tinka: false }); tiesa(!r.tinka);
-    tiesa(G.blokoPatikros(b, S, 0).some(p => p.lygis === "klaida" && /4 mėn\., o Sutartyje nustatyta ne trumpesnis kaip 6 mėn\./.test(p.tekstas)));
-    b.pabaiga = "2025-04";
-    lygu(G.skaiciuokInd(b, S).laikotarpis.tinka, true, "lygiai 6 mėn. tinka");
-    const S2 = sutartis("DARBAI"), b2 = indBlokas(S2, x => { x.pabaiga = "2025-02"; x.punktas = "4.5"; });
+    lygu([r.laikotarpis.tinka, r.laikotarpis.leidziama, r.laikotarpis.datos], [false, "2025-04-14", "akto"]); tiesa(!r.tinka);
+    tiesa(G.blokoPatikros(b, S, 0).some(p => p.lygis === "klaida" && p.laukas === "b0.darbuAktoData" && /trumpesnis nei 6 mėn\., nustatyti Sutartyje: jie sueina 2025 m\. balandžio 14 d\./.test(p.tekstas)), "klaida su data, nuo kada galima");
+    b.darbuAktoData = "2025-04-14";
+    lygu(G.skaiciuokInd(b, S).laikotarpis.tinka, true, "lygiai 6 mėn. tinka (indeksų mėnesių tik 4 - neblokuoja)");
+    b.darbuAktoData = "";
+    r = G.skaiciuokInd(b, S);
+    tiesa(r.laikotarpis.tinka === null && G.blokoPatikros(b, S, 0).some(p => p.lygis === "tikrinti" && /skaičiuojamas datomis - įrašykite paskutinio atliktų darbų akto \(pažymos\) datą\. Pagal indeksų mėnesius - 4 mėn\./.test(p.tekstas)), "be datos - „Patikrinkite“, ne kliūtis");
+    const S2 = sutartis("DARBAI"), b2 = indBlokas(S2, x => { x.pabaiga = "2025-02"; x.punktas = "4.5"; x.darbuAktoData = "2025-02-28"; });
     lygu(G.skaiciuokInd(b2, S2).laikotarpis, { reikia: null, men: 4, tinka: true }, "pirmam perskaičiavimui terminas netaikomas");
     b2.pirmas = false;
     lygu(G.skaiciuokInd(b2, S2).laikotarpis.tinka, false, "vėlesniam - taikomas");
+    /* prekių ir paslaugų forma: kreiptis ne anksčiau kaip po 6 mėn. nuo įsigaliojimo (po perskaičiavimo - nuo jo susitarimo) */
+    const S3 = sutartis("PREKES", x => { x.sutartis.isigaliojo = "2026-03-10"; }), b3p = indBlokas(S3, x => { x.pradzia = "2026-03"; x.pabaiga = "2026-08"; x.rastoData = "2026-09-15"; });
+    reiksmes(b3p, 0, 100, 107, 100000);
+    lygu([G.skaiciuokInd(b3p, S3).laikotarpis.tinka, G.skaiciuokInd(b3p, S3).men], [true, 5], "6 mėn. nuo įsigaliojimo praėjo - tinka, nors indeksų mėnesių 5");
+    S3.ankstesni.push({ nr: "1", data: "2026-10-20", regNr: "26VP-SUTP-9", esme: "kainos perskaičiavimo", pokytis: 7000, pagrindas: "", indMenuo: "2026-08", saltinis: "ranka" });
+    Object.assign(b3p, { pradzia: "2026-08", pabaiga: "2027-02", rastoData: "2027-03-15", pirmas: false });
+    r = G.skaiciuokInd(b3p, S3);
+    lygu([r.laikotarpis.tinka, r.laikotarpis.nuo, r.laikotarpis.leidziama, r.men], [false, "2026-10-20", "2027-04-20", 6], "nuo paskutinio perskaičiavimo susitarimo nepraėjo 6 mėn. - klaida, nors indeksų mėnesių 6");
+    /* projektavimo paslaugų forma - indekso pokytis per 6 mėn.: lyginami indeksų mėnesiai */
+    const S4 = sutartis("PPS"), b4 = indBlokas(S4, x => { x.pabaiga = "2025-02"; });
+    reiksmes(b4, 0, 100, 110, 1000);
+    lygu(G.skaiciuokInd(b4, S4).laikotarpis, { reikia: 6, men: 4, tinka: false }, "projektavimo paslaugos - indeksų mėnesiai");
     const b3 = indBlokas(sutartis("EKS"), x => { x.pabaiga = "2024-09"; });
     tiesa(G.skaiciuokInd(b3, sutartis("EKS")).klaidos.some(k => /pabaiga turi būti vėlesnė/.test(k)), "pabaiga ankstesnė už pradžią");
   });
@@ -240,12 +265,12 @@ async function testaiDokumentai(){
     lygu(punktai.map(x => x.nr), punktai.map((x, i) => (i + 1) + "."), "punktų numeriai iš eilės");
     tiesa(/^Perskaičiuoti Sutarties kainą Sutarties bendrųjų sąlygų 7\.3 punkte nustatyta tvarka, naudojant šias Valstybės duomenų agentūros Oficialiosios statistikos portale skelbiamų indeksų reikšmes:$/.test(punktai[0].tekstas), punktai[0].tekstas);
     tiesa(t.indexOf("- Statybos sąnaudų elementų kainų indekso „Visos statybos sąnaudos“ reikšmė laikotarpio pradžioje (2024 m. spalio mėn.) - 126,8680;") >= 0, "indekso reikšmė kilmininku");
-    tiesa(/pokytis - 6,73 %, pokyčio koeficientas K = 1,0673132705, taikomas likusiai neaktuotai Sutarties kainai;/.test(t), "koeficientas neapvalintas (10 skaitmenų)");
+    tiesa(/pokytis yra 6,73 %, pokyčio koeficientas K = 1,0673132705, taikomas likusiai neaktuotai Sutarties kainai;/.test(t), "koeficientas neapvalintas (10 skaitmenų)");
     tiesa(/^Pakeisti Sutarties specialiųjų sąlygų 7 punkte nurodytą Sutarties kainą ir nustatyti, kad perskaičiuota Sutarties kaina yra 5 226 870,90 Eur be PVM, PVM - 1 097 642,89 Eur, iš viso - 6 324 513,79 Eur su PVM\.$/.test(punktai[1].tekstas), punktai[1].tekstas);
     tiesa(/^Pakeisti Sutarties 5 priedą „Subrangovų sąrašas“, į jį įtraukiant subrangovą UAB „Ryšių darbai“\.$/.test(punktai.filter(x => /5 priedą/.test(x.tekstas))[0].tekstas), "subrangovo punktas");
     tiesa(/Rangovas užtikrina ir atsako už subrangovui UAB „Ryšių darbai“ perduotų įsipareigojimų tinkamą įvykdymą\./.test(t));
-    tiesa(/Pakeisti Sutarties specialiųjų sąlygų 17 punktą ir išdėstyti jį taip:/.test(t) && B.filter(x => x.t === "citata").map(x => x.tekstas).join("|") === "„17.1. Užsakovo atstovas - projektų vadovas.|17.2. Kontaktai nurodomi rašytiniu pranešimu.“.", "nauja punkto redakcija kabutėse");
-    tiesa(/Pasikeitus Užsakovo projekto vadovui, todėl keičiami Užsakovo atsakingi asmenys, nurodyti Sutarties specialiųjų sąlygų 17 punkte/.test(t), "atsakingų asmenų priežastis");
+    tiesa(/Pakeisti Sutarties specialiųjų sąlygų 17 punktą ir išdėstyti jį taip:/.test(t) && B.filter(x => x.t === "citata").map(x => x.tekstas).join("|") === "„17.1. Užsakovo atstovas - projektų vadovas.|17.2. Kontaktai nurodomi rašytiniu pranešimu.“", "nauja punkto redakcija kabutėse");
+    tiesa(/Pasikeitus Užsakovo projekto vadovui, keičiami Užsakovo atsakingi asmenys, nurodyti Sutarties specialiųjų sąlygų 17 punkte/.test(t), "atsakingų asmenų priežastis");
     const pap = B.filter(x => x.t === "papunktis");
     lygu(pap.map(x => x.tekstas), ["1 priedas. Rangovo 2026 m. lapkričio 3 d. raštas Nr. S-123.", "2 priedas. Perskaičiavimo aktas.", "3 priedas. Sutarties kainos perskaičiavimo skaičiavimas.", "4 priedas. Perskaičiuoti įkainiai.",
       "5 priedas. Rangovo 2026 m. lapkričio 10 d. raštas Nr. S-130 su priedais.", "6 priedas. Sutarties 5 priedas „Subrangovų sąrašas“ (nauja redakcija)."], "priedų sąrašas");
@@ -298,7 +323,7 @@ async function testaiDokumentai(){
     const S = pilna(), sk = G.skaiciavimoDok(S), pg = G.pagrindimoDok(S, { pasirasyta: "2026-11-30" }), ts = tekstas(sk), tp = tekstas(pg);
     tiesa(/SUTARTIES KAINOS PERSKAIČIAVIMO SKAIČIAVIMAS/.test(ts) && /Laikotarpis\t2024 m\. spalio mėn\. - 2026 m\. rugsėjo mėn\. \(23 mėn\.\)/.test(ts), ts.slice(0, 600));
     tiesa(/Sutarties kaina\t5 000 000,00\t5 226 870,90\t226 870,90/.test(ts), "kainos eilutė");
-    tiesa(/Skaičiavimas: K = pabaigos reikšmė \/ pradžios reikšmė; perskaičiuota suma = suma x K\./.test(ts) && /Indeksų reikšmių šaltinis: Valstybės duomenų agentūra/.test(ts), "formulė ir šaltinis");
+    tiesa(/Skaičiavimas: K = pabaigos reikšmė \/ pradžios reikšmė; perskaičiuota suma = suma × K\./.test(ts) && /Indeksų reikšmių šaltinis: Valstybės duomenų agentūra/.test(ts), "formulė ir šaltinis");
     tiesa(/Vidaus dokumentas susitarimui Nr\. 2 derinti\. Neskelbiamas\./.test(tp) && /Pagrindas: PĮ 97 str\. 1 d\. 1 p\. - iš anksto numatyta peržiūros sąlyga ar pasirinkimo galimybė\./.test(tp), "pagrindimo antraštė ir pagrindas");
     tiesa(/Terminas: 2026-12-15\./.test(tp), "viešinimo terminas - 15 dienų nuo pasirašymo: " + tp.slice(-900));
     tiesa(/nėra teisinė išvada/.test(tp));
@@ -684,6 +709,236 @@ async function testaiEtapas2(){
   });
 }
 
+async function testaiDokumentoPatikra1128(){
+  grupe("Susitarimo tekstas Word ir Pages programose (2026-11-28 patikra)");
+  await testas("Word failas: numeriai ir sumos nelūžta (U+2060 aplink brūkšnelį, nelaužomi tarpai), kopijuojamas tekstas nepakitęs", async () => {
+    lygu(DK.nelauzomi("Sutartis Nr. 24VP-SUT-0317, kaina 6 275 605,17 Eur, pokytis 6,73 %, Jurbarkas-Raseiniai, LT-01100 Vilnius"),
+      "Sutartis Nr. 24VP⁠-⁠SUT⁠-⁠0317, kaina 6 275 605,17 Eur, pokytis 6,73 %, Jurbarkas-Raseiniai, LT⁠-⁠01100 Vilnius");
+    lygu(DK.nelauzomi("toliau - Sutartis; 2024 m. - 2026 m."), "toliau - Sutartis; 2024 m. - 2026 m.", "brūkšnys tarp tarpų ir žodžiai be skaitmenų nekeičiami");
+    const S = sutartis("EKS"); S.rengiamas.blokai.push(Object.assign(G.naujasBlokas("asm", S), { kieno: "pirkejo", punktas: "17", redakcija: "17.1. Užsakovo atstovas - projektų vadovas." }));
+    const dok = G.susitarimas(S), x = await (await JSZip.loadAsync(await DK.docx(dok))).file("word/document.xml").async("string");
+    tiesa(x.indexOf("Nr. 24VP⁠-⁠SUT⁠-⁠001") >= 0, "Word faile sutarties numeris nelaužomas");
+    tiesa(DK.tekstas(dok).indexOf("Nr. 24VP-SUT-001") >= 0 && !/[ ⁠]/.test(DK.tekstas(dok)) && !/[⁠]/.test(DK.html(dok)), "kopijuojamas tekstas ir peržiūra - be nematomų ženklų");
+    tiesa(!/noBreakHyphen/.test(x), "be Word elemento noBreakHyphen - Pages jį praleidžia ir brūkšnelis dingsta");
+  });
+  await testas("Citata baigiasi kabutėmis be antro taško; „todėl“ - tik kai priežastis ne padalyvis", async () => {
+    const S = sutartis("EKS"), a = Object.assign(G.naujasBlokas("asm", S), { kieno: "pirkejo", punktas: "17", priezastis: "pasikeitus projekto vadovui", redakcija: "17.1. Užsakovo atstovas - projektų vadovas.\n17.2. Kontaktai - raštu." });
+    S.rengiamas.blokai.push(a);
+    let B = G.susitarimas(S).blokai, c = B.filter(x => x.t === "citata");
+    lygu(c[c.length - 1].tekstas, "17.2. Kontaktai - raštu.“");
+    tiesa(/pasikeitus projekto vadovui, keičiami Užsakovo atsakingi asmenys/.test(DK.tekstas(G.susitarimas(S))), "padalyvis - be „todėl“");
+    a.redakcija = "17.1. Užsakovo atstovas - projektų vadovas"; B = G.susitarimas(S).blokai; c = B.filter(x => x.t === "citata");
+    lygu(c[c.length - 1].tekstas, "„17.1. Užsakovo atstovas - projektų vadovas“.", "be taško redakcijoje - taškas po kabučių");
+    for (const [pr, re] of [["Dėl projekto vadovo pasikeitimo", /pasikeitimo, keičiami/], ["Atsižvelgiant į struktūros pertvarką", /pertvarką, keičiami/], ["Projekto vadovas pasikeitė", /pasikeitė, todėl keičiami/], ["Užsakovo struktūra pertvarkyta.", /pertvarkyta, todėl keičiami/]]) {
+      a.priezastis = pr; tiesa(re.test(DK.tekstas(G.susitarimas(S))), pr);
+    }
+  });
+  await testas("Giminės derinimas: papildomas Paslaugas, atsisakomas Prekes, papildomus Darbus; patikrų tekstai", async () => {
+    for (const [f, re, gim] of [["PASLAUGOS", /įvertinus papildomas ir atsisakomas Paslaugas yra/, /kokios paslaugos įsigyjamos papildomai/], ["PREKES", /įvertinus papildomas ir atsisakomas Prekes yra/, /kokios prekės atsisakomos|kokios prekės įsigyjamos papildomai/], ["EKS", /įvertinus papildomus ir atsisakomus Darbus yra/, /kokie darbai įsigyjami papildomai/]]) {
+      const S = sutartis(f);
+      S.rengiamas.blokai.push(Object.assign(G.naujasBlokas("pap", S), { pagrindas: "keitimas_mazos_vertes", verte: 1000 }), Object.assign(G.naujasBlokas("ats", S), { pagrindas: "perziuros_salygos", verte: 500, aprasymas: "x" }));
+      tiesa(re.test(DK.tekstas(G.susitarimas(S))), f + ": " + DK.tekstas(G.susitarimas(S)).match(/įvertinus[^.]*/));
+      tiesa(G.blokoPatikros(S.rengiamas.blokai[0], S, 0).some(p => gim.test(p.tekstas)), f + " patikra");
+    }
+  });
+  await testas("Perskaičiavimas ir atsisakymas viename susitarime - įspėjimas dėl dvigubo skaičiavimo; pokytis be brūkšnio", async () => {
+    const S = sutartis("PREKES"), b = indBlokas(S); reiksmes(b, 0, 158.42, 168.97, 260000);
+    S.rengiamas.blokai.push(Object.assign(G.naujasBlokas("ats", S), { pagrindas: "perziuros_salygos", verte: 14400, aprasymas: "žieminių striukių" }));
+    tiesa(G.blokoPatikros(S.rengiamas.blokai[1], S, 1).some(p => p.lygis === "tikrinti" && /atsisakomos prekės įeina į perskaičiuojamą Sutarties dalį/.test(p.tekstas)), "įspėjimas");
+    S.rengiamas.blokai.splice(0, 1);
+    tiesa(!G.blokoPatikros(S.rengiamas.blokai[0], S, 0).some(p => /perskaičiuojamą Sutarties dalį/.test(p.tekstas)), "be perskaičiavimo - nėra");
+    const S2 = sutartis("EKS"), b2 = indBlokas(S2); reiksmes(b2, 0, 120, 128, 1000000); reiksmes(b2, 1, 100, 98); reiksmes(b2, 2, 100, 103);
+    tiesa(/„Darbo užmokestis ir pridėtinės išlaidos“ pokytis yra -2,00 %/.test(DK.tekstas(G.susitarimas(S2))), "neigiamas pokytis: " + DK.tekstas(G.susitarimas(S2)).match(/Darbo užmokestis[^;]*pokytis[^;]*/));
+  });
+}
+
+/* Sutarties savininko patikra (2026-11-28): paskelbtų pakeitimų vertės, ribos lygiai ties riba, specialiosios paslaugos, pasibaigusi Sutartis,
+   kelių sutarčių pakeitimai, paieška ir pavadinimas kilmininku, indeksų ir koeficiento apvalinimas pagal formas, pratęsimo riba. */
+function tarpai(t){ return String(t).replace(/\s/g, " "); }
+async function testaiSavininkas1128(){
+  grupe("Sutarties savininko patikra (2026-11-28): vieši duomenys, ribos, paieška, apvalinimas");
+  await testas("Paskelbtas pakeitimas keitė vertę, o kainos pokytis neįrašytas - klaida su siūlomu pokyčiu be PVM; skirtumas dėl PVM - siūloma 0", () => {
+    const S = sutartis("SR", S => { S.sutartis.pradineVerte = 18217000; });
+    G.isSaraso(S, G.viesasSarasas(VS_SAR)[0], { dabar: "2026-11-28" });
+    lygu(G.viesosPvm(S), "su", "pradinė kaina - CVP IS vertė be PVM");
+    const v = G.viesiPokyciai(S);
+    lygu(v.map(x => [x.i, x.skirtumas, x.tikPvm, x.siulomas]), [[0, 0, false, 0], [1, 4506631.69, false, 3724489]]);
+    let k = G.patikros(S).filter(p => p.lygis === "klaida" && /Paskelbtas pakeitimas/.test(p.tekstas));
+    lygu(k.length, 1, "nepasikeitusi vertė - be klaidos");
+    tiesa(/Nr\. 2 \(22VP-SUTP-131\) keitė Sutarties vertę CVP IS duomenyse \(22 042 570,00 → 26 549 201,69 Eur\)/.test(tarpai(k[0].tekstas)) && /\+3 724 489,00 Eur/.test(tarpai(k[0].tekstas)) && k[0].laukas === "a.1.pokytis", k[0].tekstas);
+    S.ankstesni[1].pokytis = 3724489;
+    tiesa(!G.patikros(S).some(p => /Paskelbtas pakeitimas/.test(p.tekstas)), "įrašius pokytį - klaidos nėra");
+    lygu(G.dabartine(S), 21941489, "kaina iki šio pakeitimo");
+    const S2 = sutartis("PREKES", S => { S.sutartis.pradineVerte = 100000; });
+    G.isViesu(S2, { sutartis: { nr: "24VP-SUT-001", verte: 100000 }, pakeitimai: [{ nr: "P-1", sudaryta: "2025-01-10", verte: 121000 }, { nr: "P-2", sudaryta: "2025-06-10", verte: 131000 }] });
+    lygu([G.viesosPvm(S2), G.viesiPokyciai(S2).map(x => [x.tikPvm, x.siulomas])], ["be", [[true, 0], [false, 10000]]]);
+    k = G.patikros(S2).filter(p => /Paskelbtas pakeitimas/.test(p.tekstas));
+    tiesa(/atitinka PVM - tikėtina, kaina nekeista: įrašykite 0/.test(k[0].tekstas) && /\+10 000,00 Eur/.test(tarpai(k[1].tekstas)), k.map(p => p.tekstas).join(" | "));
+    S2.sutartis.pradineVerte = 90000;
+    lygu(G.viesiPokyciai(S2)[1].siulomas, null, "nežinoma, ar pradinė kaina su PVM - pokytis nesiūlomas");
+  });
+  await testas("Ribos lygiai ties riba (10 ir 15 procentų, 50 procentų atskiram pakeitimui) - leidžiama, centu daugiau - klaida su riba eurais", () => {
+    function pat(forma, pagr, verte, baze){
+      const S = sutartis(forma, S => { S.sutartis.pradineVerte = baze || 100000; });
+      const b = Object.assign(G.naujasBlokas("pap", S), { pagrindas: pagr, verte: verte, pobudisNesikeicia: true });
+      S.rengiamas.blokai.push(b);
+      return G.blokoPatikros(b, S, 0).filter(p => p.lygis === "klaida" && /riba - (10|15|50) procentų/.test(p.tekstas));
+    }
+    lygu(pat("PASLAUGOS", "keitimas_mazos_vertes", 10000).length, 0, "paslaugos lygiai 10 %");
+    lygu(pat("PASLAUGOS", "keitimas_mazos_vertes", 7000.01, 70000.1).length, 0, "lygiai 10 % - be slankiojo kablelio paklaidos");
+    let k = pat("PASLAUGOS", "keitimas_mazos_vertes", 10000.01);
+    tiesa(k.length === 1 && /\(10 000,00 Eur\)/.test(tarpai(k[0].tekstas)), "virš 10 %: " + (k[0] && k[0].tekstas));
+    lygu(pat("SR", "keitimas_mazos_vertes", 15000).length, 0, "darbai lygiai 15 %");
+    k = pat("SR", "keitimas_mazos_vertes", 15000.01);
+    tiesa(k.length === 1 && /15 procentų darbų pirkimo atveju \(15 000,00 Eur\)/.test(tarpai(k[0].tekstas)), "darbai virš 15 %");
+    lygu(pat("SR", "keitimas_papildomi", 50000).length, 0, "lygiai 50 %");
+    k = pat("SR", "keitimas_nenumatytos", 50000.01);
+    tiesa(k.length === 1 && /\(50 000,00 Eur;/.test(tarpai(k[0].tekstas)), "virš 50 %: " + (k[0] && k[0].tekstas));
+  });
+  await testas("Specialiosios paslaugos pagal BVPŽ kodą - jų tarptautinio pirkimo riba ir pastaba; kitoms paslaugoms ir darbams - įprasta", () => {
+    const P = window.GP_THRESHOLDS.PI;
+    const S = sutartis("PASLAUGOS", S => { S.sutartis.pradineVerte = 100000; S.sutartis.bvpz = "79110000"; });
+    lygu([G.ribos(S).intl, G.ribos(S).spec && G.ribos(S).spec.eilute], [P.intl_special, 8]);
+    const b = Object.assign(G.naujasBlokas("pap", S), { pagrindas: "keitimas_mazos_vertes", verte: 5000, pobudisNesikeicia: true }); S.rengiamas.blokai.push(b);
+    tiesa(G.blokoPatikros(b, S, 0).some(p => p.lygis === "info" && /socialinės ir kitos specialiosios paslaugos \(PĮ 4 priedo 8 eilutė\)/.test(p.tekstas)), "pastaba");
+    S.sutartis.bvpz = "71320000";
+    lygu([G.ribos(S).intl, G.ribos(S).spec], [P.intl_goods, null], "kitos paslaugos");
+    const D2 = sutartis("SR", S => { S.sutartis.bvpz = "79110000"; });
+    lygu([G.ribos(D2).intl, G.ribos(D2).spec], [P.intl_works, null], "darbai - visada darbų riba");
+  });
+  await testas("Ankstesni pakeitimai didino kainą nežinomu pagrindu - įspėjimas prieš skaičiuojant nedidelės vertės pakeitimų ribą", () => {
+    const S = sutartis("PASLAUGOS", S => { S.sutartis.pradineVerte = 100000; });
+    G.isViesu(S, { sutartis: { nr: "24VP-SUT-001" }, pakeitimai: [{ nr: "P-1", sudaryta: "2025-01-10" }, { nr: "P-2", sudaryta: "2025-06-10" }] });
+    Object.assign(S.ankstesni[0], { pokytis: 4000, esme: "x" }); Object.assign(S.ankstesni[1], { pokytis: 3000, pagal2d: 3000, esme: "y" });
+    const b = Object.assign(G.naujasBlokas("pap", S), { pagrindas: "keitimas_mazos_vertes", verte: 2000, pobudisNesikeicia: true }); S.rengiamas.blokai.push(b);
+    let p = G.blokoPatikros(b, S, 0).filter(x => /nenurodyta, ar pagal/.test(x.tekstas));
+    tiesa(p.length === 1 && p[0].lygis === "tikrinti" && /Nr\. 1 didino kainą \(4 000,00 Eur\)/.test(tarpai(p[0].tekstas)), p.map(x => x.tekstas).join(" | "));
+    tiesa(G.blokoPatikros(b, S, 0).some(x => x.lygis === "ok" && /5 000,00 Eur be PVM/.test(tarpai(x.tekstas))), "suma - šis ir anksčiau pagal tą dalį (3 000 + 2 000)");
+    S.ankstesni[0].pagal2d = 0;
+    tiesa(!G.blokoPatikros(b, S, 0).some(x => /nenurodyta, ar pagal/.test(x.tekstas)), "nurodžius dalį - įspėjimo nėra");
+  });
+  await testas("Pasibaigusi Sutartis - įspėjimas, kad keisti galima tik galiojimo laikotarpiu; galiojanti - be jo", () => {
+    const S = sutartis("EKS", S => { S.sutartis.galiojaIki = "2026-10-31"; }); S.rengiamas.data = "2026-11-28";
+    S.rengiamas.blokai.push(Object.assign(G.naujasBlokas("asm", S), { kieno: "pirkejo", punktas: "17", redakcija: "17.1. x." }));
+    const p = G.patikros(S).filter(x => /baigė galioti/.test(x.tekstas));
+    tiesa(p.length === 1 && p[0].lygis === "tikrinti" && p[0].laukas === "s.galiojaIki" && /2026 m\. spalio 31 d\./.test(p[0].tekstas), p.map(x => x.tekstas).join(" | "));
+    S.sutartis.galiojaIki = "2026-11-28";
+    tiesa(!G.patikros(S).some(x => /baigė galioti/.test(x.tekstas)), "galioja iki susitarimo dienos imtinai");
+  });
+  await testas("Pakeitimas, priskirtas kelioms to paties pirkimo sutartims, - nepridedamas savaime ir galiojimo neprailgina; pridedamas žmogaus pasirinkimu", () => {
+    const sar = G.viesasSarasas([
+      { nr: "S-1", pav: "Pirma dalis", sudaryta: "2024-01-10", galioja: "2026-01-10", pirkimoNr: "9", verte: 100, pakeitimai: [{ nr: "PK-1", sudaryta: "2025-01-01", verte: 120, galioja: "2027-01-10" }, { nr: "PK-2", sudaryta: "2025-02-01", verte: 130, galioja: "2026-06-01" }] },
+      { nr: "S-2", pav: "Antra dalis", sudaryta: "2024-01-10", galioja: "2026-01-10", pirkimoNr: "9", verte: 200, pakeitimai: [{ nr: "PK-1", sudaryta: "2025-01-01", verte: 120, galioja: "2027-01-10" }] }]);
+    lygu([sar[0].pakeitimai.map(p => p.bendras), sar[0].galiojaV, sar[0].verteV, sar[1].galiojaV, sar[1].verteV], [[true, false], "2026-06-01", 130, "2026-01-10", 200]);
+    const S = G.naujaSutartis("testas-2", new Date("2026-11-28T10:00:00Z")), r = G.isSaraso(S, sar[0], { dabar: "2026-11-28" });
+    lygu([S.ankstesni.map(a => a.regNr), r.abejotini.map(p => p.nr), S.sutartis.galiojaIki, S.rengiamas.nr], [["PK-2"], ["PK-1"], "2026-06-01", "2"]);
+    tiesa(G.pridekViesaPakeitima(S, r.abejotini[0]), "pridedama");
+    lygu([S.ankstesni.map(a => a.regNr + ":" + a.nr), S.sutartis.galiojaIki, S.rengiamas.nr], [["PK-1:1", "PK-2:2"], "2027-01-10", "3"], "eilė pagal datą, galiojimas ir susitarimo numeris");
+    tiesa(!G.pridekViesaPakeitima(S, r.abejotini[0]) && S.ankstesni.length === 2, "antrą kartą nepridedama");
+  });
+  await testas("Paieška: „pastotės“ randa „pastočių“, TP ir „transformatorių pastotė“ - vienas kitą, „Neries“ - „E-Neris“, tikslus tiekėjo pavadinimas pirmiau už kamieną", () => {
+    const sar = G.viesasSarasas([{ nr: "A", pav: "Pastočių remontas" }, { nr: "B", pav: "Neries transformatorių pastotės apsauga" }, { nr: "C", pav: "E-Neris tinklo priežiūra" },
+      { nr: "D", pav: "Neries TP apsauga", tiekejas: { pav: "UAB Neris projektai", kodas: "300000009" } }, { nr: "E", pav: "Elektros tinklų darbai", tiekejas: { pav: "UAB Neris", kodas: "300000011" } }]);
+    const ids = z => G.ieskok(sar, z, { dabar: "2026-11-28" }).rasta.map(r => r.x.nr);
+    lygu(ids("pastotės"), ["B", "A", "D"]);
+    tiesa(["A", "B"].every(x => ids("pastočių").indexOf(x) >= 0), "„pastočių“ randa ir „pastotės“");
+    lygu(ids("TP"), ["B", "D"], "santrumpa randa pilną pavadinimą");
+    lygu(ids("transformatorių pastotė"), ["D", "B"], "pilnas pavadinimas randa santrumpą");
+    tiesa(ids("neries").indexOf("C") >= 0, "žodis su brūkšneliu");
+    lygu(ids("neris").slice(0, 2), ["D", "E"], "tikslus tiekėjo pavadinimas pirmiau už kamieną pavadinime");
+    lygu([G.zymiuVietos("Pastočių remontas", ["pastotes"]), G.zymiuVietos("E-Neris tinklo", ["neries"])], [[[0, 8]], [[2, 7]]], "pažymimas visas rastas žodis");
+    lygu([G.kamienai("pastotes"), G.kamienai("pastociu"), G.kamienai("neris"), G.kamienai("tp")], [["pastot", "pastoc"], ["pastoc", "pastot"], ["neri"], []]);
+  });
+  await testas("Pavadinimas kilmininku: būdvardžiai derinami; įterptinė dalis, „ir kitos“ ir „Sutartis dėl ...“ be kilmininko - nesiūloma", () => {
+    for (const [p, k] of [["Teisinės paslaugos", "Teisinių paslaugų pirkimo sutarties"], ["Papildomi darbai", "Papildomų darbų pirkimo sutarties"], ["Smulkūs darbai", "Smulkių darbų pirkimo sutarties"],
+      ["Transformatorių remonto ir priežiūros paslaugos", "Transformatorių remonto ir priežiūros paslaugų pirkimo sutarties"], ["Konsultavimo ir kitos paslaugos", ""],
+      ["Teisinės, susijusios su pirkimais, paslaugos", ""], ["Sutartis dėl perimetro apsaugos stiprinimo Neries TP", ""], ["Sutartis dėl 110 kV linijos paslaugų", "110 kV linijos paslaugų sutarties"],
+      ["Neries TP rekonstravimo pirkimas", "Neries TP rekonstravimo pirkimo sutarties"]])
+      lygu(G.pavadinimasKilmininku(p), k, p);
+  });
+  await testas("Kainos perskaičiavimas: indeksai - 4 skaitmenimis, darbų pirkimo-pardavimo ir eksploatavimo sutarčių koeficientas neapvalinamas, statybos rangos - 3 skaitmenimis", () => {
+    function K(forma, pr){ const S = sutartis(forma), b = indBlokas(S), i = b.eilutes.findIndex(e => e.suSuma); reiksmes(b, i, pr, 106.54321, 100000); const r = G.skaiciuokInd(b, S).eilutes[i]; return [r.K, r.nauja]; }
+    const d = K("DARBAI", 100.00004);
+    tiesa(Math.abs(d[0] - 106.5432 / 100) < 1e-12 && d[1] === 106543.2, "darbų pirkimo-pardavimo: " + d);
+    lygu(K("DARBAI", 100.00004), K("DARBAI", 100), "indeksas - 4 skaitmenimis");
+    tiesa(Math.abs(K("EKS", 100)[0] - 1.065432) < 1e-12, "eksploatavimo - neapvalinamas");
+    lygu(K("SR", 100), [1.065, 106500], "statybos rangos - 3 skaitmenys");
+    lygu(K("PSR", 100), [1.065, 106500], "projektavimo ir statybos rangos - 3 skaitmenys");
+  });
+  await testas("Pratęsimas pagal Sutarties sąlygą: telpa, viršija, Sutartyje leidžiamas laikotarpis jau išnaudotas - atskiros pastabos", () => {
+    function pat(ank){
+      const S = sutartis("SR"), b = Object.assign(G.naujasBlokas("ter", S), { pagrindas: "perziuros_salygos", kas: "darbu", dabartinis: "2026-12-31", naujas: "2027-02-28", priezastis: "x", punktas: "5.2", aplinkybe: "y", maxPrat: 6, maxVnt: "men", ankstesniPrat: ank });
+      S.rengiamas.blokai.push(b);
+      return G.blokoPatikros(b, S, 0).filter(p => /leidžiam|išnaudotas/.test(p.tekstas)).map(p => p.lygis + ": " + p.tekstas);
+    }
+    tiesa(/^ok: .*iki 2027-03-31/.test(pat(3)[0]), pat(3).join(" | "));
+    tiesa(/^klaida: Nauja data \(2027-02-28\) vėlesnė už Sutartyje leidžiamą \(2027-01-31\)/.test(pat(5)[0]), pat(5).join(" | "));
+    tiesa(/^klaida: Sutartyje leidžiamas pratęsimas \(6 mėn\.\) jau išnaudotas ankstesniais pratęsimais \(6 mėn\.\)/.test(pat(6)[0]) && pat(6).length === 1, pat(6).join(" | "));
+  });
+  await testas("Ankstesni pakeitimai iš CVP IS be indekso mėnesio - pastaba prie kainos perskaičiavimo", () => {
+    const S = sutartis("EKS");
+    G.isViesu(S, { sutartis: { nr: "24VP-SUT-001" }, pakeitimai: [{ nr: "P-1", sudaryta: "2025-06-01" }] });
+    const b = indBlokas(S); reiksmes(b, 0, 120, 128, 1000000); reiksmes(b, 1, 100, 98); reiksmes(b, 2, 100, 103);
+    tiesa(G.blokoPatikros(b, S, 0).some(p => p.lygis === "tikrinti" && /įrašykite jo indekso mėnesį/.test(p.tekstas)), "pastaba");
+    S.ankstesni[0].indMenuo = "2025-05";
+    tiesa(!G.blokoPatikros(b, S, 0).some(p => /įrašykite jo indekso mėnesį/.test(p.tekstas)), "įrašius mėnesį - nėra");
+  });
+  await testas("Sąsaja: kelių sutarčių pakeitimas - „Pridėti“, kainos pokytis vienu paspaudimu, tas pats numeris su kitu tiekėju - nauja sutartis, AB „Amber Grid“ pavadinimas", async () => {
+    await modulis();
+    const U = W.GP_PAKEITIMAI_UI, z = [];
+    const sar = [
+      { nr: "S-1", pav: "Pirma Lauko dalis", sudaryta: "2024-01-10", galioja: "2026-01-10", pirkimoNr: "9", verte: 100, bvpz: "45222000", tiekejas: { pav: "UAB Pirmas", kodas: "300000098" },
+        pakeitimai: [{ nr: "PK-1", sudaryta: "2025-01-01", verte: 120, galioja: "2027-01-10" }, { nr: "PK-2", sudaryta: "2025-02-01", verte: 130, galioja: "2026-06-01" }] },
+      { nr: "S-2", pav: "Antra Lauko dalis", sudaryta: "2024-01-10", galioja: "2026-01-10", pirkimoNr: "9", verte: 200, tiekejas: { pav: "UAB Antras", kodas: "300000097" },
+        pakeitimai: [{ nr: "PK-1", sudaryta: "2025-01-01", verte: 120, galioja: "2027-01-10" }] },
+      { nr: "S-1", pav: "Trečia sutartis tuo pačiu numeriu", sudaryta: "2024-01-10", galioja: "2027-05-05", pirkimoNr: "8", verte: 50, tiekejas: { pav: "UAB Kitas", kodas: "300000099" }, pakeitimai: [] },
+      { nr: "S-1", pav: "Ketvirta sutartis tuo pačiu numeriu", sudaryta: "2022-02-02", galioja: "2027-05-05", pirkimoNr: "7", verte: 40, tiekejas: { pav: "UAB Pirmas", kodas: "300000098" }, pakeitimai: [] }];
+    U.naudokFetch(sarFetch(z, { sar }));
+    const org = q("#psOrg"); org.value = "amber-grid"; org.dispatchEvent(new W.Event("change", { bubbles: true }));
+    q("#psQ").value = "Pirma Lauko"; await U.ieskokDabar();
+    lygu([z.filter(x => /\/sarasas\//.test(x.u)).map(x => x.u), D.querySelectorAll(".ps-rz").length], [["https://api.g-procure.com/api/sutartys/sarasas/" + W.GP_ORG.pagalId("amber-grid").jarKodas], 1]);
+    tiesa(/paskelbtų pakeitimų: 1/.test(q(".ps-rz").textContent), "rezultate - tik šios sutarties pakeitimai: " + q(".ps-rz").textContent);
+    spausk(".ps-rz");
+    lygu([ui().S.sutartis.pirkejoPav, ui().S.ankstesni.map(a => a.regNr)], ["AB „Amber Grid“", ["PK-2"]]);
+    tiesa(/priskirti kelioms to paties pirkimo sutartims/.test(q("#psTurinys").textContent) && q('[data-veiksmas="psPridekViesa"][data-nr="PK-1"]'), "kelių sutarčių pakeitimas - pasiūlymas pridėti");
+    spausk('[data-veiksmas="psPridekViesa"][data-nr="PK-1"]');
+    lygu([ui().S.ankstesni.map(a => a.regNr), ui().S.sutartis.galiojaIki, !!q('[data-veiksmas="psPridekViesa"]')], [["PK-1", "PK-2"], "2027-01-10", false]);
+    spausk('[data-veiksmas="psVerte"][data-kaip="kaip"]');
+    const m = q('[data-veiksmas="psPokytis"][data-i="0"]');
+    tiesa(m && /Įrašyti kainos pokytį: \+20,00 Eur be PVM/.test(m.textContent), "siūlomas pokytis: " + (m && m.textContent));
+    spausk(m);
+    lygu([ui().S.ankstesni[0].pokytis, D.activeElement && D.activeElement.getAttribute("data-kelias"), !!q('[data-veiksmas="psPokytis"][data-i="0"]')], [20, "a.0.pokytis", false]);
+    spausk('[data-veiksmas="psGrizk"]');
+    q("#psQ").value = "Trečia"; await U.ieskokDabar();
+    tiesa(!/jau pradėta/.test(q(".ps-rz").textContent), "kitas tiekėjas - ne ta pati sutartis");
+    spausk(".ps-rz");
+    lygu([ui().visos.length, ui().S.sutartis.tiekejoKodas], [2, "300000099"], "sukurta nauja sutartis");
+    spausk('[data-veiksmas="psGrizk"]');
+    q("#psQ").value = "Ketvirta"; await U.ieskokDabar();
+    tiesa(!/jau pradėta/.test(q(".ps-rz").textContent), "kita sudarymo data - ne ta pati sutartis");
+    spausk(".ps-rz");
+    lygu([ui().visos.length, ui().S.sutartis.data], [3, "2022-02-02"], "sukurta nauja sutartis");
+    spausk('[data-veiksmas="psGrizk"]');
+    q("#psQ").value = "Pirma Lauko"; await U.ieskokDabar();
+    tiesa(/jau pradėta/.test(q(".ps-rz").textContent), "ta pati sutartis - pažymėta kaip pradėta");
+    spausk('[data-veiksmas="psKur"][data-kur="pav"]');
+    q("#psQ").value = "zzzzzz"; await U.ieskokDabar();
+    tiesa(/Ieškota tik lauke „Pavadinime“ - pasirinkite „Visur“/.test(q("#psRez").textContent), q("#psRez").textContent);
+  });
+  await testas("Sąsaja: įrašytas pakeitimo numeris - sutarties numeris pakeičiamas tikruoju", async () => {
+    await modulis();
+    const U = W.GP_PAKEITIMAI_UI;
+    spausk('[data-veiksmas="psNauja"]'); rasyk("s.nr", "22VP-SUTP-131");
+    const z = [];
+    W.GP_VIESOS_SUTARTYS.sutartis = (nr, o) => { z.push([nr, o.pirkejas]); return Promise.resolve({ ok: true, sutartis: { nr: "21VP-SUT-156", sudaryta: "2021-09-10", galioja: "2027-06-30", pav: "330/110/10 kV Neries TP rekonstravimo pirkimas", verte: 22042570, bvpz: "45222000", tiekejas: { pav: "\"Žilinskis ir Co\", UAB", kodas: "304317232" } },
+      pakeitimai: [{ nr: "22VP-SUTP-112", sudaryta: "2022-10-05", verte: 22042570 }, { nr: "22VP-SUTP-131", sudaryta: "2022-12-02", verte: 26549201.69 }] }); };
+    await U.rask();
+    const s = ui().S.sutartis;
+    lygu([z, s.nr, s.data, s.objektas, s.pavadinimasKilm, ui().S.ankstesni.length], [[["22VP-SUTP-131", W.GP_ORG.rekvizitai("litgrid").kodas]], "21VP-SUT-156", "2021-09-10", "darbai", "330/110/10 kV Neries TP rekonstravimo pirkimo sutarties", 2]);
+    tiesa(/sutarties numeris 21VP-SUT-156 \(įrašytas 22VP-SUTP-131 - pakeitimo numeris\)/.test(q("#psRastiBusena").textContent), q("#psRastiBusena").textContent);
+  });
+}
+
 /* ---------- sąsaja ---------- */
 let W = null, D = null, F = null;
 function modulis(plotis){
@@ -749,6 +1004,7 @@ async function testaiSasaja(){
     lygu([b.pradzia, b.pabaiga], ["2024-10", "2026-09"]);
     tiesa(pab && pab.isConnected && pab.value === "2026-09", "po perpiešimo laukas yra su įrašyta reikšme");
     rasyk("b.0.e.0.suma", "3370374,08"); rasyk("b.0.rastoData", "2026-11-03"); rasyk("b.0.garantija", "ne");
+    ui().S.sutartis.pasiulymuData = "2024-10-14"; rasyk("b.0.darbuAktoData", "2026-10-31");
     const z = [];
     await W.GP_PAKEITIMAI_UI.gaukIndeksus(0, { fetch: netikrasOsp(sdmx(Object.keys(SSKI), ["2024-10", "2026-09"], SSKI), z) });
     lygu(z.length, 3, "po užklausą kiekvienam indeksui");
@@ -759,7 +1015,7 @@ async function testaiSasaja(){
     tiesa(/Pokytis 6,73 %, K = 1,0673132705; perskaičiuota suma - 3 597 244,98 Eur \(\+226 870,90\)/.test(q('[data-ind-rez="0.0"]').textContent), q('[data-ind-rez="0.0"]').textContent);
     tiesa(/5 226 870,90 Eur/.test(q(".ps-pl--nauja").textContent) && /4,54 %/.test(q(".ps-pls").textContent), "kortelėje - kaina po pakeitimo");
     const pt = q('[data-patikros="0"]').textContent;
-    tiesa(/Indekso pokytis - 6,73 % \(Sutartyje - ne mažiau kaip 5,00 %\)/.test(pt) && /Laikotarpis - 23 mėn\./.test(pt) && /gautos iš Oficialiosios statistikos portalo/.test(pt) && !/Reikia pataisyti/.test(pt), pt);
+    tiesa(/Indekso pokytis 6,73 % \(Sutartyje - ne mažiau kaip 5,00 %\)/.test(pt) && /Laikotarpis nuo 2024 m\. spalio 14 d\. \(pasiūlymų pateikimo termino pabaiga\) iki 2026 m\. spalio 31 d\. \(paskutinis atliktų darbų aktas\) - ne trumpesnis kaip 6 mėn\./.test(pt) && /gautos iš Oficialiosios statistikos portalo/.test(pt) && !/Reikia pataisyti/.test(pt), pt);
     const lk = q('[data-kelias="b.0.e.0.pb"]'); lk.focus(); lk.value = "136"; lk.dispatchEvent(new W.Event("input", { bubbles: true }));
     tiesa(D.activeElement === lk, "rašant fokusas lieka lauke");
     tiesa(/įrašyta ranka/.test(q('[data-patikros="0"]').textContent) && b.eilutes[0].pbS === "ranka", "ranka pakeista reikšmė pažymima");
@@ -841,7 +1097,7 @@ async function testaiSasaja(){
     const r1 = await W.GP_PAKEITIMAI_UI.word("susitarimas"), r2 = await W.GP_PAKEITIMAI_UI.word("skaiciavimas"), r3 = await W.GP_PAKEITIMAI_UI.word("pagrindimas");
     lygu(W.__failai.map(f => f.vardas.replace(/_\d{4}-\d{2}-\d{2}\.docx$/, "")), ["24VP-SUT-001_Susitarimas-Nr-1", "24VP-SUT-001_Kainos-perskaiciavimo-skaiciavimas", "24VP-SUT-001_Pakeitimo-pagrindimas"]);
     const x = await (await JSZip.loadAsync(r1.blob)).file("word/document.xml").async("string");
-    tiesa(/SUSITARIMAS NR\. 1/.test(x) && /5 226 870,90/.test(x), "Word faile - tas pats tekstas");
+    tiesa(/SUSITARIMAS NR\. 1/.test(x) && /5\u00A0226\u00A0870,90/.test(x), "Word faile - tas pats tekstas (suma su nelaužomais tarpais)");
     tiesa(r2.blob.size > 3000 && r3.blob.size > 3000 && /Parengta: /.test(q("#psWordBusena").textContent));
     rasyk("r.data", "2026-11-28"); rasyk("r.regNr", "26VP-SUTP-100");
     tiesa(/2026 m\. lapkričio 28 d\. Nr\. 26VP-SUTP-100/.test(q("#psPerziura").textContent), "peržiūroje - susitarimo data ir registracijos numeris: " + q("#psPerziura").textContent.slice(0, 200));
@@ -850,7 +1106,7 @@ async function testaiSasaja(){
     lygu(ui().S.pasirasyta, undefined, "pasirašymo data į sutartį neįrašoma");
     spausk('.ps-z[data-z="2"]'); rasyk("b.1.pav", "");
     spausk('.ps-z[data-z="3"]');
-    tiesa(/Reikia pataisyti/.test(q("#psTurinys").textContent) && q('[data-veiksmas="psWord"]').disabled, "su klaida Word nerengiamas");
+    tiesa(/Reikia pataisyti/.test(q("#psTurinys").textContent) && q('[data-veiksmas="psWord"]').disabled && q('[data-veiksmas="psKopijuok"]').disabled, "su klaida Word nerengiamas ir tekstas nekopijuojamas");
     lygu(await W.GP_PAKEITIMAI_UI.word("susitarimas"), null);
     spausk(q('#psTurinys [data-veiksmas="psEik"][data-laukas="b1.pav"]'));
     lygu([ui().zingsnis, D.activeElement.getAttribute("data-kelias")], [2, "b.1.pav"], "iš patikros - tiesiai į lauką kitame žingsnyje");
@@ -932,7 +1188,7 @@ async function testaiSasaja(){
     tiesa(/paslauga dar neįdiegta/.test(q("#psRastiBusena").textContent), "paslauga neįdiegta: " + q("#psRastiBusena").textContent);
     lygu(z.map(x => x.u), ["https://api.g-procure.com/api/sutartys/busena"], "kol paslaugos nėra, numeris nesiunčiamas");
     await W.GP_PAKEITIMAI_UI.rask({ fetch: su({ f: () => Promise.reject(new TypeError("Failed to fetch")) }) });
-    tiesa(/Nepavyko susisiekti/.test(q("#psRastiBusena").textContent) && q("#psRastiBusena [data-gpb-kartoti]"), "ryšio klaida su „Bandyti dar kartą“");
+    tiesa(/G-Procure serveris nepasiekiamas/.test(q("#psRastiBusena").textContent) && q("#psRastiBusena [data-gpb-kartoti]"), "ryšio klaida su „Bandyti dar kartą“");
     lygu(ui().S.ankstesni.length, 0, "po klaidos niekas neįrašyta");
     z.length = 0;
     await W.GP_PAKEITIMAI_UI.rask({ fetch: su({ f: () => Promise.resolve({ status: 200, json: () => Promise.resolve({ sutartis: null, pakeitimai: [], keliosSutartys: false, meta: {} }) }) }) });
@@ -1175,7 +1431,7 @@ async function testaiPaieska1128(){
     lygu(z.map(x => x.u), ["https://api.g-procure.com/api/sutartys/busena"], "kol paslaugos nėra, kodas nesiunčiamas");
     U.naudokFetch(sarFetch(z, { f: () => Promise.reject(new TypeError("Failed to fetch")) }));
     await U.ieskokDabar();
-    tiesa(/Nepavyko susisiekti/.test(q("#psIeskaBusena").textContent) && q("#psIeskaBusena [data-gpb-kartoti]") && !q(".ps-rz"), "ryšio klaida su „Bandyti dar kartą“");
+    tiesa(/G-Procure serveris nepasiekiamas/.test(q("#psIeskaBusena").textContent) && q("#psIeskaBusena [data-gpb-kartoti]") && !q(".ps-rz"), "ryšio klaida su „Bandyti dar kartą“");
     let n = 0;
     U.naudokFetch(sarFetch(z, { f: () => { n++; return Promise.resolve(n < 3 ? { status: 202, json: () => Promise.resolve({ ruosiama: true }) } : { status: 200, json: () => Promise.resolve(sarAts()) }); } }));
     await U.gaukSarasa({ lauktiMs: 5 });
@@ -1253,6 +1509,8 @@ async function testaiPaieska1128(){
     await testaiEtapas2();
     await testaiSasaja();
     await testaiPaieska1128();
+    await testaiDokumentoPatikra1128();
+    await testaiSavininkas1128();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

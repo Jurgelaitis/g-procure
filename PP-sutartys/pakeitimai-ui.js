@@ -161,10 +161,20 @@
     v.forEach(function (x) { h += esc(t.slice(i, x[0])) + "<mark>" + esc(t.slice(x[0], x[1])) + "</mark>"; i = x[1]; });
     return h + esc(t.slice(i));
   }
-  function pradetaSuNr(nr) { return nr ? B.visos.filter(function (x) { return x.sutartis.nr === nr; })[0] || null : null; }
+  /* Pradėta sutartis - pagal numerį ir, kai abu žinomi, kitos Šalies kodą bei sudarymo datą: LITGRID sąraše numeriai kartojasi */
+  /* Pirkimo vykdytojų pavadinimai susitarime - su kabutėmis, kaip jų sutartyse */
+  var TEISINIS = { "amber-grid": "AB „Amber Grid“", "energy-cells": "UAB „Energy cells“", "epso-g": "UAB „EPSO-G“" };
+  function pradeta(x) {
+    if (!x || !x.nr) return null;
+    var kod = x.tiekejas && x.tiekejas.kodas;
+    return B.visos.filter(function (v) {
+      var s = v.sutartis;
+      return s.nr === x.nr && (!kod || !s.tiekejoKodas || s.tiekejoKodas === kod) && (!x.sudaryta || !s.data || s.data === x.sudaryta);
+    })[0] || null;
+  }
   var BUSENU_T = { galioja: "Galioja", baigiasi: "Baigiasi", baigesi: "Galiojimas baigėsi", nezinoma: "Galiojimo data nepaskelbta" };
   function rezEilute(r, i, zod) {
-    var x = r.x, bs = G.viesosBusena(x, siandien()), pr = pradetaSuNr(x.nr), n = x.pakeitimai.length;
+    var x = r.x, bs = G.viesosBusena(x, siandien()), pr = pradeta(x), n = x.pakeitimai.filter(function (p) { return !p.bendras; }).length;
     var bz = bs.kodas === "baigiasi" ? (bs.liko === 0 ? "Galioja iki šiandien" : "Baigiasi po " + bs.liko + " d. (" + x.galiojaV + ")") : bs.kodas === "galioja" ? "Galioja iki " + x.galiojaV
       : bs.kodas === "baigesi" ? "Paskelbta galiojimo pabaiga - " + x.galiojaV : BUSENU_T.nezinoma;
     var kitur = r.kur.filter(function (k) { return k !== "pav"; }).map(function (k) { return { tiekejas: "tiekėjas", nr: "numeris", pirkimoNr: "pirkimo numeris" }[k]; }).filter(Boolean);
@@ -191,7 +201,7 @@
       }).join("") + "</div></div>";
     if (!R.rasta.length) {
       h += '<div class="ps-nerasta"><p><b>' + (sk.visos ? "Pagal šį filtrą sutarčių nėra." : "Tokios sutarties tarp paskelbtų nerasta.") + "</b> " +
-        (sk.visos ? "Pasirinkite „Visos“." : "Pabandykite trumpesnį žodį (pvz., tik objekto pavadinimą) arba ieškokite pagal tiekėją ar numerį. Viešuose duomenyse yra tik paskelbtos rašytinės sutartys.") + "</p>" +
+        (sk.visos ? "Pasirinkite „Visos“." : (P.kur && P.kur !== "visur" ? "Ieškota tik lauke „" + ({ pav: "Pavadinime", tiekejas: "Tiekėjas", nr: "Numeris" }[P.kur] || P.kur) + "“ - pasirinkite „Visur“ arba " : "Pabandykite ") + "trumpesnį žodį (pvz., tik objekto pavadinimą). Viešuose duomenyse yra tik paskelbtos rašytinės sutartys.") + "</p>" +
         '<button type="button" class="ps-btn" data-veiksmas="psNauja">Įrašyti sutartį ranka</button></div>';
     } else {
       h += '<ul class="ps-rz-sar">' + rodoma.map(function (r, i) { return rezEilute(r, i, R.zodziai); }).join("") + "</ul>";
@@ -209,7 +219,7 @@
     doc.querySelectorAll('[data-veiksmas="psKur"]').forEach(function (m) { m.setAttribute("aria-pressed", String(m.getAttribute("data-kur") === P.kur)); });
   }
   /* Sąrašas gaunamas vieną kartą organizacijai (tik atmintyje); nepavykus - klaida su „Bandyti dar kartą“, niekada „sutarčių nėra“ */
-  var SARASO_T = { neidiegta: "Sutarčių paieška G-Procure serveryje dar neįdiegta - sutarties duomenis įrašykite ranka.", rysys: "Nepavyko susisiekti su G-Procure serveriu. Bandykite dar kartą arba įrašykite sutartį ranka.",
+  var SARASO_T = { neidiegta: "Sutarčių paieška G-Procure serveryje dar neįdiegta - sutarties duomenis įrašykite ranka.", rysys: "G-Procure serveris nepasiekiamas. Bandykite dar kartą arba įrašykite sutartį ranka.",
     saltinis: "Viešų sutarčių duomenų šaltinis šiuo metu neatsako. Bandykite vėliau arba įrašykite sutartį ranka.", parametrai: "Šiai organizacijai sutarčių sąrašo gauti negalima.",
     uzimta: "Per daug užklausų - palaukite minutę ir bandykite dar kartą.", ruosiama: "Serveris dar renka sutarčių sąrašą - pabandykite po minutės." };
   function gaukSarasa(o) {
@@ -241,13 +251,13 @@
     return gaukSarasa(o).then(function (r) { if (P.sar[P.org]) pieskRez(); return r; });
   }
   function pasirink(x) {
-    var pr = pradetaSuNr(x.nr);
+    var pr = pradeta(x);
     if (pr) { atverk(pr.id); return; }
     var oi = orgIrasas(P.org), O = global.GP_ORG, rk = O ? O.rekvizitai(P.org) : null;
     S = G.naujaSutartis(naujasId());
-    if (oi) { S.sutartis.vykdytojas = oi.id; S.sutartis.pirkejoPav = oi.pavadinimas; S.sutartis.pirkejoKodas = rk ? rk.kodas : (oi.jarKodas || ""); S.sutartis.pirkejoAdresas = rk ? rk.adresas : ""; }
+    if (oi) { S.sutartis.vykdytojas = oi.id; S.sutartis.pirkejoPav = TEISINIS[oi.id] || oi.pavadinimas; S.sutartis.pirkejoKodas = rk ? rk.kodas : (oi.jarKodas || ""); S.sutartis.pirkejoAdresas = rk ? rk.adresas : ""; }
     var r = G.isSaraso(S, x, { dabar: siandien() });
-    PASIRINKTA = r && r.ok ? { pildyta: r.pildyta, pakeitimu: r.pakeitimu, kelios: !!r.keliosSutartys } : null;
+    PASIRINKTA = r && r.ok ? { pildyta: r.pildyta, pakeitimu: r.pakeitimu, kelios: !!r.keliosSutartys, abejotini: r.abejotini || [] } : null;
     ZING = 1; TVIRTINA = ""; B.visos.unshift(S); rasyk();
     piesk("#psKortele"); global.scrollTo(0, 0);
   }
@@ -353,6 +363,10 @@
       (PASIRINKTA.pildyta.length ? "Užpildyta: " + esc(PASIRINKTA.pildyta.join(", ")) + ". " : "") +
       (PASIRINKTA.pakeitimu ? "Į sąrašą įtraukta paskelbtų pakeitimų: " + PASIRINKTA.pakeitimu + ". " : "Paskelbtų pakeitimų nerasta. ") +
       (PASIRINKTA.kelios ? "Šis pirkimas turi kelias sutartis - patikrinkite, ar visi pakeitimai priklauso šiai. " : "") + "Patikrinkite ir įrašykite, ko trūksta.</p>";
+    var abej = PASIRINKTA ? PASIRINKTA.abejotini.filter(function (p) { return !S.ankstesni.some(function (a) { return a.regNr === p.nr; }); }) : [];
+    if (abej.length) h += '<div class="ps-pastaba" role="group" aria-labelledby="psAbejH"><p id="psAbejH"><b>Šie paskelbti pakeitimai priskirti kelioms to paties pirkimo sutartims</b> - viešuose duomenyse nenurodyta, kurios. Pridėkite tik šios Sutarties pakeitimus (patikrinkite pagal pakeitimo dokumentą):</p><ul class="ps-abej">' +
+      abej.map(function (p) { return "<li>" + esc(p.nr) + (p.sudaryta ? ", " + esc(p.sudaryta) : "") + (p.verte != null ? ", vertė po pakeitimo " + esc(G.eur(p.verte)) + " Eur" : "") + (p.galioja ? ", galioja iki " + esc(p.galioja) : "") +
+        ' <button type="button" class="ps-btn ps-btn--maz" data-veiksmas="psPridekViesa" data-nr="' + esc(p.nr) + '" aria-label="Pridėti ' + esc(p.nr) + ' prie šios Sutarties pakeitimų">Pridėti</button></li>'; }).join("") + "</ul></div>";
     h += tr.length ? '<div class="ps-truksta" role="group" aria-labelledby="psTrP"><span class="ps-truksta-p" id="psTrP">Liko įrašyti (' + tr.length + "):</span>" + tr.map(function (x) {
         return '<button type="button" class="ps-truksta-m" data-veiksmas="psEik" data-laukas="' + esc(x.k) + '">' + esc(x.pav) + "</button>"; }).join("") + "</div>"
       : '<p class="ps-truksta ps-truksta--ok" role="status">Pagrindiniai sutarties duomenys įrašyti - galite pereiti prie pakeitimų.</p>';
@@ -369,8 +383,8 @@
       lauk({ k: "s.dabartineVerte", pav: "Kaina iki šio pakeitimo, Eur be PVM", tipas: "suma", v: s.dabartineVerte, pvz: d != null ? "pagal sąrašą: " + G.eur(d) : " ", uz: "Su visais ankstesniais pakeitimais. Neįrašius skaičiuojama iš pradinės kainos ir pakeitimų sąrašo." }) + "</div>";
     h += dalis("kiti", "Datos, objektas ir pirkimo rūšis", [s.galiojaIki ? "galioja iki " + s.galiojaIki : "", G.objektas(s) ? OBJ_T[G.objektas(s)] : "", { tarptautinis: "tarptautinis pirkimas", supaprastintas: "supaprastintas pirkimas", mazos: "mažos vertės pirkimas" }[s.pirkimoRusis] || ""].filter(Boolean).join(" · ") || "neįrašyta",
       '<div class="ps-tink">' +
-      lauk({ k: "s.pasiulymuData", pav: "Pasiūlymų pateikimo termino pabaiga", tipas: "data", v: s.pasiulymuData, uz: "Reikalinga kainos perskaičiavimo laikotarpio pradžiai." }) +
-      lauk({ k: "s.isigaliojo", pav: "Sutarties įsigaliojimo data", tipas: "data", v: s.isigaliojo }) +
+      lauk({ k: "s.pasiulymuData", pav: "Pasiūlymų pateikimo termino pabaiga", tipas: "data", v: s.pasiulymuData, uz: "Nuo jos rangos ir eksploatavimo sutartyse skaičiuojamas pirmo kainos perskaičiavimo laikotarpis." }) +
+      lauk({ k: "s.isigaliojo", pav: "Sutarties įsigaliojimo data", tipas: "data", v: s.isigaliojo, uz: "Nuo jos prekių ir paslaugų sutartyse skaičiuojami 6 mėn. iki pirmo kreipimosi dėl kainos perskaičiavimo." }) +
       lauk({ k: "s.galiojaIki", pav: "Sutartis galioja iki", tipas: "data", v: s.galiojaIki }) +
       lauk({ k: "s.objektas", pav: "Sutarties objektas", v: s.objektas, perpiesk: true, parinktys: [["", G.objektas({ forma: s.forma }) ? "pagal formą - " + OBJ_T[G.objektas({ forma: s.forma })] : "- pasirinkite -"], ["darbai", "Darbai"], ["prekes", "Prekės"], ["paslaugos", "Paslaugos"]],
         uz: "Nuo jo priklauso pakeitimų vertės ribos (prekėms ir paslaugoms - 10, darbams - 15 procentų)." + (s.bvpz && s.objektas && s.objektas === G.objektasIsBvpz(s.bvpz) ? " Įrašyta pagal paskelbtą BVPŽ kodą " + s.bvpz + "." : "") }) +
@@ -392,11 +406,11 @@
       '<p class="ps-uz">Iš šio sąrašo įrankis preambulėje išvardija ankstesnius susitarimus, skaičiuoja kainą iki šio pakeitimo ir tikrina, ar kainos perskaičiavimo laikotarpiai nepersidengia.</p>';
     if (!S.ankstesni.length) h += '<p class="ps-tuscia-eil">Sąrašas tuščias. Jei Sutartis jau buvo keista, pridėkite pakeitimus arba raskite juos CVP IS duomenyse.</p>';
     else {
-      var ankstesne = s.viesaVerte;
+      var ankstesne = s.viesaVerte, VP = G.viesiPokyciai(S);
       h += S.ankstesni.map(function (a, i) {
-        var vz = "";
+        var vz = "", vp = VP.filter(function (x) { return x.i === i; })[0];
         if (a.viesaVerte != null) {
-          vz = "CVP IS paskelbta vertė po šio pakeitimo - " + G.eur(a.viesaVerte) + " Eur" + (ankstesne != null ? (Math.abs(a.viesaVerte - ankstesne) < 0.005 ? " (nepasikeitė)" : " (pokytis " + (a.viesaVerte > ankstesne ? "+" : "-") + G.eur(Math.abs(a.viesaVerte - ankstesne)) + " Eur)") : "") + ". Patikrinkite, ar ji be PVM.";
+          vz = "CVP IS paskelbta vertė po šio pakeitimo - " + G.eur(a.viesaVerte) + " Eur" + (ankstesne != null ? (Math.abs(a.viesaVerte - ankstesne) < 0.005 ? " (nepasikeitė)" : " (pokytis " + (a.viesaVerte > ankstesne ? "+" : "-") + G.eur(Math.abs(a.viesaVerte - ankstesne)) + " Eur" + (vp && vp.tikPvm ? " - atitinka PVM, tikėtina, kaina nekeista" : "") + ")") : "") + ". Patikrinkite, ar ji be PVM.";
           ankstesne = a.viesaVerte;
         }
         return '<div class="ps-ank" role="group" aria-label="Ankstesnis pakeitimas ' + (i + 1) + '">' + lauk({ k: "a." + i + ".nr", pav: "Eilės Nr.", v: a.nr, klase: "ps-lauk--siaura" }) + lauk({ k: "a." + i + ".data", pav: "Data", tipas: "data", v: a.data }) +
@@ -404,7 +418,8 @@
           lauk({ k: "a." + i + ".pokytis", pav: "Kainos pokytis, Eur be PVM", tipas: "suma", v: a.pokytis, pvz: "0, jei kaina nekeista", uz: vz }) + lauk({ k: "a." + i + ".indMenuo", pav: "Indekso mėnuo (jei perskaičiuota kaina)", tipas: "menuo", v: a.indMenuo, pvz: "pvz., 2026-03" }) +
           lauk({ k: "a." + i + ".perziura", pav: "Iš jo dėl kainų peržiūros, Eur", tipas: "suma", v: a.perziura, pvz: "jei dalis pokyčio", uz: "Kainų peržiūros dalis - ribos skaičiuojamos nuo patikslintos vertės." }) +
           lauk({ k: "a." + i + ".pagal2d", pav: "Iš jo pagal nedidelės vertės pakeitimų dalį, Eur", tipas: "suma", v: a.pagal2d, pvz: "jei taikyta" }) +
-          '<div class="ps-ank-v">' + (a.saltinis === "cvpis" ? '<span class="ps-zyme">iš CVP IS duomenų</span>' : "") + '<button type="button" class="ps-btn ps-btn--maz" data-veiksmas="psSalinkAnkstesni" data-i="' + i + '" aria-label="Pašalinti ' + (i + 1) + ' pakeitimą iš sąrašo">Pašalinti</button></div></div>';
+          '<div class="ps-ank-v">' + (a.saltinis === "cvpis" ? '<span class="ps-zyme">iš CVP IS duomenų</span>' : "") +
+          (vp && a.pokytis == null && vp.siulomas != null ? '<button type="button" class="ps-btn ps-btn--maz" data-veiksmas="psPokytis" data-i="' + i + '">Įrašyti kainos pokytį: ' + (vp.siulomas > 0 ? "+" : "") + esc(G.eur(vp.siulomas)) + " Eur be PVM</button>" : "") + '<button type="button" class="ps-btn ps-btn--maz" data-veiksmas="psSalinkAnkstesni" data-i="' + i + '" aria-label="Pašalinti ' + (i + 1) + ' pakeitimą iš sąrašo">Pašalinti</button></div></div>';
       }).join("");
     }
     return h + "</section>";
@@ -443,6 +458,7 @@
       '<div class="ps-viso" data-ind-viso="' + i + '" role="status"></div></div>';
     h += '<h4 class="ps-h4">Kreipimasis</h4><div class="ps-tink">' + lauk({ k: K + "iniciatorius", pav: "Perskaičiuoti kainą kreipėsi", v: b.iniciatorius, parinktys: [["tiekejas", Tk], ["pirkejas", Pk]] }) +
       lauk({ k: K + "rastoData", pav: "Kreipimosi (rašto) data", tipas: "data", v: b.rastoData }) + lauk({ k: K + "rastoNr", pav: "Rašto numeris", v: b.rastoNr }) +
+      (G.laikotarpioMatas(S) === "akto" ? lauk({ k: K + "darbuAktoData", pav: "Paskutinio atliktų darbų akto (pažymos) data", tipas: "data", v: b.darbuAktoData, uz: "Iki jos Sutartyje skaičiuojamas trumpiausias kainos perskaičiavimo laikotarpis." }) : "") +
       lauk({ k: K + "aktas", pav: "Ar pateiktas perskaičiavimo aktas?", v: b.aktas, perpiesk: true, parinktys: [["", "- nepasirinkta -"], ["taip", "Taip"], ["ne", "Ne"]] }) +
       (b.aktas === "taip" ? lauk({ k: K + "aktoData", pav: "Akto data", tipas: "data", v: b.aktoData }) : "") +
       lauk({ k: K + "tiekejoKaina", pav: "Kitos Šalies apskaičiuota Sutarties kaina, Eur be PVM", tipas: "suma", v: b.tiekejoKaina, uz: "Įrašius palyginama su įrankio skaičiavimu." }) + "</div>";
@@ -523,7 +539,7 @@
     if (pg === "keitimas_nenumatytos") h += '<h4 class="ps-h4">Nenumatytos aplinkybės</h4><div class="ps-tink">' +
       lauk({ k: K + "aplinkybes", pav: "Kokios aplinkybės atsirado", v: b.aplinkybes, eil: 3, klase: "ps-lauk--plati", privalomas: true }) +
       lauk({ k: K + "suzinota", pav: "Kada jos paaiškėjo", tipas: "data", v: b.suzinota }) + "</div>";
-    if (pg === "keitimas_mazos_vertes" || pg === "keitimas_nenumatytos") h += '<div class="ps-tink">' + lauk({ k: K + "pobudisNesikeicia", pav: "Pakeitimu iš esmės nepakeičiamas Sutarties pobūdis (perkami tokie pat " + VARD[o] + ")", tipas: "bool", v: b.pobudisNesikeicia, klase: "ps-lauk--plati" }) + "</div>";
+    if (pg === "keitimas_mazos_vertes" || pg === "keitimas_nenumatytos") h += '<div class="ps-tink">' + lauk({ k: K + "pobudisNesikeicia", pav: "Pakeitimu iš esmės nepakeičiamas Sutarties pobūdis (" + (o === "paslaugos" || o === "prekes" ? "perkamos tokios pat " : "perkami tokie pat ") + VARD[o] + ")", tipas: "bool", v: b.pobudisNesikeicia, klase: "ps-lauk--plati" }) + "</div>";
     if (pg === "perziuros_salygos") h += '<h4 class="ps-h4">Sutartyje numatyta galimybė</h4><div class="ps-tink">' + sutPunktas(b, i, "Galimybė numatyta Sutarties") +
       lauk({ k: K + "galimybe", pav: "Ką numato sąlyga (apimtis ir aplinkybės)", v: b.galimybe, eil: 2, klase: "ps-lauk--plati" }) +
       lauk({ k: K + "ribaEur", pav: "Sutartyje nustatyta didžiausia vertė, Eur be PVM (jei yra)", tipas: "suma", v: b.ribaEur }) + "</div>";
@@ -634,7 +650,8 @@
       '<button type="button" class="ps-btn ps-btn--pagr" data-veiksmas="psWord" data-dok="susitarimas"' + (kl.length ? " disabled" : "") + ">Atsisiųsti susitarimą (Word)</button>" +
       (ind ? '<button type="button" class="ps-btn" data-veiksmas="psWord" data-dok="skaiciavimas"' + (kl.length ? " disabled" : "") + ">Skaičiavimas (Word)</button>" : "") +
       '<button type="button" class="ps-btn" data-veiksmas="psWord" data-dok="pagrindimas"' + (kl.length ? " disabled" : "") + ">Pagrindimas derinimui (Word)</button>" +
-      '<button type="button" class="ps-btn" data-veiksmas="psKopijuok">Kopijuoti tekstą</button></div></div><div id="psWordBusena" class="ps-busena" hidden></div>' +
+      '<button type="button" class="ps-btn" data-veiksmas="psKopijuok"' + (kl.length ? " disabled" : "") + '>Kopijuoti tekstą</button></div></div><div id="psWordBusena" class="ps-busena" hidden></div>' +
+      (kl.length ? '<p class="ps-pastaba ps-pastaba--klaida">Kol patikroje yra taisytinų vietų, peržiūra rodoma tik darbui: tekstas dar netinka derinti ar pasirašyti.</p>' : "") +
       '<p class="ps-uz">Projektą sudaro taisyklės ir šablonai pagal įvestus duomenis, be dirbtinio intelekto. Prieš pasirašant jis derinamas įprasta organizacijos tvarka.</p>' +
       '<div class="ps-lapas" id="psPerziura" tabindex="0" role="group" aria-label="Susitarimo projekto peržiūra">' + DK.html(G.susitarimas(S)) + "</div></section>";
     h += '<section class="ps-card" aria-labelledby="psZ3d"><h2 id="psZ3d">Kas toliau</h2><div class="ps-tink">' + lauk({ k: "x.pasirasyta", pav: "Pasirašymo data (jei jau žinoma)", tipas: "data", v: PASIRASYTA, perpiesk: true, uz: "Pagal ją apskaičiuojami terminai. Data čia neišsaugoma." }) + "</div>" +
@@ -756,7 +773,7 @@
       var nauj = b.eilutes.map(function (e) { var x = e.naujausias; delete e.naujausias; return x; }).filter(Boolean)[0];
       b.gauta = siandien();
       issaugok(); piesk();
-      var t = truksta.length ? "Šių mėnesių reikšmės šaltinyje dar nepaskelbtos arba jų nėra: " + truksta.map(I.menuoZodziais).join(", ") + "." + (nauj ? " Naujausia paskelbta - " + I.menuoZodziais(nauj) + "." : "")
+      var t = truksta.length ? ("Šių mėnesių reikšmės šaltinyje dar nepaskelbtos arba jų nėra: " + truksta.map(I.menuoZodziais).join(", ") + "." + (nauj ? " Naujausia paskelbta - " + I.menuoZodziais(nauj) + "." : "")).replace(/\.\./g, ".")
         : "Reikšmės gautos " + b.gauta + "." + (nepavyko ? " Dalies indeksų gauti nepavyko - įrašykite juos ranka arba bandykite dar kartą." : "");
       busena(sel, truksta.length || nepavyko ? "nezinoma" : "gerai", t);
       var m = doc.querySelector('[data-veiksmas="psGaukIndeksus"][data-b="' + bi + '"]'); if (m) m.focus();
@@ -764,7 +781,7 @@
     });
   }
 
-  var RASTI_T = { neidiegta: "Viešų sutarčių duomenų paslauga dar neįdiegta - įrašykite sutarties duomenis ranka.", rysys: "Nepavyko susisiekti su G-Procure serveriu. Bandykite dar kartą arba įrašykite duomenis ranka.",
+  var RASTI_T = { neidiegta: "Viešų sutarčių duomenų paslauga dar neįdiegta - įrašykite sutarties duomenis ranka.", rysys: "G-Procure serveris nepasiekiamas. Bandykite dar kartą arba įrašykite duomenis ranka.",
     saltinis: "Viešų duomenų šaltinis šiuo metu neatsako. Bandykite vėliau arba įrašykite duomenis ranka.", parametrai: "Sutarties numeris neatpažintas - patikrinkite, ar įrašytas visas numeris.",
     uzimta: "Per daug užklausų - palaukite minutę ir bandykite dar kartą.", ruosiama: "Duomenys dar ruošiami - bandykite po kelių sekundžių." };
   function rask(o) {
@@ -783,7 +800,10 @@
       if (!rez || !rez.ok || !S || S.id !== sid) return rez;
       var r = rez.reiksme;
       if (!r.ok) { busena(sel, "tuscia", "Sutartis Nr. " + nr + " viešuose duomenyse nerasta. Patikrinkite numerį arba įrašykite duomenis ranka (ne visos sutartys viešuose duomenyse turi numerį)."); return rez; }
-      var x = G.isViesu(S, r);
+      var x = G.isViesu(S, r), rv = r.sutartis || {};
+      /* Įrašytas pakeitimo numeris - sutarties numeris pakeičiamas tikruoju */
+      if (rv.nr && rv.nr !== nr && S.sutartis.nr === nr) { S.sutartis.nr = String(rv.nr).slice(0, 60); x.pildyta.unshift("sutarties numeris " + rv.nr + " (įrašytas " + nr + " - pakeitimo numeris)"); }
+      G.papildyk(S, rv, x.pildyta);
       S.sutartis.gauta = siandien();
       issaugok(); piesk();
       busena(sel, "gerai", "Rasta: „" + (S.sutartis.viesaPav || nr) + "“. " + (x.pildyta.length ? "Užpildyta: " + x.pildyta.join(", ") + ". " : "Jau įrašyti laukai nepakeisti. ") +
@@ -860,6 +880,16 @@
     },
     psPasirink: function (el) { var r = P.rasta[+el.getAttribute("data-i")]; if (r) pasirink(r.x); },
     psDalis: function (el) { ATVERTA[el.getAttribute("data-dalis")] = !!el.open; },
+    psPridekViesa: function (el) {
+      var nr = el.getAttribute("data-nr"), p = PASIRINKTA && PASIRINKTA.abejotini.filter(function (x) { return x.nr === nr; })[0];
+      if (!S || !p || !G.pridekViesaPakeitima(S, p)) return;
+      issaugok(); piesk(); pranesk("Pakeitimas " + nr + " įtrauktas į ankstesnių pakeitimų sąrašą.");
+    },
+    psPokytis: function (el) {
+      var i = +el.getAttribute("data-i"), v = G.viesiPokyciai(S).filter(function (x) { return x.i === i; })[0];
+      if (!S || !v || v.siulomas == null || !S.ankstesni[i]) return;
+      S.ankstesni[i].pokytis = v.siulomas; issaugok(); piesk("#" + lid("a." + i + ".pokytis"));
+    },
     psForma: function (el) {
       var f = el.getAttribute("data-f");
       if (!S || !Object.prototype.hasOwnProperty.call(G.FORMOS, f)) return;
@@ -944,7 +974,7 @@
       if (n) { var d = n.closest("details"); if (d) { d.open = true; if (d.hasAttribute("data-dalis")) ATVERTA[d.getAttribute("data-dalis")] = true; } n.focus(); if (n.scrollIntoView) n.scrollIntoView({ block: "center" }); }
     },
     psWord: function (el) { word(el.getAttribute("data-dok")); },
-    psKopijuok: function () { if (global.GP_KOPIJA) global.GP_KOPIJA.kopijuok(DK.tekstas(G.susitarimas(S)), { sekme: "Susitarimo tekstas nukopijuotas." }); },
+    psKopijuok: function () { if (G.kliuciu(S)) { busena("#psWordBusena", "klaida", "Pirmiausia pataisykite patikroje nurodytas vietas."); return; } if (global.GP_KOPIJA) global.GP_KOPIJA.kopijuok(DK.tekstas(G.susitarimas(S)), { sekme: "Susitarimo tekstas nukopijuotas." }); },
     psUzbaik: function () {
       if (G.patikros(S).some(function (p) { return p.lygis === "klaida"; })) return;
       TVIRTINA = "uzbaik"; piesk(); var m = doc.querySelector('[data-veiksmas="psUzbaikTikrai"]'); if (m) m.focus(); },

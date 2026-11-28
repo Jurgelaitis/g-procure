@@ -168,7 +168,7 @@
       taikymas: "Perskaičiuoti įkainiai taikomi už tuos Darbus, kurių numatoma pradžia yra vėlesnė nei šio Susitarimo sudarymo mėnesio 25 diena, ir tik tiems Darbams, kurie atliekami po to, kai Šalys pasirašė šį Susitarimą." },
     SR: { formule: "koef", slenkstis: 5, grieztas: false, minMen: 6, pirmamTaikoma: true, kTikslumas: 3, pradzia: "pasiulymu", dok: "bendrųjų sąlygų", punktas: "7.3", eilutes: E_RANGA, taikymas: T_RANGA, garantija: true },
     PSR: { formule: "koef", slenkstis: 5, grieztas: false, minMen: 6, pirmamTaikoma: true, kTikslumas: 3, pradzia: "pasiulymu", dok: "bendrųjų sąlygų", punktas: "8.3", eilutes: E_RANGA, taikymas: T_RANGA, garantija: true },
-    DARBAI: { formule: "koef", slenkstis: 5, grieztas: false, minMen: 6, pirmamTaikoma: false, kTikslumas: 3, pradzia: "pasiulymu", dok: "bendrųjų sąlygų", punktas: "", eilutes: E_RANGA, taikymas: T_RANGA, garantija: true },
+    DARBAI: { formule: "koef", slenkstis: 5, grieztas: false, minMen: 6, pirmamTaikoma: false, kTikslumas: null, pradzia: "pasiulymu", dok: "bendrųjų sąlygų", punktas: "", eilutes: E_RANGA, taikymas: T_RANGA, garantija: true },
     PPS: { formule: "koef", slenkstis: 5, grieztas: false, minMen: 6, pirmamTaikoma: true, kTikslumas: null, pradzia: "pasiulymu", dok: "bendrųjų sąlygų", punktas: "",
       eilutes: [["sski_du", "Užsakovui neperduotų (neužaktuotų) Paslaugų vertei", true, true]], taikymas: "Perskaičiuojama tik Užsakovui neperduotų (neužaktuotų) Paslaugų vertė.", garantija: true },
     PREKES: { formule: "proc", slenkstis: 5, grieztas: true, minMen: 6, pirmamTaikoma: true, kTikslumas: 1, pradzia: "isigaliojimo", dok: "specialiųjų sąlygų", punktas: "5.3.1.2",
@@ -185,6 +185,18 @@
     isigaliojimo: "Pirmam perskaičiavimui - Sutarties įsigaliojimo mėnuo; vėlesniam - paskutinio perskaičiavimo metu naudotos indekso reikšmės mėnuo.",
     "": "Laikotarpio pradžią nustato Sutarties kainos peržiūros nuostata."
   };
+  /* Kaip Sutartis skaičiuoja trumpiausią laikotarpį (LITGRID formos, perskaityta 2026-11-28):
+     kreipimosi - prekių ir paslaugų SS 5.3.1.2.1: kreiptis ne anksčiau kaip po 6 mėn. nuo Sutarties įsigaliojimo (po perskaičiavimo - nuo jo susitarimo);
+     akto - rangos, darbų ir eksploatavimo BS: laikotarpis nuo pasiūlymų termino pabaigos (po perskaičiavimo - nuo jo) iki paskutinio atliktų darbų akto (pažymos);
+     indeksu - projektavimo paslaugų BS: indekso reikšmė pakinta „per 6 mėnesius ar ilgesnį laikotarpį“ - lyginami indeksų mėnesiai. */
+  var LAIK_MATAS = { PREKES: "kreipimosi", PASLAUGOS: "kreipimosi", SR: "akto", PSR: "akto", DARBAI: "akto", EKS: "akto" };
+  function laikotarpioMatas(S) { var f = S && S.sutartis && S.sutartis.forma; return turi(LAIK_MATAS, f) ? LAIK_MATAS[f] : "indeksu"; }
+  /* Paskutinio kainos perskaičiavimo susitarimo data (ankstesnis su vėliausiu indekso mėnesiu) */
+  function paskutinioIndData(S) {
+    var m = "", d = "";
+    ((S && S.ankstesni) || []).forEach(function (a) { if (a.indMenuo && a.indMenuo >= m) { m = a.indMenuo; d = a.pasirasyta || a.data || ""; } });
+    return d;
+  }
   /* pagrindai - kai pagrindą renkasi žmogus (pirmas sąraše - numatytas, jei pasirinkimas tik vienas). */
   var TIPAI = {
     ind: { pav: "Kainos perskaičiavimas pagal indeksą", pagrindas: "perziuros_salygos", esme: "Sutarties kainos perskaičiavimo pagal kainų indeksą" },
@@ -235,7 +247,7 @@
     if (tipas === "ind") {
       var ank = paskutinisInd(S);
       return { tipas: "ind", taisykle: taisykle(f), dok: t.dok, punktas: t.punktas, pradzia: ank ? ank : "", pabaiga: "", pirmas: !ank, eilutes: t.eilutes.map(indEilute),
-        iniciatorius: "tiekejas", rastoData: "", rastoNr: "", aktas: "", aktoData: "", tiekejoKaina: null, kainosDok: "", kainosPunktas: "", ikainiuPriedas: false, skaiciavimoPriedas: false,
+        iniciatorius: "tiekejas", rastoData: "", rastoNr: "", aktas: "", aktoData: "", darbuAktoData: "", tiekejoKaina: null, kainosDok: "", kainosPunktas: "", ikainiuPriedas: false, skaiciavimoPriedas: false,
         taikymas: t.taikymas, garantija: t.garantija ? "" : "netaikoma", gauta: "" };
     }
     if (tipas === "sub") {
@@ -282,7 +294,7 @@
           kTikslumas: sk(t.kTikslumas) != null && t.kTikslumas >= 0 && t.kTikslumas <= 10 ? Math.floor(t.kTikslumas) : null, pradzia: turi(PRADZIOS, t.pradzia) ? t.pradzia : "" },
         dok: DOKAI.indexOf(b.dok) >= 0 ? b.dok : "", punktas: laukas(b, "punktas", 40), pradzia: menuo(b.pradzia) || "", pabaiga: menuo(b.pabaiga) || "", pirmas: b.pirmas !== false, eilutes: el,
         iniciatorius: b.iniciatorius === "pirkejas" ? "pirkejas" : "tiekejas", rastoData: dataISO(b.rastoData), rastoNr: laukas(b, "rastoNr", 60), aktas: b.aktas === "taip" || b.aktas === "ne" ? b.aktas : "",
-        aktoData: dataISO(b.aktoData), tiekejoKaina: teig(b.tiekejoKaina), kainosDok: DOKAI.indexOf(b.kainosDok) >= 0 ? b.kainosDok : "", kainosPunktas: laukas(b, "kainosPunktas", 40),
+        aktoData: dataISO(b.aktoData), darbuAktoData: dataISO(b.darbuAktoData), tiekejoKaina: teig(b.tiekejoKaina), kainosDok: DOKAI.indexOf(b.kainosDok) >= 0 ? b.kainosDok : "", kainosPunktas: laukas(b, "kainosPunktas", 40),
         ikainiuPriedas: b.ikainiuPriedas === true, skaiciavimoPriedas: b.skaiciavimoPriedas === true, taikymas: txt(b.taikymas, 600).replace(/\n+/g, " "),
         garantija: ["taip", "ne", "netaikoma"].indexOf(b.garantija) >= 0 ? b.garantija : "", gauta: laukas(b, "gauta", 40) };
     }
@@ -388,11 +400,36 @@
     });
     return { verte: r2(s.pradineVerte + p), perziura: r2(p), spejama: spej };
   }
+  /* Ar suma viršija p procentų bazės - centais, be slankiojo kablelio paklaidos (lygiai ties riba - neviršija). */
+  function virsProc(suma, baze, p) { return Math.round(suma * 100) * 100 > Math.round(baze * 100) * p; }
+  /* Ar pradinė kaina įrašyta iš CVP IS vertės su PVM („su“), be PVM („be“) ar nežinoma („“) */
+  function viesosPvm(S) {
+    var s = S.sutartis, t = pvmTarifas(), v = s.viesaVerte, p = s.pradineVerte;
+    if (v == null || p == null) return "";
+    if (Math.abs(p - v) < 0.01) return "be";
+    return t != null && Math.abs(p - r2(v / (1 + t))) < 0.01 ? "su" : "";
+  }
+  /* Ankstesnių pakeitimų CVP IS vertės pokyčiai: [{ i, pries, po, skirtumas, tikPvm, siulomas }] - siulomas be PVM pagal pradinės kainos prielaidą */
+  function viesiPokyciai(S) {
+    var t = pvmTarifas(), pv = viesosPvm(S), pries = S.sutartis.viesaVerte, out = [];
+    S.ankstesni.forEach(function (a, i) {
+      if (a.viesaVerte == null) return;
+      if (pries != null) {
+        var sk = r2(a.viesaVerte - pries), tikPvm = t != null && sk !== 0 && (Math.abs(a.viesaVerte - r2(pries * (1 + t))) < 0.01 || Math.abs(pries - r2(a.viesaVerte * (1 + t))) < 0.01);
+        out.push({ i: i, pries: pries, po: a.viesaVerte, skirtumas: sk, tikPvm: tikPvm, siulomas: tikPvm ? 0 : pv === "su" && t != null ? r2(sk / (1 + t)) : pv === "be" ? sk : null });
+      }
+      pries = a.viesaVerte;
+    });
+    return out;
+  }
+  function siandienISO() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   function suma2d(S) { var v = 0; S.ankstesni.forEach(function (a) { if (a.pagal2d != null) v += a.pagal2d; }); return r2(v); }
   function ribos(S) {
-    var T = global.GP_THRESHOLDS, o = objektas(S.sutartis), pi = T && T.PI;
-    return { objektas: o, proc: o === "darbai" ? 15 : o ? 10 : null, intl: pi && o ? (o === "darbai" ? pi.intl_works : pi.intl_goods) : null,
-      mv: pi && o ? (o === "darbai" ? pi.mv_works : pi.mv_goods) : null };
+    var T = global.GP_THRESHOLDS, o = objektas(S.sutartis), pi = T && T.PI, SP = global.GP_SPEC_PASLAUGOS;
+    /* Socialinės ir kitos specialiosios paslaugos (PĮ 4 priedas, pagal BVPŽ kodą) - jų tarptautinio pirkimo riba */
+    var spec = o === "paslaugos" && SP && S.sutartis.bvpz ? SP.tikrink(S.sutartis.bvpz) : null;
+    return { objektas: o, proc: o === "darbai" ? 15 : o ? 10 : null, intl: pi && o ? (o === "darbai" ? pi.intl_works : spec ? pi.intl_special : pi.intl_goods) : null,
+      mv: pi && o ? (o === "darbai" ? pi.mv_works : pi.mv_goods) : null, spec: spec };
   }
   function blokuSuma(S, tipas, kur) {
     var v = 0;
@@ -454,14 +491,24 @@
     if (!b.pradzia) out.truksta.push("laikotarpio pradžios mėnuo");
     if (!b.pabaiga) out.truksta.push("laikotarpio pabaigos mėnuo");
     if (out.men != null && out.men <= 0) out.klaidos.push("Laikotarpio pabaiga turi būti vėlesnė už pradžią.");
-    var reikiaMen = t.minMen != null && (t.pirmamTaikoma || !b.pirmas);
+    var reikiaMen = t.minMen != null && (t.pirmamTaikoma || !b.pirmas), lm = laikotarpioMatas(S);
     out.laikotarpis = { reikia: reikiaMen ? t.minMen : null, men: out.men, tinka: out.men == null ? null : (!reikiaMen || out.men >= t.minMen) };
+    if (reikiaMen && lm !== "indeksu") {
+      /* Sutartis laikotarpį skaičiuoja datomis - indeksų mėnesiai (dėl skelbimo vėlavimo trumpesni) tik orientyras. */
+      var pd = paskutinioIndData(S), ss = S.sutartis, nuo = pd || (lm === "kreipimosi" ? ss.isigaliojo : ss.pasiulymuData), iki = lm === "kreipimosi" ? b.rastoData : b.darbuAktoData;
+      var L2 = { reikia: t.minMen, men: out.men, datos: lm, nuo: nuo, iki: iki, nuoK: pd ? "paskutinio perskaičiavimo susitarimas" : lm === "kreipimosi" ? "Sutarties įsigaliojimas" : "pasiūlymų pateikimo termino pabaiga",
+        ikiK: lm === "kreipimosi" ? "kreipimasis" : "paskutinis atliktų darbų aktas", truksta: [] };
+      if (!nuo) L2.truksta.push(lm === "kreipimosi" ? "Sutarties įsigaliojimo datą (1 žingsnis)" : "pasiūlymų pateikimo termino pabaigos datą (1 žingsnis)");
+      if (!iki) L2.truksta.push(lm === "kreipimosi" ? "kreipimosi (rašto) datą" : "paskutinio atliktų darbų akto (pažymos) datą");
+      if (nuo && iki) { L2.leidziama = pridekMen(nuo, t.minMen); L2.tinka = iki >= L2.leidziama; } else L2.tinka = null;
+      out.laikotarpis = L2;
+    }
     var suma = 0, delta = 0, sumu = 0, visos = true;
     b.eilutes.forEach(function (e, i) {
       var r = { i: i, indeksas: e.indeksas, pav: e.pav, taikoma: e.taikoma, suSuma: e.suSuma, slenksciui: e.slenksciui, suma: e.suma, pr: e.pr, pb: e.pb, pokytis: null, K: null, nauja: null, skirtumas: null };
       if (!e.pav) out.truksta.push("indekso pavadinimas (" + (i + 1) + " eilutė)");
       if (e.pr != null && e.pb != null) {
-        var santykis = e.pb / e.pr;
+        var santykis = apvalink(e.pb, 4) / apvalink(e.pr, 4);
         r.pokytis = (santykis - 1) * 100;
         r.K = t.formule === "proc" ? apvalink(r.pokytis, t.kTikslumas == null ? 1 : t.kTikslumas) : (t.kTikslumas == null ? santykis : apvalink(santykis, t.kTikslumas));
         if (e.suSuma && e.suma != null) {
@@ -475,11 +522,13 @@
         else { suma += e.suma; if (r.skirtumas != null) delta += r.skirtumas; }
       }
       if (e.slenksciui && r.pokytis != null && !out.slenkstis) {
-        /* Su riba lyginamas pokyčio dydis (padidėjimas ar sumažėjimas). Kai Sutartis nustato apvalintą pokytį k (formulė „proc“), lyginamas jis;
-           kitaip - neapvalintas pokytis (6 skaitmenys - tik slankiojo kablelio paklaidai). Jei apvalinimas keistų išvadą - „ribinis“. */
+        /* Su riba lyginamas apskaičiuotas pokyčio dydis (padidėjimas ar sumažėjimas; 6 skaitmenys - tik slankiojo kablelio paklaidai):
+           prekių ir paslaugų SS 5.3.1.2.1 - „pokytis (k), apskaičiuotas kaip nustatyta 5.3.1.2.6 papunktyje, viršija 5 procentus“, o suapvalintas k
+           naudojamas tik „tolimesniems skaičiavimams“ (5.3.1.2.7); rangos formose - indeksas „pakinta 5 % arba daugiau“. Jei apvalinimas keistų
+           išvadą - „ribinis“ (tik paaiškinimas; sprendimas - pagal apskaičiuotą pokytį). */
         var tiksl = apvalink(Math.abs(r.pokytis), 6), apval = Math.abs(t.formule === "proc" ? r.K : apvalink(r.pokytis, 2));
         var lyg = function (x) { return t.slenkstis == null ? null : (t.grieztas ? x > t.slenkstis : x >= t.slenkstis); };
-        var pagr = t.formule === "proc" ? lyg(apval) : lyg(tiksl), kitaip = t.formule === "proc" ? lyg(tiksl) : lyg(apval);
+        var pagr = lyg(tiksl), kitaip = lyg(apval);
         out.slenkstis = { pav: e.pav, pokytis: r.pokytis, reikia: t.slenkstis, grieztas: t.grieztas, pasiektas: pagr, ribinis: pagr !== kitaip };
       }
       out.eilutes.push(r);
@@ -508,18 +557,25 @@
       var r = skaiciuokInd(b, S), t = b.taisykle;
       if (b.punktas) out.push(P("ok", "Kainos peržiūra numatyta " + punktoTekstas(b.dok, b.punktas) + "."));
       else out.push(P("klaida", "Nurodykite Sutarties punktą, kuriame numatyta kainos peržiūra. Jei Sutartyje tokios sąlygos nėra, šiuo pagrindu kainos keisti negalima.", L("punktas")));
-      if (r.laikotarpis.tinka === true && r.laikotarpis.reikia != null) out.push(P("ok", "Laikotarpis - " + r.men + " mėn. (Sutartyje - ne trumpesnis kaip " + r.laikotarpis.reikia + " mėn.)."));
+      var LT = r.laikotarpis, lk = LT.datos === "kreipimosi" ? "rastoData" : "darbuAktoData";
+      if (LT.datos && LT.truksta.length) out.push(P("tikrinti", "Sutartyje " + LT.reikia + " mėn. laikotarpis skaičiuojamas datomis - įrašykite " + LT.truksta.join(" ir ") + "." + (r.men != null ? " Pagal indeksų mėnesius - " + r.men + " mėn." : ""), L(LT.iki ? "pradzia" : lk)));
+      else if (LT.datos && LT.tinka) out.push(P("ok", "Laikotarpis nuo " + dataZ(LT.nuo) + " (" + LT.nuoK + ") iki " + dataZ(LT.iki) + " (" + LT.ikiK + ") - ne trumpesnis kaip " + LT.reikia + " mėn."));
+      else if (LT.datos) out.push(P("klaida", "Laikotarpis nuo " + dataZ(LT.nuo) + " (" + LT.nuoK + ") iki " + dataZ(LT.iki) + " (" + LT.ikiK + ") trumpesnis nei " + LT.reikia + " mėn., nustatyti Sutartyje: jie sueina " + dataZ(LT.leidziama) + ".", L(lk)));
+      else if (r.laikotarpis.tinka === true && r.laikotarpis.reikia != null) out.push(P("ok", "Laikotarpis - " + r.men + " mėn. (Sutartyje - ne trumpesnis kaip " + r.laikotarpis.reikia + " mėn.)."));
       else if (r.laikotarpis.tinka === true) out.push(P("info", "Laikotarpis - " + r.men + " mėn.; mažiausia trukmė šiam perskaičiavimui Sutartyje nenustatyta arba nenurodyta."));
       else if (r.laikotarpis.tinka === false) out.push(P("klaida", "Laikotarpis - " + r.men + " mėn., o Sutartyje nustatyta ne trumpesnis kaip " + r.laikotarpis.reikia + " mėn.", L("pabaiga")));
       if (r.slenkstis) {
         var zn = t.grieztas ? "daugiau kaip " : "ne mažiau kaip ", sl = r.slenkstis;
-        if (sl.reikia == null) out.push(P("tikrinti", "Indekso pokytis - " + proc(sl.pokytis) + " %. Sutartyje nustatyta riba nenurodyta - įrašykite ją arba patikrinkite, ar Sutartis jos nenustato.", L("slenkstis")));
-        else if (sl.ribinis) out.push(P("tikrinti", "Indekso pokytis - " + proc(sl.pokytis, 4) + " %, riba - " + zn + proc(sl.reikia, 2) + " %. Rezultatas priklauso nuo apvalinimo - patikrinkite pagal Sutartį.", L("slenkstis")));
-        else if (sl.pasiektas) out.push(P("ok", "Indekso pokytis - " + proc(sl.pokytis) + " % (Sutartyje - " + zn + proc(sl.reikia, 2) + " %)."));
-        else out.push(P("klaida", "Indekso pokytis - " + proc(sl.pokytis) + " %, o Sutartyje nustatyta riba - " + zn + proc(sl.reikia, 2) + " %. Kainos peržiūros sąlyga neįvykdyta.", L("slenkstis")));
+        var apv = t.formule === "proc" ? "suapvalintas pokytis k (" + kTekstas(apvalink(Math.abs(sl.pokytis), t.kTikslumas == null ? 1 : t.kTikslumas), t) + ")" : "iki 2 skaitmenų suapvalintas pokytis (" + proc(Math.abs(sl.pokytis)) + " %)";
+        if (sl.reikia == null) out.push(P("tikrinti", "Indekso pokytis " + proc(sl.pokytis) + " %. Sutartyje nustatyta riba nenurodyta - įrašykite ją arba patikrinkite, ar Sutartis jos nenustato.", L("slenkstis")));
+        else if (sl.ribinis && sl.pasiektas) out.push(P("tikrinti", "Indekso pokytis " + proc(sl.pokytis, 4) + " % (Sutartyje - " + zn + proc(sl.reikia, 2) + " %) - sąlyga įvykdyta: ji tikrinama pagal apskaičiuotą pokytį, nors " + apv + " ribos nesiektų. Jei kita Šalis skaičiuoja kitaip, išsiaiškinkite pagal Sutartį.", L("slenkstis")));
+        else if (sl.ribinis) out.push(P("klaida", "Indekso pokytis " + proc(sl.pokytis, 4) + " %, o Sutartyje nustatyta riba - " + zn + proc(sl.reikia, 2) + " %. Sąlyga tikrinama pagal apskaičiuotą pokytį, todėl ji neįvykdyta, nors " + apv + " ribą pasiektų. Jei Sutartyje nustatyta kitaip, pakeiskite peržiūros taisyklę.", L("slenkstis")));
+        else if (sl.pasiektas) out.push(P("ok", "Indekso pokytis " + proc(sl.pokytis) + " % (Sutartyje - " + zn + proc(sl.reikia, 2) + " %)."));
+        else out.push(P("klaida", "Indekso pokytis " + proc(sl.pokytis) + " %, o Sutartyje nustatyta riba - " + zn + proc(sl.reikia, 2) + " %. Kainos peržiūros sąlyga neįvykdyta.", L("slenkstis")));
       }
       var ank = paskutinisInd(S);
-      if (ank && b.pradzia && b.pradzia < ank) out.push(P("klaida", "Laikotarpis persidengia su ankstesniu perskaičiavimu: jame naudota " + menZ(ank) + " reikšmė, o šis laikotarpis prasideda " + menZ(b.pradzia) + ".", L("pradzia")));
+      if (!ank && S.ankstesni.some(function (a) { return a.saltinis === "cvpis" && !a.indMenuo; })) out.push(P("tikrinti", "Jei kuris nors ankstesnis pakeitimas buvo kainos perskaičiavimas pagal indeksą, 1 žingsnyje įrašykite jo indekso mėnesį - nuo jo prasideda šis laikotarpis ir tikrinama, ar laikotarpiai nepersidengia.", "a0"));
+      if (ank && b.pradzia && b.pradzia < ank) out.push(P("klaida", "Laikotarpis persidengia su ankstesniu perskaičiavimu: jame naudota " + menZ(ank) + " reikšmė, o šis laikotarpis prasideda " + menZ(b.pradzia) + (/\.$/.test(menZ(b.pradzia)) ? "" : "."), L("pradzia")));
       else if (ank && b.pradzia && b.pradzia !== ank) out.push(P("tikrinti", "Ankstesniame perskaičiavime naudota " + menZ(ank) + " indekso reikšmė - įprastai nuo to mėnesio prasideda kitas laikotarpis.", L("pradzia")));
       r.klaidos.forEach(function (k) { out.push(P("klaida", k)); });
       if (r.truksta.length) out.push(P("klaida", "Trūksta duomenų: " + r.truksta.join("; ") + "."));
@@ -569,7 +625,7 @@
     var s = S.sutartis, pagr = blokoPagrindas(b), o = OBJ[objektas(s)][0], vp = punktoTekstas(b.dok, b.punktas);
     if (!pagr) out.push(P("klaida", "Pasirinkite pakeitimo pagrindą.", L("pagrindas")));
     if (b.tipas === "pap" || b.tipas === "ats") {
-      if (!b.aprasymas) out.push(P("klaida", "Aprašykite, kokie " + VARDAS[objektas(s)] + " " + (b.tipas === "pap" ? "įsigyjami papildomai" : "atsisakomi") + ".", L("aprasymas")));
+      if (!b.aprasymas) out.push(P("klaida", "Aprašykite, " + gim(s, "kokie", "kokios") + " " + VARDAS[objektas(s)] + " " + (b.tipas === "pap" ? gim(s, "įsigyjami", "įsigyjamos") + " papildomai" : gim(s, "atsisakomi", "atsisakomos")) + ".", L("aprasymas")));
       if (b.verte == null) out.push(P("klaida", "Įrašykite vertę be PVM.", L("verte")));
       if (!b.priezastis) out.push(P("klaida", "Įrašykite priežastį - VPT gairėse pabrėžiama, kad sprendimas keisti Sutartį turi būti pagrįstas dokumentais.", L("priezastis")));
       nebaigtaPatikra(b, out, L);
@@ -585,15 +641,18 @@
         if (rp == null || ri == null) out.push(P("klaida", "Ribų patikrinti negalima: pasirinkite Sutarties objektą (1 žingsnis)" + (ri == null && rp != null ? " arba neįkeltos tarptautinio pirkimo vertės ribos" : "") + ".", "s.objektas"));
         else {
           var txt2 = "Visų pakeitimų pagal " + cit(pagr) + " vertė - " + eur(R.viso) + " Eur be PVM (" + proc(R.visoProc) + " % " + zod + " Sutarties vertės; anksčiau - " + eur(R.pries) + " Eur)";
-          if (R.visoProc > rp) out.push(P("klaida", txt2 + ", o riba - " + rp + " procentų " + (rp === 15 ? "darbų" : "prekių ar paslaugų") + " pirkimo atveju.", L("verte")));
+          if (virsProc(R.viso, R.bazes, rp)) out.push(P("klaida", txt2 + ", o riba - " + rp + " procentų " + (rp === 15 ? "darbų" : "prekių ar paslaugų") + " pirkimo atveju (" + eur(r2(R.bazes * rp / 100)) + " Eur).", L("verte")));
           else if (R.viso > ri) out.push(P("klaida", txt2 + " viršija tarptautinio pirkimo vertės ribą (" + eur(ri) + " Eur).", L("verte")));
           else out.push(P("ok", txt2 + " - neviršija " + rp + " procentų ir tarptautinio pirkimo vertės ribos (" + eur(ri) + " Eur)."));
+          if (R.ribos.spec) out.push(P("info", "BVPŽ kodas " + S.sutartis.bvpz + " - socialinės ir kitos specialiosios paslaugos (PĮ 4 priedo " + R.ribos.spec.eilute + " eilutė), todėl taikoma jų tarptautinio pirkimo vertės riba (" + cit("specialiosios_paslaugos") + "). Jei perkamos kitos paslaugos, patikrinkite BVPŽ kodą 1 žingsnyje."));
+          var nez = S.ankstesni.filter(function (a) { return a.pokytis != null && a.pokytis > 0 && a.pagal2d == null && !a.indMenuo; });
+          if (nez.length) out.push(P("tikrinti", "Ankstesni pakeitimai Nr. " + nez.map(function (a) { return a.nr; }).join(", ") + " didino kainą (" + eur(nez.reduce(function (v, a) { return v + a.pokytis; }, 0)) + " Eur), bet nenurodyta, ar pagal " + cit(pagr) + ". Jei taip - 1 žingsnyje įrašykite jų dalį lauke „Iš jo pagal nedidelės vertės pakeitimų dalį“, kitaip riba bus skaičiuojama per maža.", "a" + S.ankstesni.indexOf(nez[0])));
           out.push(P("tikrinti", "Kas remiasi šia dalimi, turi įrodyti, kad ribos neviršytos (" + bylos("e3K-3-325-916/2023") + "). Ankstesnių pakeitimų sumą įrankis ima iš 1 žingsnio sąrašo (laukas „Iš jo pagal nedidelės vertės pakeitimų dalį“) - sutikrinkite, ar įrašyti visi. Atsisakomų " + o + " vertė iš papildomų neatimama (" + bylos("eA-227-415/2025") + ")."));
         }
-        if (!b.pobudisNesikeicia) out.push(P("klaida", "Pažymėkite, kad pakeitimu iš esmės nepakeičiamas Sutarties pobūdis (perkami tokie pat " + VARDAS[objektas(s)] + ", ne kitokie).", L("pobudisNesikeicia")));
+        if (!b.pobudisNesikeicia) out.push(P("klaida", "Pažymėkite, kad pakeitimu iš esmės nepakeičiamas Sutarties pobūdis (" + gim(s, "perkami tokie pat", "perkamos tokios pat") + " " + VARDAS[objektas(s)] + ", ne " + gim(s, "kitokie", "kitokios") + ").", L("pobudisNesikeicia")));
       }
       if ((pagr === "keitimas_papildomi" || pagr === "keitimas_nenumatytos") && R.proc != null) {
-        if (R.proc > 50) out.push(P("klaida", "Šio pakeitimo vertė - " + proc(R.proc) + " % " + zod + " Sutarties vertės, o riba - 50 procentų (" + cit(pagr) + ").", L("verte")));
+        if (virsProc(b.verte, R.bazes, 50)) out.push(P("klaida", "Šio pakeitimo vertė - " + proc(R.proc) + " % " + zod + " Sutarties vertės, o riba - 50 procentų (" + eur(r2(R.bazes / 2)) + " Eur; " + cit(pagr) + ").", L("verte")));
         else out.push(P("ok", "Šio pakeitimo vertė - " + proc(R.proc) + " % " + zod + " Sutarties vertės (riba - 50 procentų atskiram pakeitimui)."));
       }
       if (pagr === "keitimas_papildomi") {
@@ -634,6 +693,7 @@
         if (!b.galimybe) out.push(P("tikrinti", "Įrašykite, kokią apimtį ir aplinkybes numato Sutarties sąlyga. VPT gairėse vien galimybė „atsisakyti dalies darbų“ be apimties ir aplinkybių laikoma nepakankama, o " + bylos("e3K-3-245-916/2023") + " - ir sąmatoje išvardyti galimai nereikalingi darbai.", L("galimybe")));
       }
       if (pagr === "keitimas_neesminis") esmPatikros(b, out, L);
+      if (S.rengiamas.blokai.some(function (x) { return x.tipas === "ind"; })) out.push(P("tikrinti", "Šiame susitarime kaina perskaičiuojama ir pagal indeksą. Jei " + gim(s, "atsisakomi", "atsisakomos") + " " + VARDAS[objektas(s)] + " įeina į perskaičiuojamą Sutarties dalį, jų vertę atimkite iš perskaičiuojamos sumos arba atsisakomų " + o + " vertę apskaičiuokite perskaičiuotais įkainiais - kitaip kaina už neperkamą dalį padidės.", L("verte")));
       if (!b.vertesBudas) out.push(P("tikrinti", "Pasirinkite, kaip apskaičiuota atsisakomų " + o + " vertė.", L("vertesBudas")));
       else if (b.vertesBudas === "kitaip") out.push(P("tikrinti", "VPT gairėse esminiu pakeitimu laikomas darbų atsisakymas mažesniais nei Sutartyje nustatyti įkainiai - vertę skaičiuokite pagal Sutarties įkainius ar sąmatas.", L("vertesBudas")));
       else out.push(P("ok", "Vertė apskaičiuota pagal Sutarties " + (b.vertesBudas === "ikainiai" ? "įkainius" : "sąmatas") + "."));
@@ -648,6 +708,7 @@
         if (!b.punktas) out.push(P("klaida", "Nurodykite Sutarties punktą, kuriame numatytas termino pratęsimas.", L("punktas")));
         if (!b.aplinkybe) out.push(P("tikrinti", "Įrašykite, kuri Sutartyje numatyta aplinkybė yra pratęsimo pagrindas.", L("aplinkybe")));
         if (b.maxPrat == null) out.push(P("tikrinti", "Įrašykite, kiek ilgiausiai Sutartis leidžia pratęsti terminą - VPT gairėse rekomenduojama nustatyti konkretų laikotarpį.", L("maxPrat")));
+        else if (T.virsija && T.liko != null && T.liko <= 0) out.push(P("klaida", "Sutartyje leidžiamas pratęsimas (" + b.maxPrat + (b.maxVnt === "d" ? " d." : " mėn.") + ") jau išnaudotas ankstesniais pratęsimais (" + b.ankstesniPrat + (b.maxVnt === "d" ? " d." : " mėn.") + ") - šiuo pagrindu pratęsti nebegalima.", L("ankstesniPrat")));
         else if (T.virsija) out.push(P("klaida", "Nauja data (" + b.naujas + ") vėlesnė už Sutartyje leidžiamą (" + T.riba + ") - įvertinus ankstesnius pratęsimus pagal šį punktą.", L("naujas")));
         else if (T.riba) out.push(P("ok", "Pratęsimas telpa į Sutartyje leidžiamą laikotarpį (iki " + T.riba + ")."));
       }
@@ -683,6 +744,16 @@
     else if (nr > 1 && S.ankstesni.length < nr - 1) out.push(P("tikrinti", "Tai susitarimas Nr. " + r.nr + ", bet ankstesnių pakeitimų sąraše - " + S.ankstesni.length + ". Ankstesni susitarimai išvardijami preambulėje pagal sąrašą (1 žingsnis).", "r.nr"));
     else if (nr >= 1 && S.ankstesni.length >= nr) out.push(P("tikrinti", "Ankstesnių pakeitimų sąraše jau yra " + S.ankstesni.length + " - patikrinkite susitarimo eilės numerį.", "r.nr"));
     S.ankstesni.forEach(function (a, i) { if (!a.data || !a.esme) out.push(P("tikrinti", "Ankstesnio pakeitimo (" + (i + 1) + " eilutė) data ar esmė neįrašyta - preambulėje jis bus paminėtas nepilnai.", "a" + i)); });
+    /* CVP IS paskelbta vertė po ankstesnio pakeitimo pasikeitė, o kainos pokytis neįrašytas - kaina iki šio pakeitimo būtų neteisinga */
+    viesiPokyciai(S).forEach(function (v) {
+      var a = S.ankstesni[v.i];
+      if (a.pokytis != null || v.skirtumas === 0) return;
+      out.push(P("klaida", "Paskelbtas pakeitimas Nr. " + a.nr + (a.regNr ? " (" + a.regNr + ")" : "") + " keitė Sutarties vertę CVP IS duomenyse (" + eur(v.pries) + " → " + eur(v.po) + " Eur), bet kainos pokytis neįrašytas - be jo kaina iki šio pakeitimo neteisinga. " +
+        (v.tikPvm ? "Skirtumas atitinka PVM - tikėtina, kaina nekeista: įrašykite 0." : "Įrašykite pokytį be PVM" + (v.siulomas != null ? " (pagal tą pačią prielaidą kaip pradinei kainai - " + (v.siulomas > 0 ? "+" : "") + eur(v.siulomas) + " Eur)" : "") + ", arba 0, jei kaina nekeista."), "a." + v.i + ".pokytis"));
+    });
+    /* Keisti galima tik Sutarties galiojimo laikotarpiu (PĮ 97 str.; Teisingumo Teismo byla C-820/24) */
+    var siand = r.data || siandienISO();
+    if (s.galiojaIki && s.galiojaIki < siand) out.push(P("tikrinti", "Pagal įrašytą galiojimo datą Sutartis baigė galioti " + dataZ(s.galiojaIki) + ". Keisti galima tik Sutarties galiojimo laikotarpiu (" + cit("sutarties_keitimas") + ") - jei Sutartis buvo pratęsta ar dar vykdoma, patikslinkite galiojimo datą 1 žingsnyje.", "s.galiojaIki"));
     r.blokai.forEach(function (b, i) { blokoPatikros(b, S, i).forEach(function (p) { if (p.lygis !== "ok") { p.blokas = i; out.push(p); } }); });
     var ind = r.blokai.filter(function (b) { return b.tipas === "ind"; }).length;
     if (ind > 1) out.push(P("klaida", "Viename susitarime gali būti tik vienas kainos perskaičiavimas pagal indeksą."));
@@ -730,9 +801,15 @@
     return "pakeitimas nėra esminis: juo nekeičiamas Sutarties bendrasis pobūdis, nenustatoma sąlyga, kuri pradiniame pirkime būtų leidusi priimti kitų dalyvių pasiūlymus ar sudominusi daugiau tiekėjų, ekonominė Sutarties pusiausvyra nepasikeičia " +
       link(Tk, "k") + " naudai, labai nepadidėja Sutarties apimtis ir " + Tk + " nekeičiamas nauju tiekėju";
   }
+  /* Priežastis, prasidedanti padalyviu („pasikeitus ...“, „atsižvelgiant ...“) ar „dėl ...“, jau sako priežastį - „todėl“ po jos netaisyklinga. */
+  function beTodel(t) { var w = (String(t || "").trim().split(/[\s,]+/)[0] || "").toLowerCase(); return w === "dėl" || /^\p{L}{3,}(us|ant|int|ęs|usi)$/u.test(w); }
   function be(t) { return String(t || "").replace(/[\s.;,]+$/, ""); }
   var VARDAS = { darbai: "darbai", paslaugos: "paslaugos", prekes: "prekės", "": "darbai (paslaugos, prekės)" };
+  /* Žodžio forma pagal objekto giminę: darbai - vyriškoji, paslaugos ir prekės - moteriškoji. */
+  function gim(s, vyr, mot) { var o = objektas(s); return o === "paslaugos" || o === "prekes" ? mot : vyr; }
   var GAL = { darbai: "Darbus", paslaugos: "Paslaugas", prekes: "Prekes", "": "įsipareigojimus" };
+  /* Būdvardžiai galininku pagal giminę: Darbus, įsipareigojimus - vyriškoji, Paslaugas, Prekes - moteriškoji. */
+  var ADJ = { darbai: ["papildomus", "atsisakomus"], paslaugos: ["papildomas", "atsisakomas"], prekes: ["papildomas", "atsisakomas"], "": ["papildomus", "atsisakomus"] };
   var VEIKS = { darbai: ["atlikti papildomus Darbus", "neatlieka šių Darbų"], paslaugos: ["suteikti papildomas Paslaugas", "neteikia šių Paslaugų"],
     prekes: ["pristatyti papildomas Prekes", "nepristato šių Prekių"], "": ["įvykdyti papildomus įsipareigojimus", "nevykdo šių įsipareigojimų"] };
   function naujiTekstai(b, S, c) {
@@ -830,14 +907,14 @@
             var be = b.eilutes[e.i], sal = !be.indeksas && be.saltinis ? " (šaltinis - " + be.saltinis + ")" : "", o = [];
             o.push(indKilm(e.pav) + sal + " reikšmė laikotarpio pradžioje (" + menZ(b.pradzia) + ") - " + fiks(e.pr, 4));
             o.push(indKilm(e.pav) + " reikšmė laikotarpio pabaigoje (" + menZ(b.pabaiga) + ") - " + fiks(e.pb, 4));
-            o.push(indKilm(e.pav) + " pokytis - " + proc(e.pokytis) + " %" + (e.taikoma || e.suSuma ?
+            o.push(indKilm(e.pav) + " pokytis yra " + proc(e.pokytis) + " %" + (e.taikoma || e.suSuma ?
               (t.formule === "proc" ? ", perskaičiavimui taikomas kainų pokytis k = " + kTekstas(e.K, t) : ", pokyčio koeficientas K = " + kTekstas(e.K, t)) + (e.taikoma ? ", taikomas " + e.taikoma : "") : ""));
             return o;
           })) });
         var pv = R.pvm, kp = punktoTekstas(b.kainosDok, b.kainosPunktas, "punkte");
         /* Kai keičiama ir apimtis, kainos punktas vienas - po visų pakeitimų. */
-        if (!papAts) punktai.push({ tekstas: (kp ? "Pakeisti " + kp + " nurodytą Sutarties kainą ir nustatyti" : "Nustatyti") + ", kad perskaičiuota Sutarties kaina yra " + eur(R.nauja) + " Eur be PVM" +
-          (pv ? ", PVM - " + eur(pv.pvm) + " Eur, iš viso - " + eur(pv.viso) + " Eur su PVM." : ".") });
+        if (!papAts) punktai.push({ tekstas: (kp ? "Pakeisti " + kp + " nurodytą Sutarties kainą ir nustatyti" : "Nustatyti") + ", kad perskaičiuota Sutarties kaina yra " + (Rz.nevykdyta ? "__________" : eur(R.nauja)) + " Eur be PVM" +
+          (pv && !Rz.nevykdyta ? ", PVM - " + eur(pv.pvm) + " Eur, iš viso - " + eur(pv.viso) + " Eur su PVM." : ".") });
         priedas(priedoRastas(b, kas));
         if (b.aktas === "taip") priedas("Perskaičiavimo aktas");
         if (b.skaiciavimoPriedas) priedas("Sutarties kainos perskaičiavimo skaičiavimas");
@@ -860,14 +937,14 @@
         if (b.priedoNr) priedas("Sutarties " + b.priedoNr + " priedas" + (b.priedoPav ? " „" + b.priedoPav + "“" : "") + " (nauja redakcija)");
       } else {
         var kn = b.kieno === "pirkejo" ? link(Pk, "k") : b.kieno === "tiekejo" ? link(Tk, "k") : "Šalių", apk = punktoTekstas(b.dok, b.punktas);
-        pre.push((b.priezastis ? b.priezastis.replace(/[.;,]+$/, "") + ", todėl keičiami " : "pasikeitė ") + kn + " atsakingi asmenys, nurodyti " + (apk || "Sutartyje"));
+        pre.push((b.priezastis ? b.priezastis.replace(/[.;,]+$/, "") + (beTodel(b.priezastis) ? ", keičiami " : ", todėl keičiami ") : "pasikeitė ") + kn + " atsakingi asmenys, nurodyti " + (apk || "Sutartyje"));
         punktai.push({ tekstas: "Pakeisti " + (apk ? apk.replace(/punkte$/, "punktą") : "Sutarties ____ punktą") + " ir išdėstyti jį taip:", citata: (b.redakcija || "__________").split(/\n+/) });
       }
     });
     if (papAts) {
       var pv2 = Rz.pvm;
       punktai.push({ tekstas: (kainosVieta ? "Pakeisti " + kainosVieta + " nurodytą Sutarties kainą ir nustatyti" : "Nustatyti") + ", kad Sutarties kaina " +
-        (Rz.ind ? "po perskaičiavimo ir " : "") + (Rz.papildomi && Rz.atsisakomi ? "įvertinus papildomus ir atsisakomus " : Rz.papildomi ? "įvertinus papildomus " : "įvertinus atsisakomus ") + GAL[o] + " yra " +
+        (Rz.ind ? "po perskaičiavimo ir " : "") + (Rz.papildomi && Rz.atsisakomi ? "įvertinus " + ADJ[o][0] + " ir " + ADJ[o][1] + " " : Rz.papildomi ? "įvertinus " + ADJ[o][0] + " " : "įvertinus " + ADJ[o][1] + " ") + GAL[o] + " yra " +
         (Rz.galutine != null ? eur(Rz.galutine) : "__________") + " Eur be PVM" + (pv2 ? ", PVM - " + eur(pv2.pvm) + " Eur, iš viso - " + eur(pv2.viso) + " Eur su PVM." : ".") });
     } else if (!Rz.ind && r.blokai.some(function (x) { return (x.tipas === "ter" || x.tipas === "kit") && x.kainaNesikeicia; })) {
       punktai.push({ tekstas: "Susitarimu Sutarties kaina nekeičiama." });
@@ -884,7 +961,7 @@
       n++;
       B.push({ t: "punktas", nr: n + ".", tekstas: o.tekstas });
       (o.sarasas || []).forEach(function (x, i, a) { B.push({ t: "bruksnys", tekstas: x + (i === a.length - 1 ? "." : ";") }); });
-      (o.citata || []).forEach(function (x, i, a) { B.push({ t: "citata", tekstas: (i === 0 ? "„" : "") + x + (i === a.length - 1 ? "“." : "") }); });
+      (o.citata || []).forEach(function (x, i, a) { B.push({ t: "citata", tekstas: (i === 0 ? "„" : "") + x + (i === a.length - 1 ? (/[.!?]$/.test(x) ? "“" : "“.") : "") }); });
     }
     punktai.forEach(punktas);
     punktas({ tekstas: "Kitos Sutarties sąlygos nekeičiamos ir lieka galioti visa apimtimi." });
@@ -918,7 +995,7 @@
     eil.push(["Sutarties kaina", eur(R.sena), eur(R.nauja), eur(R.pokytisEur)]);
     B.push({ t: "lentele", plociai: [46, 18, 18, 18], antrastes: ["", "Iki perskaičiavimo", "Po perskaičiavimo", "Skirtumas"], eilutes: eil, paskutinePusjuode: true });
     if (R.pvm) B.push({ t: "p", tekstas: "PVM (" + proc(R.pvm.tarifas * 100, 0) + " %) - " + eur(R.pvm.pvm) + " Eur; Sutarties kaina su PVM - " + eur(R.pvm.viso) + " Eur." });
-    B.push({ t: "p", tekstas: t.formule === "proc" ? "Skaičiavimas: k = pabaigos reikšmė / pradžios reikšmė x 100 - 100; perskaičiuota suma = suma + suma x k / 100." : "Skaičiavimas: K = pabaigos reikšmė / pradžios reikšmė; perskaičiuota suma = suma x K." });
+    B.push({ t: "p", tekstas: t.formule === "proc" ? "Skaičiavimas: k = pabaigos reikšmė / pradžios reikšmė × 100 - 100; perskaičiuota suma = suma + suma × k / 100." : "Skaičiavimas: K = pabaigos reikšmė / pradžios reikšmė; perskaičiuota suma = suma × K." });
     var osp = b.eilutes.every(function (e) { return e.prS === "osp" && e.pbS === "osp"; });
     B.push({ t: "p", tekstas: "Indeksų reikšmių šaltinis: " + (osp && I ? I.SALTINIS.lt + (b.gauta ? ", gauta " + b.gauta : "") : "įrašyta ranka - sutikrinkite su Sutartyje nurodytu šaltiniu") + "." });
     return { pavadinimas: "Sutarties kainos perskaičiavimo skaičiavimas", blokai: B };
@@ -1044,9 +1121,11 @@
   /* ---------- vieši duomenys (G-Procure serverio atsakymas) -> sutarties laukai ir ankstesni pakeitimai ---------- */
   function isViesu(S, ats) {
     if (!ats || typeof ats !== "object" || !ats.sutartis) return { ok: false };
-    var v = ats.sutartis, s = S.sutartis, pildyta = [];
+    var v = ats.sutartis, s = S.sutartis, pildyta = [], abejotini = [];
     function dek(k, val, pav) { if (val && !s[k]) { s[k] = val; pildyta.push(pav); } }
-    dek("nr", eilute1(v.nr, 60), "numeris"); dek("data", dataISO(v.sudaryta), "sudarymo data"); dek("galiojaIki", dataISO(v.galioja), "galiojimo pabaiga");
+    var galV = dataISO(v.galioja);
+    (Array.isArray(ats.pakeitimai) ? ats.pakeitimai : []).forEach(function (p) { var g = p && !p.bendras ? dataISO(p.galioja) : ""; if (g && g > galV) galV = g; });
+    dek("nr", eilute1(v.nr, 60), "numeris"); dek("data", dataISO(v.sudaryta), "sudarymo data"); dek("galiojaIki", galV, "galiojimo pabaiga");
     dek("pirkimoNr", eilute1(v.pirkimoNr, 40), "pirkimo numeris");
     /* Kitos Šalies kodas pildomas tik kartu su viešu pavadinimu: ranka įrašytam kitam pavadinimui svetimas kodas nepriskiriamas. */
     var tp = v.tiekejas ? kabutes(eilute1(v.tiekejas.pav, 200)) : "";
@@ -1057,13 +1136,25 @@
     (Array.isArray(ats.pakeitimai) ? ats.pakeitimai : []).slice(0, RIBOS.ankstesniu).forEach(function (p) {
       var reg = eilute1(p && p.nr, 40), d = dataISO(p && p.sudaryta);
       if (!reg || yra[reg] || S.ankstesni.length >= RIBOS.ankstesniu) return;
+      if (p.bendras) { abejotini.push({ nr: reg, sudaryta: d, verte: teig(p.verte), galioja: dataISO(p.galioja) }); return; }
       yra[reg] = 1; nauju++;
       S.ankstesni.push(ankstesnioForma({ nr: "", data: d, regNr: reg, esme: "", pokytis: null, saltinis: "cvpis", viesaVerte: p && p.verte }));
     });
     S.ankstesni.sort(function (a, b) { return (a.data || "9") < (b.data || "9") ? -1 : (a.data || "9") > (b.data || "9") ? 1 : 0; });
     S.ankstesni.forEach(function (a, i) { if (!a.nr) a.nr = String(i + 1); });
     if (!S.rengiamas.nr) S.rengiamas.nr = String(S.ankstesni.length + 1);
-    return { ok: true, pildyta: pildyta, pakeitimu: nauju };
+    return { ok: true, pildyta: pildyta, pakeitimu: nauju, abejotini: abejotini };
+  }
+  /* Žmogaus pasirinktas paskelbtas pakeitimas (iš abejotinų) -> į ankstesnių sąrašą, eilės tvarka pagal datą */
+  function pridekViesaPakeitima(S, p) {
+    var reg = eilute1(p && p.nr, 40);
+    if (!reg || S.ankstesni.some(function (a) { return a.regNr === reg; }) || S.ankstesni.length >= RIBOS.ankstesniu) return false;
+    S.ankstesni.push(ankstesnioForma({ nr: "", data: dataISO(p.sudaryta), regNr: reg, esme: "", pokytis: null, saltinis: "cvpis", viesaVerte: p.verte }));
+    S.ankstesni.sort(function (a, b) { return (a.data || "9") < (b.data || "9") ? -1 : (a.data || "9") > (b.data || "9") ? 1 : 0; });
+    S.ankstesni.forEach(function (a, i) { a.nr = String(i + 1); });
+    var g = dataISO(p.galioja); if (g && (!S.sutartis.galiojaIki || g > S.sutartis.galiojaIki)) S.sutartis.galiojaIki = g;
+    S.rengiamas.nr = String(S.ankstesni.length + 1);
+    return true;
   }
 
   /* ==========================================================================
@@ -1082,6 +1173,13 @@
     return out;
   }
   function norm(t) { return lygink(t).replace(/\s+/g, " ").trim(); }
+  /* Santrumpos ir pilni pavadinimai ieškomi kartu: „TP“ - „transformatorių pastotė“, „OL“ - „oro linija“, „KL“ - „kabelių linija“ */
+  var SANTRUMPOS = [["tp", "transformatoriu pastot", " transformatoriu pastote"], ["ol", "oro linij", " oro linija"], ["kl", "kabeliu linij", " kabeliu linija"]];
+  function santrumpos(n) {
+    var t = " " + n + " ", out = "";
+    SANTRUMPOS.forEach(function (x) { if (t.indexOf(" " + x[0] + " ") >= 0 && t.indexOf(" " + x[1]) < 0) out += x[2]; else if (t.indexOf(" " + x[1]) >= 0 && t.indexOf(" " + x[0] + " ") < 0) out += " " + x[0]; });
+    return out;
+  }
   function viesaSutartis(x) {
     if (!x || typeof x !== "object") return null;
     var pav = eilute1(x.pav, 300), nr = eilute1(x.nr, 60);
@@ -1089,7 +1187,7 @@
     var t = x.tiekejas && typeof x.tiekejas === "object" ? x.tiekejas : null, tp = t && typeof t.pav === "string" ? kabutes(eilute1(t.pav, 200)) : "";
     var pak = (Array.isArray(x.pakeitimai) ? x.pakeitimai : []).slice(0, RIBOS.ankstesniu).map(function (p) {
       p = p && typeof p === "object" ? p : {};
-      return { nr: eilute1(p.nr, 40), sudaryta: dataISO(p.sudaryta), verte: teig(p.verte), galioja: dataISO(p.galioja) };
+      return { nr: eilute1(p.nr, 40), sudaryta: dataISO(p.sudaryta), verte: teig(p.verte), galioja: dataISO(p.galioja), bendras: false };
     }).filter(function (p) { return p.nr; });
     var gal = dataISO(x.galioja), galV = gal, verteV = teig(x.verte);
     pak.forEach(function (p) { if (p.galioja && p.galioja > galV) galV = p.galioja; if (p.verte != null) verteV = p.verte; });
@@ -1097,10 +1195,23 @@
       bvpz: typeof x.bvpz === "string" && /^\d{8}$/.test(x.bvpz) ? x.bvpz : "",
       tiekejas: tp ? { pav: tp, kodas: typeof t.kodas === "string" && /^\d{7,9}$/.test(t.kodas) ? t.kodas : "" } : null,
       tiekejasNerodomas: !tp && !!t, pakeitimai: pak, keliosSutartys: x.keliosSutartys === true };
-    o._p = norm(pav); o._t = norm(tp); o._n = norm([nr].concat(pak.map(function (p) { return p.nr; })).join(" ")); o._k = norm(o.pirkimoNr);
+    o._p = norm(pav) + santrumpos(norm(pav)); o._t = norm(tp); o._n = norm([nr].concat(pak.map(function (p) { return p.nr; })).join(" ")); o._k = norm(o.pirkimoNr);
     return o;
   }
-  function viesasSarasas(a) { return (Array.isArray(a) ? a : []).slice(0, SARASO_RIBA).map(viesaSutartis).filter(Boolean); }
+  /* Sąrašas. Paskelbtas pakeitimas, kurį šaltinis priskiria kelioms to paties pirkimo sutartims (susiejama tik pagal pirkimo numerį ir tiekėją),
+     pažymimas „bendras“: jis neprailgina galiojimo, neskaičiuojamas ir automatiškai nepridedamas - žmogus pasirenka, ar jis šios sutarties. */
+  function viesasSarasas(a) {
+    var sar = (Array.isArray(a) ? a : []).slice(0, SARASO_RIBA).map(viesaSutartis).filter(Boolean), kiek = {};
+    sar.forEach(function (x) { x.pakeitimai.forEach(function (p) { kiek[p.nr] = (kiek[p.nr] || 0) + 1; }); });
+    sar.forEach(function (x) {
+      var bendri = 0;
+      x.pakeitimai.forEach(function (p) { if (kiek[p.nr] > 1) { p.bendras = true; bendri++; } });
+      if (!bendri) return;
+      x.galiojaV = x.galioja; x.verteV = x.verte;
+      x.pakeitimai.forEach(function (p) { if (p.bendras) return; if (p.galioja && p.galioja > x.galiojaV) x.galiojaV = p.galioja; if (p.verte != null) x.verteV = p.verte; });
+    });
+    return sar;
+  }
   /* Sutarties būsena pagal vėliausią paskelbtą galiojimo datą (sutartis ar jos pakeitimai): galioja / baigiasi (per 90 d.) / baigesi / nezinoma */
   function viesosBusena(x, dabar) {
     var d = x && x.galiojaV;
@@ -1115,14 +1226,27 @@
   }
   /* Lietuviški linksniai: ilgesnio žodžio kamienas (be dviejų paskutinių raidžių, ne trumpesnis kaip 4) - „Neries“ randa ir „Neris“ */
   function kamienas(z) { return z.length >= 5 && !/\d/.test(z) ? z.slice(0, Math.max(4, z.length - 2)) : ""; }
-  /* Kaip žodis z atitinka tekstą t (abu - norm): visas žodis - 1, žodžio pradžia - 0,9, kamienas - 0,7, žodžio vidurys - 0,5, neatitinka - 0 */
+  /* Kamieno variantai su t/č ir d/dž kaita (be diakritikų - t/c, d/dz): „pastotės“ randa „pastočių“, „pastočių“ - „pastotė“ */
+  function kamienai(z) {
+    var k = kamienas(z);
+    if (!k) return [];
+    var v = [k], m;
+    if ((m = /^(.*[aeiouy])(c|dz)([a-z]?)$/.exec(k)) && m[3] === "") v.push(m[1] + (m[2] === "c" ? "t" : "d"));
+    else if ((m = /^(.*[aeiouy])c([a-z])$/.exec(k))) v.push(m[1] + "t");
+    else if ((m = /^(.*[aeiouy])dz([a-z])$/.exec(k))) v.push(m[1] + "d");
+    if (/[aeiouy]t$/.test(k)) v.push(k.slice(0, -1) + "c");
+    else if (/[aeiouy]d$/.test(k)) v.push(k.slice(0, -1) + "dz");
+    return v;
+  }
+  /* Kaip žodis z atitinka tekstą t (abu - norm): visas žodis - 1, žodžio pradžia - 0,9, kamienas - 0,6 (mažiau už tikslų tiekėjo pavadinimą), žodžio vidurys - 0,5, neatitinka - 0 */
   function zodzioBalas(z, t) {
     if (!t) return 0;
     var i = (" " + t + " ").indexOf(" " + z);
     if (i >= 0) { var po = (" " + t + " ").charAt(i + 1 + z.length); return po === " " ? 1 : 0.9; }
-    var k = kamienas(z);
-    if (k && (" " + t).indexOf(" " + k) >= 0) return 0.7;
-    return z.length >= 3 && t.indexOf(z) >= 0 ? 0.5 : 0;
+    if (kamienai(z).some(function (k) { return (" " + t).indexOf(" " + k) >= 0; })) return 0.6;
+    if (z.length >= 3 && t.indexOf(z) >= 0) return 0.5;
+    /* žodžiai su brūkšneliu („E-Neris“, „Vilnius-Neris“) - ieškoma ir kaip atskirų žodžių */
+    return t.indexOf("-") >= 0 && !/\d/.test(z) ? zodzioBalas(z, t.replace(/-/g, " ")) : 0;
   }
   var PAIESKOS_LAUKAI = { pav: [["_p", 3, "pav"]], tiekejas: [["_t", 3, "tiekejas"]], nr: [["_n", 3, "nr"], ["_k", 2, "pirkimoNr"]],
     visur: [["_p", 3, "pav"], ["_n", 2.5, "nr"], ["_t", 2, "tiekejas"], ["_k", 1.5, "pirkimoNr"]] };
@@ -1159,16 +1283,16 @@
   function zymiuVietos(tekstas, zodziai) {
     var t = lygink(tekstas), v = [];
     (zodziai || []).forEach(function (z) {
-      var k = kamienas(z), rado = false, i = -1;
+      var rado = false, i = -1;
       while ((i = t.indexOf(z, i + 1)) >= 0) { v.push([i, i + z.length]); rado = true; }
-      if (!rado && k) {
+      if (!rado) kamienai(z).forEach(function (k) {
         i = -1;
         while ((i = t.indexOf(k, i + 1)) >= 0) {
-          if (i > 0 && t.charAt(i - 1) !== " ") continue;
-          var g = i + k.length; while (g < t.length && t.charAt(g) !== " ") g++;
+          if (i > 0 && t.charAt(i - 1) !== " " && t.charAt(i - 1) !== "-") continue;
+          var g = i + k.length; while (g < t.length && t.charAt(g) !== " " && t.charAt(g) !== "-") g++;
           v.push([i, g]);
         }
-      }
+      });
     });
     v.sort(function (a, b) { return a[0] - b[0] || b[1] - a[1]; });
     var out = [];
@@ -1188,17 +1312,49 @@
     if (obj === "paslaugos") return /(^| )(projektavim|techninio projekto|darbo projekto)/.test(n) && !/ekspertiz/.test(n) ? "PPS" : "PASLAUGOS";
     return obj === "prekes" ? "PREKES" : "";
   }
+  /* Būdvardžiai (dalyviai) prieš „paslaugos“ / „darbai“ vardininku daugiskaita -> kilmininkas: „teisinės, susijusios“ -> „teisinių, susijusių“,
+     „papildomi, smulkūs“ -> „papildomų, smulkių“. Nekeičiama, kai prieš daiktavardį ne būdvardis („remonto darbai“). Kai prieš būdvardį yra
+     „ir“ / „bei“ ar galūnė dviprasmė (moteriškos giminės „-os“, „-ės“ gali būti ir vienaskaitos kilmininkas) - null (pavadinimo nesiūlome). */
+  function budvardziai(t, gim) {
+    var w = t.split(/\s+/), i = w.length - 1, keista = false;
+    /* įterptinė dalis kableliais („Teisinės, susijusios su pirkimais, paslaugos“) - linksnio nespėjame */
+    if (/,$/.test(w[i])) return null;
+    for (; i >= 0; i--) {
+      var x = w[i], n = x.toLowerCase(), nk = null;
+      if (gim === "mot") {
+        if (/inės$/.test(n)) nk = x.slice(0, -2) + "ių";                       /* teisinės -> teisinių */
+        else if (/ios$/.test(n)) nk = x.slice(0, -2) + "ų";                    /* susijusios -> susijusių */
+        else if (/(amos|omos|imos)$/.test(n) || n === "kitos") nk = x.slice(0, -2) + "ų";   /* papildomos, teikiamos, kitos */
+      } else {
+        if (/iai$/.test(n)) nk = x.slice(0, -2) + "ų";                         /* remontiniai -> remontinių */
+        else if (/[^a]i$/.test(n)) nk = x.slice(0, -1) + "ų";                  /* papildomi -> papildomų */
+        else if (/ūs$/.test(n)) nk = x.slice(0, -2) + "ių";                    /* smulkūs -> smulkių */
+      }
+      if (nk == null) break;
+      w[i] = nk; keista = true;
+    }
+    if (keista && i >= 0 && (/^(ir|bei)$/i.test(w[i]) || /,$/.test(w[i]))) return null;
+    return w.join(" ");
+  }
   /* Sutarties pavadinimas kilmininku iš paskelbto pavadinimo - tik aiškiais atvejais, kitaip "" (žmogus įrašo pats) */
   function pavadinimasKilmininku(pav) {
     var p = eilute1(pav, 380).replace(/[.\s]+$/, ""), m;
     if (!p) return "";
     if ((m = /^(.*\S)\s+pirkimas$/i.exec(p))) return m[1] + " pirkimo sutarties";
     if ((m = /^(.*\S)\s+sutartis$/i.exec(p))) return m[1] + " sutarties";
-    if ((m = /^sutartis\s+dėl\s+(.+)$/i.exec(p))) return m[1] + " sutarties";
-    if ((m = /^(.*\S)\s+paslaugos$/i.exec(p))) return m[1] + " paslaugų pirkimo sutarties";
-    if ((m = /^(.*\S)\s+darbai$/i.exec(p))) return m[1] + " darbų pirkimo sutarties";
+    /* „Sutartis dėl X“ - tik kai X jau kilmininku („... paslaugų“, „... remonto“), ne vardininku („... stiprinimas“) */
+    if ((m = /^sutartis\s+dėl\s+(.+)$/i.exec(p))) return /(ų|o|io|os|ės|aus)$/i.test(m[1]) ? m[1] + " sutarties" : "";
+    if ((m = /^(.*\S)\s+paslaugos$/i.exec(p))) { var pk = budvardziai(m[1], "mot"); return pk == null ? "" : pk + " paslaugų pirkimo sutarties"; }
+    if ((m = /^(.*\S)\s+darbai$/i.exec(p))) { var dk = budvardziai(m[1], "vyr"); return dk == null ? "" : dk + " darbų pirkimo sutarties"; }
     if (/\s(paslaugų|darbų|prekių)$/i.test(p)) return p + " pirkimo sutarties";
     return "";
+  }
+  /* BVPŽ kodas, objektas pagal jį ir pavadinimo kilmininku pasiūlymas iš viešos sutarties (sąrašo ar paieškos numeriu) */
+  function papildyk(S, x, pildyta) {
+    var s = S.sutartis, k = x && typeof x.bvpz === "string" && /^\d{8}$/.test(x.bvpz) ? x.bvpz : "";
+    if (k) s.bvpz = k;
+    if (!s.objektas && !objektas({ forma: s.forma })) { var ob = objektasIsBvpz(k); if (ob) { s.objektas = ob; if (pildyta) pildyta.push("objektas (pagal BVPŽ kodą)"); } }
+    if (!s.pavadinimasKilm && x) { var pk = pavadinimasKilmininku(x.pav); if (pk) { s.pavadinimasKilm = pk; s.pavS = "cvpis"; } }
   }
   /* Pasirinkta sąrašo sutartis -> sutarties įrašas: vieši duomenys (isViesu), objektas pagal BVPŽ, pavadinimo kilmininku pasiūlymas.
      Kainos neįrašomos (vieša vertė gali būti su PVM) - jos lieka užuomina prie lauko. */
@@ -1207,10 +1363,8 @@
     if (!S || !x) return { ok: false };
     var r = isViesu(S, { sutartis: { nr: x.nr, sudaryta: x.sudaryta, galioja: x.galiojaV || x.galioja, pirkimoNr: x.pirkimoNr, pav: x.pav, verte: x.verte, tiekejas: x.tiekejas }, pakeitimai: x.pakeitimai, keliosSutartys: x.keliosSutartys });
     if (!r.ok) return r;
+    papildyk(S, x, r.pildyta);
     var s = S.sutartis;
-    if (x.bvpz) s.bvpz = x.bvpz;
-    if (!s.objektas && !objektas({ forma: s.forma })) { var ob = objektasIsBvpz(x.bvpz); if (ob) { s.objektas = ob; r.pildyta.push("objektas (pagal BVPŽ kodą)"); } }
-    if (!s.pavadinimasKilm) { var pk = pavadinimasKilmininku(x.pav); if (pk) { s.pavadinimasKilm = pk; s.pavS = "cvpis"; } }
     s.gauta = dataISO(o.dabar) || s.gauta;
     r.keliosSutartys = x.keliosSutartys;
     return r;
@@ -1246,6 +1400,6 @@
     susitarimas: susitarimas, skaiciavimoDok: skaiciavimoDok, blokoPagrindas: blokoPagrindas, skaiciuokPap: skaiciuokPap, skaiciuokTer: skaiciuokTer,
     patikslinta: patikslinta, ribos: ribos, objektas: objektas, apzvalga: apzvalga, artimiausi: artimiausi, pazymekAtlikta: pazymekAtlikta, PRAKTIKA: PRAKTIKA, LITEKO: LITEKO, blokoPraktika: blokoPraktika, praktikosEilute: praktikosEilute, ESM: ESM, ESM_PAAISK: ESM_PAAISK, OBJ: OBJ, TERMINAI: TERMINAI, SALTINIAI: SALTINIAI, saltiniaiSusitarimui: saltiniaiSusitarimui, pagrindimoDok: pagrindimoDok, terminai: terminai, esme: esme, uzbaik: uzbaik, isViesu: isViesu, paskutinisInd: paskutinisInd,
     lygink: lygink, norm: norm, viesaSutartis: viesaSutartis, viesasSarasas: viesasSarasas, viesosBusena: viesosBusena, paieskosZodziai: paieskosZodziai, ieskok: ieskok, zymiuVietos: zymiuVietos,
-    objektasIsBvpz: objektasIsBvpz, siulomaForma: siulomaForma, pavadinimasKilmininku: pavadinimasKilmininku, isSaraso: isSaraso, trukstaSutarciai: trukstaSutarciai, pvmTarifas: pvmTarifas, tiketinaSuPvm: tiketinaSuPvm
+    objektasIsBvpz: objektasIsBvpz, siulomaForma: siulomaForma, viesosPvm: viesosPvm, viesiPokyciai: viesiPokyciai, papildyk: papildyk, laikotarpioMatas: laikotarpioMatas, kamienai: kamienai, pridekViesaPakeitima: pridekViesaPakeitima, budvardziai: budvardziai, pavadinimasKilmininku: pavadinimasKilmininku, isSaraso: isSaraso, trukstaSutarciai: trukstaSutarciai, pvmTarifas: pvmTarifas, tiketinaSuPvm: tiketinaSuPvm
   };
 })(typeof window !== "undefined" ? window : this);
