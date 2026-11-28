@@ -208,11 +208,19 @@ naujausios 1 000 sutarčių nuo 10 000 Eur per 3 metus (atsakyme - `apribota`). 
 | `/api/sutartys/rinka?cpv=<3-8 skaitmenys>&ted=lt\|es` | 200 `{ lt, ted, klaidos, meta }`: juridiniai asmenys, laimėję panašias sutartis (Lietuva) ir TED laimėtojai (Lietuva arba visa ES); asmens vardu pavadintos įmonės - tik skaičius; nepavykęs šaltinis - `null` ir `klaidos` (niekada tuščias sąrašas) |
 | `/api/sutartys/pajegumas?cpv=...&apyvarta=<EUR>&patirtis=<EUR>` | 200 `{ pajegumas, meta }` - tik skaičiai: kiek juridinių asmenų atitiktų / neatitiktų / nežinoma (naujausių finansinių metų pardavimo pajamos, didžiausia panaši sutartis); įmonių pavadinimų ir kodų atsakyme nėra; finansų nepavykus - `saltiniai.finansai: false` |
 | `/api/sutartys/sutartis?nr=<sutarties numeris>&pirkejas=<įmonės kodas>` | 200 `{ sutartis, pakeitimai, keliosSutartys, meta }` (nuo 2026-11-28, sutarties pakeitimų įrankis): sutartis pagal numerį - pavadinimas, datos, pirkimo numeris, vieša vertė, tiekėjas (asmens vardu pavadintos įmonės ir ne juridiniai asmenys - `paslepta`) - ir to paties pirkimo paskelbti sutarties pakeitimai (numeris, data, vertė) be dublikatų; nerasta - `sutartis: null`; kai pirkime kelios sutartys, paliekami tik šios sutarties tiekėjo pakeitimai ir `keliosSutartys: true`. Numeryje - tik raidės be diakritikų, skaitmenys ir `- / . _`; `pirkejas` neprivalomas (nurodžius, kito pirkimo vykdytojo sutartis tuo pačiu numeriu nerodoma) |
+| `/api/sutartys/sarasas/<įmonės kodas>` | 200 `{ sarasas: { sutartys, viso, apribota }, meta }` (nuo 2026-11-28, sutarties pakeitimų įrankio paieška pagal pavadinimą): visos pirkimo vykdytojo paskelbtos rašytinės sutartys (ne pakeitimai ir ne žodinės sutartys), naujausios pirmos, ne daugiau kaip 6 000 - numeris, pavadinimas, datos, pirkimo numeris, vieša vertė, pirmasis BVPŽ kodas, tiekėjas (kaip `sutartis`) ir kiekvienos sutarties paskelbti pakeitimai (numeris, data, vertė, galiojimas) bei `keliosSutartys`. Ieškoma NARŠYKLĖJE: paieškos žodžių serveris negauna. LITGRID AB, AB „Amber Grid“ ir UAB „Energy cells“ sąrašus (`NUOLATINIAI`) serveris surenka paleistas ir atnaujina fone, kai jie senesni nei 11 val. (tikrina kas 6 val.); pasenęs, bet dar tinkamas sąrašas grąžinamas iš karto (`meta.pasenusi`), o naujas renkamas fone |
 | `/api/sutartys/busena` | versija, rezultatų atmintyje, vykdomų ir laukiančių darbų skaičius, paskutinės klaidos laikas ir rūšis |
 
 400 - su `parametras` (netinkamas kodas, BVPŽ, riba, neleidžiamas ar pasikartojantis parametras; įvestis neatkartojama), 404 - kitas adresas,
 429 - per daug užklausų, 503 - šaltinis neatsakė ir ankstesnio rezultato nėra. Darbas ilgiau kaip 40 s - 202 `{ ruosiama: true }` (klientas kartoja
 po 3 s, rezultatas tuo metu ruošiamas toliau). Nepavykus atnaujinti - ankstesnis rezultatas iki 7 d. su `meta.pasenusi` ir `meta.klaida`.
+
+Sutarčių sąrašas (2026-11-28): šaltinyje sutarties ir jos šalių duomenys - atskirose lentelėse, todėl vienos organizacijos sąrašui reikia apie
+100 užklausų (LITGRID AB: 6 894 įrašai, iš jų 2 741 rašytinė sutartis, 445 pakeitimai, 3 697 žodinės sutartys; surinkimas - apie 1-3 min.,
+atsakymas - apie 0,9 MB; pirmąją užklausą - pirkimo vykdytojo sutarčių identifikatorius - šaltinis kartais vykdo ilgai: 2026-11-28 LITGRID AB - 99 s, todėl jai leidžiama laukti 150 s, kitoms - 30 s). Todėl sąrašai ruošiami iš anksto, o ne pagal žmogaus užklausą; kitos organizacijos sąrašas renkamas pirmą kartą
+paprašius (klientas laukia iki ~2 min., 202 „ruošiama“). Sutarties tipas šaltinyje (`dok_sut_tipas`) neaprašytas: „5“ - sutarties pakeitimas,
+„8“ - žodinė sutartis, kiti (1, 2, 3, 4, 9 ...) - rašytinės sutartys; nuo 2026-11-28 ir paieška pagal numerį (`sutartis`) sutartimi laiko visus
+tipus, išskyrus „5“ ir „8“ (iki tol - tik „1“, todėl dalis sutarčių pagal numerį nebuvo randamos).
 
 ### Saugumas
 

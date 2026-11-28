@@ -12,6 +12,9 @@
  *   pajegumas(bvpz, { apyvarta, patirtis }) -> { ok, pajegumas, meta }   PP-qual „Rinkos pajėgumas“ (tik skaičiai)
  *   sutartis(numeris, { pirkejas }) -> { ok, sutartis, pakeitimai, keliosSutartys, meta }   PP-sutartys (nuo 2026-11-28): sutartis pagal
  *                                  numerį ir to paties pirkimo paskelbti pakeitimai; nerasta - { ok: false, rusis: "nerasta", meta }
+ *   sarasas(kodas, o)             -> { ok, sutartys, viso, apribota, meta }   PP-sutartys (nuo 2026-11-28): visos pirkimo vykdytojo paskelbtos
+ *                                  rašytinės sutartys (pavadinimas, numeris, kita Šalis, datos, vertė, BVPŽ, paskelbti pakeitimai) - paieškai
+ *                                  pagal pavadinimą NARŠYKLĖJE: paieškos žodžiai į serverį nesiunčiami, siunčiamas tik pirkimo vykdytojo kodas
  *   klaida -> { ok: false, rusis }: "neidiegta" (404 - paslauga dar neįdiegta), "parametrai" (400), "uzimta" (429),
  *            "saltinis" (503 - šaltinis neatsakė), "ruosiama" (serveris vis dar ruošia), "rysys", "atsaukta".
  *   Nepavykęs įkėlimas NIEKADA nėra „sutarčių nėra“ - tekstai žmogui: klaida(rusis, kalba).
@@ -67,6 +70,8 @@
                 en: "Only the contracting entity code is sent to the G-Procure server; the server gets public contract data from the State Data Agency. Nothing is stored." },
     rinka: { lt: "Į G-Procure serverį siunčiama tik BVPŽ kodo pradžia; serveris duomenis gauna iš Valstybės duomenų agentūros ir TED. Nieko neišsaugoma.",
              en: "Only the beginning of the CPV code is sent to the G-Procure server; the server gets data from the State Data Agency and TED. Nothing is stored." },
+    sarasas: { lt: "Į G-Procure serverį siunčiamas tik pirkimo vykdytojo kodas - gaunamas jo viešai paskelbtų sutarčių sąrašas (Valstybės duomenų agentūros duomenys). Paieškos žodžiai lieka naršyklėje. Nieko neišsaugoma.",
+               en: "Only the contracting entity code is sent to the G-Procure server - the list of its published contracts is returned (State Data Agency data). Search words stay in the browser. Nothing is stored." },
     sutartis: { lt: "Į G-Procure serverį siunčiamas tik sutarties numeris ir pirkimo vykdytojo kodas; serveris viešų sutarčių duomenis gauna iš Valstybės duomenų agentūros. Nieko neišsaugoma.",
                 en: "Only the contract number and the contracting entity code are sent to the G-Procure server; the server gets public contract data from the State Data Agency. Nothing is stored." },
     pajegumas: { lt: "Į G-Procure serverį siunčiama tik BVPŽ kodo pradžia ir ribos eurais; serveris grąžina tik skaičius (be įmonių pavadinimų). Nieko neišsaugoma.",
@@ -165,6 +170,19 @@
       return { ok: true, zemelapis: z, meta: metaIs(j) };
     });
   }
+  /* Pirkimo vykdytojo paskelbtų rašytinių sutarčių sąrašas. Serveris jį laiko paruoštą; jei dar renka (202), laukiama ilgiau nei kitų
+     užklausų (iki ~2 min.) - o.eiga(bandymas) leidžia parodyti, kad darbas vyksta. */
+  function sarasas(kodas, o) {
+    kodas = String(kodas == null ? "" : kodas).trim();
+    if (!/^\d{7,9}$/.test(kodas)) return Promise.resolve({ ok: false, rusis: "parametrai" });
+    var oo = {}; for (var k in (o || {})) if (Object.prototype.hasOwnProperty.call(o, k)) oo[k] = o[k];
+    if (oo.kartu202 === undefined) oo.kartu202 = 40;
+    return kviesk("/sarasas/" + kodas, oo, function (j) {
+      var x = j.sarasas;
+      if (!x || typeof x !== "object" || !Array.isArray(x.sutartys)) return null;
+      return { ok: true, sutartys: x.sutartys, viso: typeof x.viso === "number" ? x.viso : x.sutartys.length, apribota: x.apribota === true, meta: metaIs(j) };
+    });
+  }
   /* Sutarties numeris užklausai: raidės be diakritikų, skaitmenys ir - / . _ (kaip serveryje); kitoks - null */
   function sutartiesNr(s) { s = String(s == null ? "" : s).trim(); return /^[0-9A-Za-z][0-9A-Za-z\-\/._]{2,59}$/.test(s) ? s : null; }
   function sutartis(numeris, o) {
@@ -204,7 +222,7 @@
 
   global.GP_VIESOS_SUTARTYS = {
     API_BAZE: API_BAZE, SALTINIAI: SALTINIAI, TEKSTAI: TEKSTAI,
-    pirkejas: pirkejas, rinka: rinka, pajegumas: pajegumas, sutartis: sutartis, sutartiesNr: sutartiesNr,
+    pirkejas: pirkejas, rinka: rinka, pajegumas: pajegumas, sutartis: sutartis, sarasas: sarasas, sutartiesNr: sutartiesNr,
     cpvPradzia: cpvPradzia, klaida: klaida, siunciama: siunciama, saltiniuTekstas: saltiniuTekstas, atnaujinta: atnaujinta
   };
 })(typeof window !== "undefined" ? window : this);

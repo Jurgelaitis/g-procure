@@ -716,7 +716,7 @@ async function testaiSasaja(){
   grupe("Sąsaja");
   await testas("Tuščias sąrašas, nauja sutartis su LITGRID duomenimis, laukai įrašomi ir kortelė atsinaujina", async () => {
     await modulis();
-    tiesa(/Sutarčių dar nėra/.test(q("#psSarasas").textContent) && q("#psDarbas").hidden, "tuščia būsena");
+    tiesa(/Kurią sutartį reikia keisti\?/.test(q("#psSarasas").textContent) && q("#psQ") && q("#psKaip") && !q("#psKaip").hidden && !q(".ps-sar") && q("#psDarbas").hidden, "tuščia būsena: paieška ir trys žingsniai, be tuščio sąrašo");
     tiesa(q("#infoPanelMount").textContent.length > 20, "informacinė skiltis");
     await uzpildykSutarti();
     const s = ui().S.sutartis;
@@ -949,7 +949,7 @@ async function testaiSasaja(){
     const bt = q("#psRastiBusena").textContent;
     tiesa(/Rasta:/.test(bt) && /paskelbtų pakeitimų: 2/.test(bt) && /kelias sutartis/.test(bt), bt);
     tiesa(!D.querySelector("#psDarbas img") && !W.__xss, "viešų duomenų tekstas - tik tekstu");
-    tiesa(/CVP IS duomenyse nurodyta vertė - 359 128,00 Eur/.test(q("#psTurinys").textContent), "vieša vertė - tik užuomina prie lauko");
+    tiesa(/CVP IS paskelbta vertė - 359 128,00 Eur/.test(q("#psTurinys").textContent) && D.querySelectorAll('[data-veiksmas="psVerte"]').length === 2, "vieša vertė - tik pasiūlymas prie lauko, į kainą neįrašoma");
     tiesa(/Papildyta iš CVP IS duomenų/.test(q("#psKortele").textContent) && D.querySelectorAll(".ps-ank").length === 2, "kortelė ir pakeitimų sąrašas");
     lygu(D.activeElement && D.activeElement.getAttribute("data-veiksmas"), "psRask", "fokusas grįžta į mygtuką");
   });
@@ -1045,6 +1045,205 @@ async function testaiSasaja(){
   });
 }
 
+/* Sutarties paieška viešai paskelbtų sutarčių sąraše (2026-11-28, naudotojo užduotis): paieška pagal pirkimo objekto pavadinimo žodį,
+   kiti laukai - iš paskelbtos sutarties. Serverio atsakymas imituojamas; paieškos žodžiai į užklausas nepatenka. */
+const VS_SAR = [
+  { nr: "21VP-SUT-156", sudaryta: "2021-09-10", galioja: "2025-05-10", pirkimoNr: "526678", pav: "330/110/10 kV Neries TP rekonstravimo pirkimas", verte: 22042570, bvpz: "45222000",
+    tiekejas: { pav: "\"Žilinskis ir Co\", UAB", kodas: "304317232" }, tiekeju: 1, keliosSutartys: false,
+    pakeitimai: [{ nr: "22VP-SUTP-112", sudaryta: "2022-10-05", verte: 22042570, galioja: "2025-05-10" }, { nr: "22VP-SUTP-131", sudaryta: "2022-12-02", verte: 26549201.69, galioja: "2027-06-30" }] },
+  { nr: "25VP-SUT-201", sudaryta: "2025-08-25", galioja: "2027-04-25", pirkimoNr: "3058484", pav: "Sutartis dėl perimetro apsaugos stiprinimo Neries TP", verte: 603604.87, bvpz: "45222000",
+    tiekejas: { pav: "UAB Gelmesta", kodas: "281324460" }, tiekeju: 1, pakeitimai: [], keliosSutartys: true },
+  { nr: "23VP-SUT-271", sudaryta: "2023-10-09", galioja: "2023-12-08", pirkimoNr: "689855", pav: "Neries TP sinchroninio kompensatoriaus transportavimo studijos parengimo paslaugos", verte: 17061, bvpz: "71241000",
+    tiekejas: { paslepta: true, priezastis: "nezinomas" }, tiekeju: 1, pakeitimai: [], keliosSutartys: false },
+  { nr: "24VP-SUT-055", sudaryta: "2024-03-22", galioja: "2027-03-21", pirkimoNr: "648563", pav: "330 kV OL Utena-IAE projektavimo paslaugos", verte: 138363.5, bvpz: "71320000",
+    tiekejas: { pav: "UAB Neris projektai", kodas: "300000009" }, tiekeju: 1, pakeitimai: [], keliosSutartys: false },
+  { nr: "26VP-SUT-010", sudaryta: "2026-02-01", galioja: "2026-12-15", pirkimoNr: "700001", pav: "Transformatorių alyvos <img src=x onerror=\"window.__xss=1\"> pirkimas", verte: null, bvpz: "09211000",
+    tiekejas: { pav: "UAB Alyva", kodas: "300000010" }, tiekeju: 1, pakeitimai: [], keliosSutartys: false },
+  { nr: {}, pav: [] }, { verte: 5 }, null, "x"
+];
+function sarAts(sar){ return { sarasas: { sutartys: sar || VS_SAR, viso: (sar || VS_SAR).length, apribota: false }, meta: { atnaujinta: "2026-11-28T08:00:00Z", pasenusi: false, klaida: null } }; }
+function sarFetch(z, o){
+  o = o || {};
+  return (u, par) => { z.push({ u: u, o: par });
+    if (/\/busena$/.test(u)) return Promise.resolve({ status: o.busena || 200, json: () => Promise.resolve({}) });
+    return o.f ? o.f() : Promise.resolve({ status: 200, json: () => Promise.resolve(sarAts(o.sar)) }); };
+}
+async function testaiPaieska1128(){
+  grupe("Sutarties paieška viešai paskelbtų sutarčių sąraše (2026-11-28)");
+  const DABAR = "2026-11-28";
+  await testas("Sąrašo tikrinimas: tik žinomi laukai ir tipai, vėliausias paskelbtas galiojimas ir vertė, kabutės, paslėptas tiekėjas", () => {
+    const a = G.viesasSarasas(VS_SAR);
+    lygu(a.length, 5, "netinkami įrašai (be pavadinimo ir numerio, null, tekstas) atmetami");
+    lygu([a[0].nr, a[0].galioja, a[0].galiojaV, a[0].verte, a[0].verteV, a[0].tiekejas, a[0].pakeitimai.length], ["21VP-SUT-156", "2025-05-10", "2027-06-30", 22042570, 26549201.69, { pav: "„Žilinskis ir Co“, UAB", kodas: "304317232" }, 2]);
+    lygu([a[2].tiekejas, a[2].tiekejasNerodomas, a[4].verte], [null, true, null]);
+    lygu(G.viesasSarasas(null), []); lygu(G.viesasSarasas({ a: 1 }), []);
+    lygu(G.viesaSutartis({ nr: "A-1", pav: "X", sudaryta: "2026-02-30", galioja: "ne data", bvpz: "123", verte: -5, tiekejas: { pav: 5 }, pakeitimai: "x" }),
+      Object.assign({ nr: "A-1", pav: "X", sudaryta: "", galioja: "", galiojaV: "", pirkimoNr: "", verte: null, verteV: null, bvpz: "", tiekejas: null, tiekejasNerodomas: true, pakeitimai: [], keliosSutartys: false }, { _p: "x", _t: "", _n: "a-1", _k: "" }));
+    lygu([G.norm("  „Žilinskis ir Co“, UAB "), G.norm("330/110/10 kV Neries TP"), G.lygink("Ąžuolų g.").length], ["zilinskis ir co uab", "330/110/10 kv neries tp", 9]);
+  });
+  await testas("Paieška: visi žodžiai turi atitikti, be diakritikų ir didžiųjų raidžių, linksniai pagal kamieną, kur ieškoti, galiojimo filtras ir skaičiai", () => {
+    const a = G.viesasSarasas(VS_SAR), nr = r => r.rasta.map(x => x.x.nr);
+    lygu(nr(G.ieskok(a, "Neries TP", { dabar: DABAR })), ["25VP-SUT-201", "21VP-SUT-156", "23VP-SUT-271"], "galiojančios pirmiau, tada naujausios");
+    lygu(nr(G.ieskok(a, "NERIES tp rekonstravimas", { dabar: DABAR })), ["21VP-SUT-156"], "kitas linksnis („rekonstravimas“ - „rekonstravimo“)");
+    lygu(nr(G.ieskok(a, "Neris", { dabar: DABAR })).sort(), ["21VP-SUT-156", "23VP-SUT-271", "24VP-SUT-055", "25VP-SUT-201"], "„Neris“ randa „Neries“ ir tiekėją „Neris projektai“");
+    lygu(nr(G.ieskok(a, "Neris", { kur: "pav", dabar: DABAR })).length, 3, "tik pavadinime - be tiekėjo atitikmens");
+    lygu(nr(G.ieskok(a, "zilinskis", { dabar: DABAR })), ["21VP-SUT-156"], "tiekėjas be diakritikų");
+    lygu(G.ieskok(a, "zilinskis", { dabar: DABAR }).rasta[0].kur, ["tiekejas"], "pasakoma, kur rasta");
+    lygu(nr(G.ieskok(a, "zilinskis", { kur: "pav", dabar: DABAR })), [], "tiekėjo žodis pavadinime nerandamas");
+    lygu(nr(G.ieskok(a, "22VP-SUTP-131", { dabar: DABAR })), ["21VP-SUT-156"], "randama ir pagal paskelbto pakeitimo numerį");
+    lygu(nr(G.ieskok(a, "526678", { kur: "nr", dabar: DABAR })), ["21VP-SUT-156"], "pirkimo numeris");
+    lygu(nr(G.ieskok(a, "neries dujotiekis", { dabar: DABAR })), [], "vienas žodis neatitinka - nerasta");
+    const r = G.ieskok(a, "", { dabar: DABAR });
+    lygu([nr(r), r.skaiciai], [["26VP-SUT-010", "25VP-SUT-201", "24VP-SUT-055", "23VP-SUT-271", "21VP-SUT-156"], { visos: 5, galioja: 4, baigesi: 1 }], "be žodžių - visos, naujausios pirmos");
+    lygu(nr(G.ieskok(a, "", { busena: "baigesi", dabar: DABAR })), ["23VP-SUT-271"]);
+    lygu(nr(G.ieskok(a, "neries", { busena: "galioja", dabar: DABAR })), ["25VP-SUT-201", "21VP-SUT-156", "24VP-SUT-055"], "galiojimas - pagal vėliausią paskelbtą datą (ir pakeitimų); atitikimas pavadinime - pirmiau nei tiekėjo");
+    lygu([G.viesosBusena(a[0], "2027-06-30").kodas, G.viesosBusena(a[0], "2027-07-01").kodas, G.viesosBusena(a[0], "2027-04-01").kodas, G.viesosBusena(a[0], "2027-03-31").kodas, G.viesosBusena({ galiojaV: "" }, DABAR).kodas],
+      ["baigiasi", "baigesi", "baigiasi", "galioja", "nezinoma"], "ribos: paskutinė diena dar galioja, 90 d. - baigiasi, 91 d. - galioja");
+    lygu(G.paieskosZodziai("  Neries   neries, a TP 5 "), ["neries", "tp", "5"], "vienos raidės žodis nepaisomas, dublikatai - vieną kartą");
+    lygu(G.zymiuVietos("330/110/10 kV Neries TP rekonstravimo pirkimas", ["neries", "rekonstravimas"]), [[14, 20], [24, 37]], "žymimos vietos originaliame tekste (ir kito linksnio žodis)");
+  });
+  await testas("Objektas pagal BVPŽ kodą, sutarties formos pasiūlymas, pavadinimas kilmininku - tik aiškiais atvejais", () => {
+    lygu(["45222000", "31170000", "48000000", "71320000", "09211000", "99000000", "4522", ""].map(G.objektasIsBvpz), ["darbai", "prekes", "prekes", "paslaugos", "prekes", "", "", ""]);
+    lygu([G.siulomaForma("330/110/10 kV Neries TP rekonstravimo pirkimas", "darbai"), G.siulomaForma("TP projektavimo ir statybos darbai", "darbai"), G.siulomaForma("Slėptuvės paprastasis remontas", "darbai"),
+      G.siulomaForma("Oro linijų eksploatavimo darbai", "darbai"), G.siulomaForma("330 kV OL projektavimo paslaugos", "paslaugos"), G.siulomaForma("Techninio projekto ekspertizės paslaugos", "paslaugos"),
+      G.siulomaForma("Transformatorių alyva", "prekes"), G.siulomaForma("Kiti darbai", "darbai"), G.siulomaForma("Kažkas", "")], ["SR", "PSR", "DARBAI", "EKS", "PPS", "PASLAUGOS", "PREKES", "", ""]);
+    lygu([G.pavadinimasKilmininku("330/110/10 kV Neries TP rekonstravimo pirkimas"), G.pavadinimasKilmininku("Statybos rangos sutartis."), G.pavadinimasKilmininku("Sutartis dėl 110 kV linijos paslaugų"),
+      G.pavadinimasKilmininku("Projektavimo paslaugos"), G.pavadinimasKilmininku("Remonto darbai"), G.pavadinimasKilmininku("Transformatorių alyva"), G.pavadinimasKilmininku("")],
+      ["330/110/10 kV Neries TP rekonstravimo pirkimo sutarties", "Statybos rangos sutarties", "110 kV linijos paslaugų sutarties", "Projektavimo paslaugų pirkimo sutarties", "Remonto darbų pirkimo sutarties", "", ""]);
+  });
+  await testas("Pasirinkta sutartis užpildo įrašą: numeris, datos, kita Šalis, objektas, pakeitimai su paskelbta verte; kaina ir forma neįrašomos", () => {
+    const a = G.viesasSarasas(VS_SAR), S = G.naujaSutartis("testas-2", new Date("2026-11-28T10:00:00Z"));
+    const r = G.isSaraso(S, a[0], { dabar: DABAR }), s = S.sutartis;
+    lygu([r.ok, r.pakeitimu, r.keliosSutartys], [true, 2, false]);
+    lygu([s.nr, s.data, s.galiojaIki, s.pirkimoNr, s.tiekejoPav, s.tiekejoKodas, s.objektas, s.bvpz, s.pavadinimasKilm, s.pavS, s.viesaVerte, s.pradineVerte, s.dabartineVerte, s.forma, s.gauta],
+      ["21VP-SUT-156", "2021-09-10", "2027-06-30", "526678", "„Žilinskis ir Co“, UAB", "304317232", "darbai", "45222000", "330/110/10 kV Neries TP rekonstravimo pirkimo sutarties", "cvpis", 22042570, null, null, "", DABAR]);
+    lygu(S.ankstesni.map(x => [x.nr, x.data, x.regNr, x.saltinis, x.viesaVerte, x.pokytis]), [["1", "2022-10-05", "22VP-SUTP-112", "cvpis", 22042570, null], ["2", "2022-12-02", "22VP-SUTP-131", "cvpis", 26549201.69, null]]);
+    lygu(S.rengiamas.nr, "3");
+    lygu(G.trukstaSutarciai(S).map(x => x.k), ["s.forma", "s.pradineVerte"], "lieka tik tai, ko vieši duomenys nepasako");
+    const P2 = G.sutartiesForma(JSON.parse(JSON.stringify(S)));
+    lygu([P2.sutartis.bvpz, P2.sutartis.pavS, P2.ankstesni[1].viesaVerte], ["45222000", "cvpis", 26549201.69], "nauji laukai išlieka išsaugojus");
+    lygu(["viesaVerte" in G.sutartiesForma({ id: "abcd", ankstesni: [{ nr: "1" }] }).ankstesni[0], G.sutartiesForma({ id: "abcd", sutartis: { bvpz: "<b>", pavS: "x" } }).sutartis.bvpz], [false, ""], "ranka įrašytas pakeitimas be viešos vertės; netinkamas BVPŽ atmetamas");
+    const S3 = G.naujaSutartis("testas-3"); S3.sutartis.pavadinimasKilm = "Mano įrašytas pavadinimas"; S3.sutartis.objektas = "paslaugos";
+    G.isSaraso(S3, a[0], { dabar: DABAR });
+    lygu([S3.sutartis.pavadinimasKilm, S3.sutartis.pavS, S3.sutartis.objektas], ["Mano įrašytas pavadinimas", "", "paslaugos"], "jau įrašyti laukai neperrašomi");
+    lygu(G.isSaraso(null, a[0]).ok, false);
+  });
+  await testas("Pradžia: paieškos laukas, sąrašas gaunamas tik pradėjus ieškoti, siunčiamas tik pirkimo vykdytojo kodas; rezultatai, žymėjimas, filtrai, „Rodyti daugiau“", async () => {
+    await modulis();
+    const z = [], U = W.GP_PAKEITIMAI_UI;
+    const daug = VS_SAR.slice(0, 5).concat(Array.from({ length: 30 }, (x, i) => ({ nr: "26VP-SUT-" + (100 + i), sudaryta: "2026-01-" + String(i % 28 + 1).padStart(2, "0"), galioja: "2028-01-01", pav: "Neries TP papildomas pirkimas " + (i + 1), verte: 1000 + i, pakeitimai: [] })));
+    U.naudokFetch(sarFetch(z, { sar: daug }));
+    tiesa(q("#psQ") && q('[data-veiksmas="psIeskok"]') && D.querySelectorAll('[data-veiksmas="psKur"]').length === 4 && q("#psOrg"), "paieškos laukas, „Ieškoti“, kur ieškoti, pirkimo vykdytojas");
+    tiesa(/siunčiamas tik pirkimo vykdytojo kodas/.test(q("#psIeskaUz").textContent) && /Paieškos žodžiai lieka naršyklėje/.test(q("#psIeskaUz").textContent), "pasakyta, kas siunčiama");
+    lygu([z.length, q("#psRez").innerHTML], [0, ""], "atvėrus puslapį niekas nesiunčiama");
+    const lauk = q("#psQ"); lauk.focus(); lauk.value = "Neries TP"; lauk.dispatchEvent(new W.Event("input", { bubbles: true }));
+    await kol(() => D.querySelectorAll(".ps-rz").length);
+    lygu(z.map(x => x.u), ["https://api.g-procure.com/api/sutartys/busena", "https://api.g-procure.com/api/sutartys/sarasas/302564383"], "viena užklausa - tik pirkimo vykdytojo kodas");
+    tiesa(z.every(x => !/neries|Neries/i.test(x.u) && !(x.o && x.o.body)), "paieškos žodžiai į užklausą nepatenka");
+    lygu([z[1].o.credentials, z[1].o.referrerPolicy, z[1].o.method], ["omit", "no-referrer", "GET"]);
+    lygu([D.activeElement && D.activeElement.id, lauk.value], ["psQ", "Neries TP"], "fokusas ir įrašytas tekstas lieka lauke");
+    lygu([D.querySelectorAll(".ps-rz").length, /Rasta: 33 iš 35/.test(q("#psRezSk").textContent), q("#psKaip").hidden], [12, true, true], "pirmi 12 rezultatų, „Kaip tai veikia“ paslepiama");
+    lygu([...D.querySelectorAll('[data-veiksmas="psBusena"]')].map(b => b.textContent.replace(/\s+/g, " ").trim() + "|" + b.getAttribute("aria-pressed")), ["Visos 33|true", "Galiojančios 32|false", "Pasibaigusios 1|false"]);
+    const pirmas = q(".ps-rz");
+    tiesa(pirmas.querySelectorAll("mark").length >= 2 && /Neries/.test(pirmas.querySelector("mark").textContent), "rasti žodžiai pažymėti");
+    spausk('[data-veiksmas="psDaugiau"]');
+    lygu([D.querySelectorAll(".ps-rz").length, D.activeElement === D.querySelectorAll(".ps-rz")[12]], [32, true], "„Rodyti daugiau“ - dar 20, fokusas - į pirmą naują");
+    lauk.value = "rekonstravimo"; lauk.dispatchEvent(new W.Event("input", { bubbles: true }));
+    lygu([D.querySelectorAll(".ps-rz").length, z.length], [1, 2], "kita užklausa - be naujo kreipimosi į serverį");
+    const e = q(".ps-rz").textContent.replace(/\s+/g, " ");
+    tiesa(/330\/110\/10 kV Neries TP rekonstravimo pirkimas/.test(e) && /Nr\. 21VP-SUT-156/.test(e) && /„Žilinskis ir Co“, UAB/.test(e) && /sudaryta 2021-09-10/.test(e) && /Galioja iki 2027-06-30/.test(e) && /paskelbtų pakeitimų: 2/.test(e) && /22 042 570,00 Eur/.test(e), e);
+    spausk('[data-veiksmas="psBusena"][data-b="baigesi"]');
+    tiesa(/Pagal šį filtrą sutarčių nėra/.test(q("#psRez").textContent) && D.activeElement.getAttribute("data-b") === "baigesi", "filtras be rezultatų - pasakoma, fokusas lieka");
+    spausk('[data-veiksmas="psBusena"][data-b="visos"]');
+    lauk.value = "zilinskis"; lauk.dispatchEvent(new W.Event("input", { bubbles: true }));
+    tiesa(/rasta pagal: tiekėjas/.test(q(".ps-rz").textContent), "pasakoma, kad rasta pagal tiekėją");
+    spausk('[data-veiksmas="psKur"][data-kur="pav"]');
+    tiesa(/Tokios sutarties tarp paskelbtų nerasta/.test(q("#psRez").textContent) && q('#psRez [data-veiksmas="psNauja"]') && q('[data-veiksmas="psKur"][data-kur="pav"]').getAttribute("aria-pressed") === "true", "tik pavadinime - nerasta, siūloma įrašyti ranka");
+    spausk('[data-veiksmas="psKur"][data-kur="visur"]');
+    lauk.value = "alyvos"; lauk.dispatchEvent(new W.Event("input", { bubbles: true }));
+    tiesa(!q("#psRez img") && !W.__xss && /<img/.test(q(".ps-rz-p").textContent) && /vertė nepaskelbta/.test(q(".ps-rz").textContent), "paskelbtas pavadinimas - tik tekstu; nepaskelbta vertė pasakoma");
+    spausk('[data-veiksmas="psVisos"]');
+    await kol(() => D.querySelectorAll(".ps-rz").length === 12);
+    lygu([lauk.value, /35 paskelbtos sutartys|35 paskelbtų sutarčių/.test(q("#psRezSk").textContent)], ["", true], "„Rodyti visas sutartis“");
+  });
+  await testas("Sąrašo gavimo klaidos: neįdiegta, ryšys su „Bandyti dar kartą“, serveris dar renka - niekada „nerasta“; kita organizacija - kita užklausa", async () => {
+    await modulis();
+    const U = W.GP_PAKEITIMAI_UI, z = [];
+    U.naudokFetch(sarFetch(z, { busena: 404 }));
+    q("#psQ").value = "Neries"; await U.ieskokDabar();
+    tiesa(/paieška G-Procure serveryje dar neįdiegta/.test(q("#psIeskaBusena").textContent) && !q(".ps-rz") && !/nerasta/i.test(q("#psRez").textContent), q("#psIeskaBusena").textContent);
+    lygu(z.map(x => x.u), ["https://api.g-procure.com/api/sutartys/busena"], "kol paslaugos nėra, kodas nesiunčiamas");
+    U.naudokFetch(sarFetch(z, { f: () => Promise.reject(new TypeError("Failed to fetch")) }));
+    await U.ieskokDabar();
+    tiesa(/Nepavyko susisiekti/.test(q("#psIeskaBusena").textContent) && q("#psIeskaBusena [data-gpb-kartoti]") && !q(".ps-rz"), "ryšio klaida su „Bandyti dar kartą“");
+    let n = 0;
+    U.naudokFetch(sarFetch(z, { f: () => { n++; return Promise.resolve(n < 3 ? { status: 202, json: () => Promise.resolve({ ruosiama: true }) } : { status: 200, json: () => Promise.resolve(sarAts()) }); } }));
+    await U.gaukSarasa({ lauktiMs: 5 });
+    lygu([n, D.querySelectorAll(".ps-rz").length > 0], [3, true], "serveris dar renka - kartojama, kol gaunama");
+    z.length = 0;
+    const org = q("#psOrg"), kita = [...org.options].map(o => o.value).filter(v => v !== "litgrid")[0];
+    tiesa(kita, "yra kita Pirkimų įstatymą taikanti organizacija");
+    org.value = kita; org.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await kol(() => z.some(x => /\/sarasas\//.test(x.u)));
+    const kodas = W.GP_ORG.pagalId(kita).jarKodas;
+    lygu(z.filter(x => /\/sarasas\//.test(x.u)).map(x => x.u), ["https://api.g-procure.com/api/sutartys/sarasas/" + kodas], "kitos organizacijos sąrašas - pagal jos kodą");
+  });
+  await testas("Pasirinkus sutartį: duomenys užpildyti, „Liko įrašyti“ su šuoliais, formos ir kainos pasiūlymai vienu paspaudimu, išskleistos dalys išlieka; pradėta sutartis atveriama, ne kuriama iš naujo", async () => {
+    await modulis();
+    const U = W.GP_PAKEITIMAI_UI, z = [];
+    U.naudokFetch(sarFetch(z));
+    q("#psQ").value = "rekonstravimo"; await U.ieskokDabar();
+    spausk('[data-veiksmas="psIeskok"]'); await U.ieskokDabar();
+    lygu(z.filter(x => /\/sarasas\//.test(x.u)).length, 1, "pakartotinė paieška („Ieškoti“, Enter) sąrašo iš naujo neparsiunčia");
+    spausk(".ps-rz");
+    const s = ui().S.sutartis;
+    lygu([ui().zingsnis, s.nr, s.tiekejoPav, s.vykdytojas, s.pirkejoPav, s.objektas, ui().S.ankstesni.length, ui().visos.length], [1, "21VP-SUT-156", "„Žilinskis ir Co“, UAB", "litgrid", "LITGRID AB", "darbai", 2, 1]);
+    tiesa(/užpildyti iš viešų CVP IS duomenų/.test(q("#psTurinys .ps-pastaba--ok").textContent) && /paskelbtų pakeitimų: 2/.test(q("#psTurinys .ps-pastaba--ok").textContent), "santrauka, kas užpildyta");
+    lygu([...D.querySelectorAll(".ps-truksta-m")].map(b => b.textContent), ["sutarties forma", "pradinė kaina be PVM"], "liko įrašyti tik tai, ko nėra viešuose duomenyse");
+    tiesa(/Papildyta iš CVP IS duomenų/.test(q("#psKortele").textContent) && /Nr\. 3/.test(q(".ps-eiga").textContent), "kortelė ir rengiamo susitarimo numeris");
+    lygu([q('[data-dalis="kiti"]').open, q('[data-dalis="salys"]').open], [false, false], "užpildytos dalys suskleistos");
+    tiesa(/galioja iki 2027-06-30 · darbai/.test(q('[data-dalis="kiti"] summary').textContent) && /LITGRID AB ir „Žilinskis ir Co“, UAB/.test(q('[data-dalis="salys"] summary').textContent), "suskleistos dalies santrauka");
+    spausk(".ps-truksta-m");
+    lygu(D.activeElement && D.activeElement.getAttribute("data-kelias"), "s.forma", "šuolis į trūkstamą lauką");
+    tiesa(/siūloma: Statybos rangos sutartis/.test(q("#psTurinys").textContent), "formos pasiūlymas");
+    lygu(ui().S.sutartis.forma, "", "pasiūlymas pats neįrašomas");
+    spausk('[data-veiksmas="psForma"]');
+    lygu([ui().S.sutartis.forma, D.activeElement && D.activeElement.getAttribute("data-kelias"), !!q('[data-veiksmas="psForma"]')], ["SR", "s.forma", false]);
+    lygu(D.querySelectorAll('[data-veiksmas="psVerte"]').length, 2, "du kainos pasiūlymai");
+    tiesa(/be PVM - 18 217 000,00 Eur/.test(q('[data-veiksmas="psVerte"][data-kaip="bepvm"]').textContent), "kaina be PVM pagal tarifą iš bendro failo: " + q('[data-veiksmas="psVerte"][data-kaip="bepvm"]').textContent);
+    tiesa(/Tikėtina, kad ji su PVM/.test(q('[data-veiksmas="psVerte"]').parentNode.textContent), "užuomina, kai atėmus PVM gaunama apvali suma");
+    lygu([22042570, 18217000, 603604.87, 121, 1000, 0, null].map(G.tiketinaSuPvm), [true, false, true, true, false, false, false], "tikėtina su PVM - tik kai atėmus PVM gaunama sveika ir apvalesnė suma");
+    lygu(ui().S.sutartis.pradineVerte, null, "kaina pati neįrašoma");
+    spausk('[data-veiksmas="psVerte"][data-kaip="bepvm"]');
+    lygu([ui().S.sutartis.pradineVerte, D.activeElement && D.activeElement.getAttribute("data-kelias"), !!q('[data-veiksmas="psVerte"]'), /Pagrindiniai sutarties duomenys įrašyti/.test(q(".ps-truksta--ok").textContent)], [18217000, "s.pradineVerte", false, true]);
+    tiesa(/CVP IS paskelbta vertė po šio pakeitimo - 26 549 201,69 Eur \(pokytis \+4 506 631,69 Eur\)/.test(q("#psTurinys").textContent) && /22 042 570,00 Eur \(nepasikeitė\)/.test(q("#psTurinys").textContent), "pakeitimų paskelbtos vertės - užuomina prie kainos pokyčio");
+    const d = q('[data-dalis="kiti"]'); d.open = true; d.dispatchEvent(new W.Event("toggle"));
+    rasyk("s.objektas", "paslaugos");
+    tiesa(q('[data-dalis="kiti"]').open, "perpiešus išskleista dalis lieka išskleista");
+    rasyk("s.pavadinimasKilm", "Neries TP rekonstravimo darbų pirkimo sutarties");
+    lygu(ui().S.sutartis.pavS, "", "ranka pataisytas pavadinimas nebe pasiūlymas");
+    spausk('[data-veiksmas="psGrizk"]');
+    tiesa(q(".ps-pradetos") && D.querySelectorAll(".ps-sar-el").length === 1 && /Jūsų sutartys šioje naršyklėje/.test(q("#psSarH").textContent), "pradėta sutartis - sąraše");
+    q("#psQ").value = "rekonstravimo"; q("#psQ").dispatchEvent(new W.Event("input", { bubbles: true }));
+    tiesa(/jau pradėta šioje naršyklėje/.test(q(".ps-rz").textContent) && /Tęsti/.test(q(".ps-rz-t").textContent), "rezultate pažymėta, kad sutartis jau pradėta");
+    spausk(".ps-rz");
+    lygu([ui().visos.length, ui().S.sutartis.forma, ui().S.sutartis.pradineVerte], [1, "SR", 18217000], "atveriama ta pati sutartis, naujos nekuriama");
+    lygu(z.filter(x => /\/sarasas\//.test(x.u)).length, 1, "sąrašas gautas vieną kartą");
+  });
+  await testas("Telefonas 375 px: paieška ir rezultatai telpa, puslapis neslenka į šoną; be paieškos paslaugos - rankinis kelias", async () => {
+    await modulis(375);
+    const U = W.GP_PAKEITIMAI_UI;
+    U.naudokFetch(sarFetch([]));
+    q("#psQ").value = "Neries"; await U.ieskokDabar();
+    tiesa(D.querySelectorAll(".ps-rz").length >= 3, "rezultatai");
+    tiesa(D.documentElement.scrollWidth <= D.documentElement.clientWidth + 1, "puslapis platesnis už ekraną: " + D.documentElement.scrollWidth + " > " + D.documentElement.clientWidth);
+    [...D.querySelectorAll(".ps-rz, .ps-ieska-e, .ps-seg")].forEach(el => { const r = el.getBoundingClientRect(); tiesa(r.right <= D.documentElement.clientWidth + 1 && r.left >= -1, "elementas už ekrano: " + el.className); });
+    await modulis();
+    W.GP_VIESOS_SUTARTYS.sarasas = null; W.GP_PAKEITIMAI_UI.piesk();
+    tiesa(!q("#psQ") && q('[data-veiksmas="psNauja"]').classList.contains("ps-btn--pagr") && /Nauja sutartis/.test(q('[data-veiksmas="psNauja"]').textContent), "be paieškos - pagrindinis veiksmas „Nauja sutartis“");
+  });
+}
+
 (async function(){
   try {
     await testaiSkaiciavimas();
@@ -1053,6 +1252,7 @@ async function testaiSasaja(){
     await testaiIndeksai();
     await testaiEtapas2();
     await testaiSasaja();
+    await testaiPaieska1128();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

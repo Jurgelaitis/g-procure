@@ -443,13 +443,13 @@
       sumLt: "Susitarimo dėl sutarties pakeitimo projektas: kainos perskaičiavimas pagal indeksą, papildomi ir atsisakomi darbai, termino pratęsimas, subtiekėjai - su Pirkimų įstatymo ribomis ir patikromis.",
       sumEn: "A draft contract amendment agreement: price indexation, additional and withdrawn works, extension of the term, subcontractors - with the limits and checks of the Law on Procurement.",
       galiLt: [
-        "Sutartis ir jos paskelbti pakeitimai randami viešuose CVP IS duomenyse pagal sutarties numerį",
+        "Sutartis randama tarp viešai paskelbtų pagal pirkimo objekto pavadinimo žodį, tiekėją ar numerį - numeris, datos, kita Šalis ir paskelbti pakeitimai užpildomi patys",
         "Kainos perskaičiavimas: indeksų reikšmės iš Oficialiosios statistikos portalo, Sutartyje nustatytos ribos ir laikotarpio patikra",
         "Papildomi ir atsisakomi darbai, termino pratęsimas ir kitos sąlygos - su Pirkimų įstatymo ribomis ir esminio pakeitimo klausimais",
         "Patikros remiasi VPT sutarčių keitimo gairėmis ir teismų praktika - su nuorodomis į sprendimus"
       ],
       galiEn: [
-        "The contract and its published amendments are found in public CVP IS data by the contract number",
+        "The contract is found among published contracts by a word of the title, the supplier or the number - the number, dates, the other party and published amendments are filled in automatically",
         "Price indexation: index values from the Official Statistics Portal, a check of the threshold and period set in the contract",
         "Additional and withdrawn works, extension of the term and other terms - with the limits of the Law on Procurement and questions on substantial modification",
         "The checks follow the VPT contract modification guidelines and case law - with links to the judgments"

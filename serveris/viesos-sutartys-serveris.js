@@ -5,10 +5,12 @@
  * Ką daro: į GET užklausas
  *   /api/sutartys/pirkejas/<kodas>          /api/sutartys/rinka?cpv=...&ted=lt|es
  *   /api/sutartys/pajegumas?cpv=...&apyvarta=...&patirtis=...      /api/sutartys/busena
+ *   /api/sutartys/sutartis?nr=...&pirkejas=<kodas>                 /api/sutartys/sarasas/<kodas>
  * atsako iš viešų šaltinių (Valstybės duomenų agentūros viešųjų pirkimų sutartys, Registrų centro finansinės ataskaitos,
  * TED), kurie nepriima naršyklės užklausų. Užklausos šaltiniams - tik iš anksto apibrėžtos (viesos-sutartys-logika.js),
  * rezultatas laikomas atmintyje 24 val.; nepavykus - paskutinis geras (iki 7 d.) su žyma „pasenęs“. Jei darbas trunka
  * ilgiau nei 40 s, atsakoma 202 („ruošiama“), darbas tęsiamas ir kitas kartas atsako iš talpyklos.
+ * Pirkimo vykdytojų iš L.NUOLATINIAI sutarčių sąrašai (paieškai pagal pavadinimą) renkami paleidus ir atnaujinami fone - žmogus jų nelaukia.
  * Logika ir tikrinimai - viesos-sutartys-logika.js (testai - serveris/testai.html). Diegimas - README.md.
  *
  * Saugumas:
@@ -28,6 +30,7 @@ const PORTAS = Number(process.env.PORT || 3003);
 const RIBA_IP_MIN = 30;                 // užklausų per minutę vienam IP (nginx riba - pirmoji, ši - antroji)
 const LAUKTI_MS = 40000;                // tiek laukiama darbo, paskui - 202 „ruošiama“
 const UZKLAUSOS_MS = 30000;             // vienai šaltinio užklausai
+const ILGIAUSIAI_MS = 180000;           // užklausa gali prašyti ilgesnio laukimo (uz.laikas), bet ne ilgiau
 const MAX_ATSAKYMO = 20 * 1048576;      // šaltinio atsakymo riba
 const MAX_DARBU = 2;                    // vienu metu vykdomi darbai
 const MAX_TALPYKLOS = 300;              // įrašų talpykloje
@@ -44,6 +47,8 @@ class SaltinioKlaida extends Error {
   constructor(rusis, kartoti) { super(rusis); this.rusis = rusis; this.kartoti = !!kartoti; }
 }
 const miegok = ms => new Promise(r => setTimeout(r, ms));
+// Laukimas be duomenų: numatyta UZKLAUSOS_MS, užklausa gali prašyti ilgesnio (didelis šaltinio sąrašas), bet ne ilgiau ILGIAUSIAI_MS
+function laukimas(uz) { const l = Number(uz && uz.laikas); return isFinite(l) && l > UZKLAUSOS_MS ? Math.min(l, ILGIAUSIAI_MS) : UZKLAUSOS_MS; }
 
 // Viena šaltinio užklausa: tik L.SALTINIAI kompiuteris ir kelias; kelias perduodamas toks, kokį sudarė logika
 // (šaltinio užklausų kalba neatkoduoja %22 - todėl ne fetch(), kuris kabutes užkoduotų)
@@ -57,7 +62,7 @@ function gaukVienas(uz) {
   return new Promise((pavyko, nepavyko) => {
     const antr = { "User-Agent": NAUDOTOJO_AGENTAS, "Accept": "application/json" };
     if (kunas) { antr["Content-Type"] = "application/json"; antr["Content-Length"] = kunas.length; }
-    const req = https.request({ hostname: cfg.kompiuteris, port: 443, path: kelias, method: kunas ? "POST" : "GET", headers: antr, timeout: UZKLAUSOS_MS }, res => {
+    const req = https.request({ hostname: cfg.kompiuteris, port: 443, path: kelias, method: kunas ? "POST" : "GET", headers: antr, timeout: laukimas(uz) }, res => {
       const st = res.statusCode;
       if (st !== 200) {
         res.resume();
@@ -114,13 +119,22 @@ function atlaisvink() { const k = laukia.shift(); if (k) k(); else vykdoma--; }
 
 function dalinis(d) { return !!(d && d.klaidos && Object.keys(d.klaidos).length); }
 
-function irasas(raktas, tipas, vykdyk) {
+/* o.fone - pasenęs, bet dar tinkamas (iki 7 d.) įrašas grąžinamas iš karto, o naujas renkamas fone (sutarčių sąrašas renkamas apie
+   minutę - žmogus jo nelaukia); atsakymo meta.pasenusi tada true. */
+function irasas(raktas, tipas, vykdyk, o) {
   const dabar = Date.now(), esamas = TALPYKLA.get(raktas);
   if (esamas && !esamas.klaida && dabar - esamas.laikas < esamas.ttl) return Promise.resolve(esamas);
   if (esamas && esamas.klaida && dabar - esamas.klaidosLaikas < KLAIDOS_PAUZE_MS) return Promise.resolve(esamas);
   const nes = NESEKMES.get(raktas);
   if (!esamas && nes && dabar - nes.laikas < NESEKMES_MS) return Promise.reject(new SaltinioKlaida(nes.rusis, false));
+  if (o && o.fone && esamas && dabar - esamas.laikas < L.PASENES_MAX_D * 86400000) {
+    if (!VYKDOMI.has(raktas)) paleisk(raktas, tipas, vykdyk).catch(() => {});
+    return Promise.resolve(esamas);
+  }
   if (VYKDOMI.has(raktas)) return VYKDOMI.get(raktas);
+  return paleisk(raktas, tipas, vykdyk);
+}
+function paleisk(raktas, tipas, vykdyk) {
   const p = (async () => {
     await eileje();
     const pradzia = Date.now();
@@ -152,11 +166,31 @@ function irasas(raktas, tipas, vykdyk) {
 }
 
 const PARINKTYS = { lygiagreciai: 2 };
+function sarasas(jar) {
+  return irasas("l:" + jar, "sarasas", () => L.vykdykSarasas({ jar: jar }, gauk, Object.assign({ dabar: Date.now() }, PARINKTYS)), { fone: true });
+}
+/* Sutarčių sąrašai, laikomi paruošti iš anksto (L.NUOLATINIAI - viešai žinomi pirkimo vykdytojų kodai): renkami paleidus ir atnaujinami,
+   kai įrašas senesnis nei 11 val. - kad žmogui, ieškančiam sutarties, nereikėtų laukti apie minutę trunkančio surinkimo. */
+const SILDYMO_MS = 6 * 3600000, SILDYTI_NUO_MS = 11 * 3600000, SILDYTI_PO_KLAIDOS_MS = 10 * 60000;
+let sildymoKartojimas = null;
+async function sildyk() {
+  let nepavyko = false;
+  for (const jar of L.NUOLATINIAI) {
+    const raktas = "l:" + jar, e = TALPYKLA.get(raktas);
+    if (e && !e.klaida && Date.now() - e.laikas < SILDYTI_NUO_MS) continue;
+    if (VYKDOMI.has(raktas)) continue;
+    try { const ir = await paleisk(raktas, "sarasas", () => L.vykdykSarasas({ jar: jar }, gauk, Object.assign({ dabar: Date.now() }, PARINKTYS))); if (ir && ir.klaida) nepavyko = true; }
+    catch (err) { nepavyko = true; /* klaida jau žurnale (darbas-nepavyko) */ }
+  }
+  // Šaltinis kartais atsako klaida (HTTP 500, ilgas laukimas) - nepavykę sąrašai bandomi dar kartą po 10 min., ne po SILDYMO_MS
+  if (nepavyko && !sildymoKartojimas) sildymoKartojimas = setTimeout(() => { sildymoKartojimas = null; sildyk(); }, SILDYTI_PO_KLAIDOS_MS).unref();
+}
 function rinka(cpv, ted) {
   return irasas("r:" + cpv + ":" + ted, "rinka", () => L.vykdykRinka({ cpv: cpv, ted: ted }, gauk, Object.assign({ dabar: Date.now() }, PARINKTYS)));
 }
 async function vykdykDarba(d) {
   if (d.tipas === "pirkejas") return { irasas: await irasas(d.raktas, "pirkejas", () => L.vykdykPirkejas(d.p, gauk, Object.assign({ dabar: Date.now() }, PARINKTYS))) };
+  if (d.tipas === "sarasas") return { irasas: await sarasas(d.p.jar) };
   if (d.tipas === "sutartis") return { irasas: await irasas(d.raktas, "sutartis", () => L.vykdykSutartis(d.p, gauk, Object.assign({ dabar: Date.now() }, PARINKTYS))) };
   if (d.tipas === "rinka") return { irasas: await rinka(d.p.cpv, d.p.ted) };
   if (d.tipas === "pajegumas") {
@@ -241,4 +275,8 @@ function baik() { serveris.close(() => process.exit(0)); setTimeout(() => proces
 process.on("SIGTERM", baik);
 process.on("SIGINT", baik);
 
-serveris.listen(PORTAS, "127.0.0.1", () => zurnalas("paleista", { portas: PORTAS, versija: L.VERSIJA }));
+serveris.listen(PORTAS, "127.0.0.1", () => {
+  zurnalas("paleista", { portas: PORTAS, versija: L.VERSIJA });
+  setTimeout(() => { sildyk(); }, 3000).unref();
+  setInterval(() => { sildyk(); }, SILDYMO_MS).unref();
+});

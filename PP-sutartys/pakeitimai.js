@@ -329,9 +329,12 @@
       x = x && typeof x === "object" ? x : {};
       return { kas: /^[a-z]{2,20}$/.test(x.kas || "") ? x.kas : "kita", tekstas: laukas(x, "tekstas", 400), iki: dataISO(x.iki), atlikta: dataISO(x.atlikta) };
     }).filter(function (x) { return x.tekstas && x.iki; });
-    return { nr: laukas(a, "nr", 10), data: dataISO(a.data), regNr: laukas(a, "regNr", 40), esme: laukas(a, "esme", 300), pokytis: sk(a.pokytis), pagrindas: laukas(a, "pagrindas", 120),
+    var o = { nr: laukas(a, "nr", 10), data: dataISO(a.data), regNr: laukas(a, "regNr", 40), esme: laukas(a, "esme", 300), pokytis: sk(a.pokytis), pagrindas: laukas(a, "pagrindas", 120),
       indMenuo: menuo(a.indMenuo) || "", pagal2d: teig(a.pagal2d), perziura: sk(a.perziura), pasirasyta: dataISO(a.pasirasyta), priminimai: pr,
       saltinis: a.saltinis === "cvpis" || a.saltinis === "irankis" ? a.saltinis : "ranka" };
+    /* viešai paskelbta Sutarties vertė po šio pakeitimo (tik iš CVP IS duomenų gautiems įrašams) - užuomina prie kainos pokyčio lauko */
+    if (teig(a.viesaVerte) != null) o.viesaVerte = teig(a.viesaVerte);
+    return o;
   }
   function sutartiesForma(S) {
     if (!S || typeof S !== "object") return null;
@@ -343,7 +346,8 @@
         nr: laukas(s, "nr", 60), data: dataISO(s.data), pavadinimasKilm: laukas(s, "pavadinimasKilm", 400), forma: turi(FORMOS, s.forma) ? s.forma : "", salisP: laukas(s, "salisP", 40), salisT: laukas(s, "salisT", 40),
         tiekejoPav: laukas(s, "tiekejoPav", 200), tiekejoKodas: laukas(s, "tiekejoKodas", 20), tiekejoAdresas: laukas(s, "tiekejoAdresas", 200), pradineVerte: teig(s.pradineVerte), dabartineVerte: teig(s.dabartineVerte),
         objektas: ["darbai", "prekes", "paslaugos"].indexOf(s.objektas) >= 0 ? s.objektas : "", pirkimoRusis: ["tarptautinis", "supaprastintas", "mazos"].indexOf(s.pirkimoRusis) >= 0 ? s.pirkimoRusis : "",
-        pasiulymuData: dataISO(s.pasiulymuData), isigaliojo: dataISO(s.isigaliojo), galiojaIki: dataISO(s.galiojaIki), pirkimoNr: laukas(s, "pirkimoNr", 40), viesaVerte: teig(s.viesaVerte), viesaPav: laukas(s, "viesaPav", 300), gauta: laukas(s, "gauta", 40) },
+        pasiulymuData: dataISO(s.pasiulymuData), isigaliojo: dataISO(s.isigaliojo), galiojaIki: dataISO(s.galiojaIki), pirkimoNr: laukas(s, "pirkimoNr", 40), viesaVerte: teig(s.viesaVerte), viesaPav: laukas(s, "viesaPav", 300), gauta: laukas(s, "gauta", 40),
+        bvpz: /^\d{8}$/.test(s.bvpz || "") ? s.bvpz : "", pavS: s.pavS === "cvpis" ? "cvpis" : "" },
       ankstesni: (Array.isArray(S.ankstesni) ? S.ankstesni : []).slice(0, RIBOS.ankstesniu).map(ankstesnioForma),
       rengiamas: { nr: laukas(r, "nr", 10), data: dataISO(r.data), regNr: laukas(r, "regNr", 40), vieta: laukas(r, "vieta", 60) || "Vilnius",
         blokai: (Array.isArray(r.blokai) ? r.blokai : []).slice(0, RIBOS.bloku).map(blokoForma).filter(Boolean) } };
@@ -1054,12 +1058,183 @@
       var reg = eilute1(p && p.nr, 40), d = dataISO(p && p.sudaryta);
       if (!reg || yra[reg] || S.ankstesni.length >= RIBOS.ankstesniu) return;
       yra[reg] = 1; nauju++;
-      S.ankstesni.push(ankstesnioForma({ nr: "", data: d, regNr: reg, esme: "", pokytis: null, saltinis: "cvpis" }));
+      S.ankstesni.push(ankstesnioForma({ nr: "", data: d, regNr: reg, esme: "", pokytis: null, saltinis: "cvpis", viesaVerte: p && p.verte }));
     });
     S.ankstesni.sort(function (a, b) { return (a.data || "9") < (b.data || "9") ? -1 : (a.data || "9") > (b.data || "9") ? 1 : 0; });
     S.ankstesni.forEach(function (a, i) { if (!a.nr) a.nr = String(i + 1); });
     if (!S.rengiamas.nr) S.rengiamas.nr = String(S.ankstesni.length + 1);
     return { ok: true, pildyta: pildyta, pakeitimu: nauju };
+  }
+
+  /* ==========================================================================
+   * Paieška viešai paskelbtų sutarčių sąraše (2026-11-28, naudotojo užduotis: sutartį rasti pagal pirkimo objekto pavadinimo žodį,
+   * o kitus laukus užpildyti iš paskelbtos sutarties). Sąrašas gaunamas iš G-Procure serverio (siunčiamas tik pirkimo vykdytojo kodas),
+   * ieškoma NARŠYKLĖJE - paieškos žodžiai niekur nesiunčiami. Serverio atsakymas - nepatikimi duomenys: tik žinomi laukai, tipai ir ribos.
+   * ========================================================================== */
+  var SARASO_RIBA = 8000;
+  /* Raidė į raidę (ilgis nesikeičia - pagal tas pačias vietas žymimi rasti žodžiai): mažosios, be diakritikų, kabutės ir skyryba - tarpai */
+  function lygink(t) {
+    var s = String(t == null ? "" : t).toLowerCase(), out = "";
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i), n = c.normalize ? c.normalize("NFD").charAt(0) : c;
+      out += /[a-z0-9\/.\-]/.test(n) ? n : " ";
+    }
+    return out;
+  }
+  function norm(t) { return lygink(t).replace(/\s+/g, " ").trim(); }
+  function viesaSutartis(x) {
+    if (!x || typeof x !== "object") return null;
+    var pav = eilute1(x.pav, 300), nr = eilute1(x.nr, 60);
+    if (!pav && !nr) return null;
+    var t = x.tiekejas && typeof x.tiekejas === "object" ? x.tiekejas : null, tp = t && typeof t.pav === "string" ? kabutes(eilute1(t.pav, 200)) : "";
+    var pak = (Array.isArray(x.pakeitimai) ? x.pakeitimai : []).slice(0, RIBOS.ankstesniu).map(function (p) {
+      p = p && typeof p === "object" ? p : {};
+      return { nr: eilute1(p.nr, 40), sudaryta: dataISO(p.sudaryta), verte: teig(p.verte), galioja: dataISO(p.galioja) };
+    }).filter(function (p) { return p.nr; });
+    var gal = dataISO(x.galioja), galV = gal, verteV = teig(x.verte);
+    pak.forEach(function (p) { if (p.galioja && p.galioja > galV) galV = p.galioja; if (p.verte != null) verteV = p.verte; });
+    var o = { nr: nr, pav: pav, sudaryta: dataISO(x.sudaryta), galioja: gal, galiojaV: galV, pirkimoNr: eilute1(x.pirkimoNr, 40), verte: teig(x.verte), verteV: verteV,
+      bvpz: typeof x.bvpz === "string" && /^\d{8}$/.test(x.bvpz) ? x.bvpz : "",
+      tiekejas: tp ? { pav: tp, kodas: typeof t.kodas === "string" && /^\d{7,9}$/.test(t.kodas) ? t.kodas : "" } : null,
+      tiekejasNerodomas: !tp && !!t, pakeitimai: pak, keliosSutartys: x.keliosSutartys === true };
+    o._p = norm(pav); o._t = norm(tp); o._n = norm([nr].concat(pak.map(function (p) { return p.nr; })).join(" ")); o._k = norm(o.pirkimoNr);
+    return o;
+  }
+  function viesasSarasas(a) { return (Array.isArray(a) ? a : []).slice(0, SARASO_RIBA).map(viesaSutartis).filter(Boolean); }
+  /* Sutarties būsena pagal vėliausią paskelbtą galiojimo datą (sutartis ar jos pakeitimai): galioja / baigiasi (per 90 d.) / baigesi / nezinoma */
+  function viesosBusena(x, dabar) {
+    var d = x && x.galiojaV;
+    if (!d || !dataISO(dabar)) return { kodas: "nezinoma", liko: null };
+    var liko = Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(dabar + "T00:00:00Z")) / 86400000);
+    return { kodas: liko < 0 ? "baigesi" : liko <= 90 ? "baigiasi" : "galioja", liko: liko };
+  }
+  function paieskosZodziai(q) {
+    var z = norm(q).split(" ").filter(function (w) { return w.length >= 2 || /^\d$/.test(w); }), out = [];
+    z.forEach(function (w) { if (out.indexOf(w) < 0) out.push(w); });
+    return out.slice(0, 8);
+  }
+  /* Lietuviški linksniai: ilgesnio žodžio kamienas (be dviejų paskutinių raidžių, ne trumpesnis kaip 4) - „Neries“ randa ir „Neris“ */
+  function kamienas(z) { return z.length >= 5 && !/\d/.test(z) ? z.slice(0, Math.max(4, z.length - 2)) : ""; }
+  /* Kaip žodis z atitinka tekstą t (abu - norm): visas žodis - 1, žodžio pradžia - 0,9, kamienas - 0,7, žodžio vidurys - 0,5, neatitinka - 0 */
+  function zodzioBalas(z, t) {
+    if (!t) return 0;
+    var i = (" " + t + " ").indexOf(" " + z);
+    if (i >= 0) { var po = (" " + t + " ").charAt(i + 1 + z.length); return po === " " ? 1 : 0.9; }
+    var k = kamienas(z);
+    if (k && (" " + t).indexOf(" " + k) >= 0) return 0.7;
+    return z.length >= 3 && t.indexOf(z) >= 0 ? 0.5 : 0;
+  }
+  var PAIESKOS_LAUKAI = { pav: [["_p", 3, "pav"]], tiekejas: [["_t", 3, "tiekejas"]], nr: [["_n", 3, "nr"], ["_k", 2, "pirkimoNr"]],
+    visur: [["_p", 3, "pav"], ["_n", 2.5, "nr"], ["_t", 2, "tiekejas"], ["_k", 1.5, "pirkimoNr"]] };
+  /* ieskok(sar, q, { kur: visur|pav|tiekejas|nr, busena: visos|galioja|baigesi, dabar }) -> { rasta: [{ x, balas, kur: [...] }], skaiciai, zodziai }.
+     Visi žodžiai turi atitikti (kiekvienas - bet kuriame leidžiamame lauke). Tuščia užklausa - visos sutartys, naujausios pirmos.
+     Rikiuojama: atitikimas, tada galiojančios pirmiau, tada naujausios. skaiciai - kiek atitinka pagal būseną (filtrų mygtukams). */
+  function ieskok(sar, q, o) {
+    o = o || {};
+    var zod = paieskosZodziai(q), laukai = PAIESKOS_LAUKAI[turi(PAIESKOS_LAUKAI, o.kur) ? o.kur : "visur"], dabar = dataISO(o.dabar) || "", rasta = [];
+    (sar || []).forEach(function (x) {
+      var balas = 0, kur = {}, ok = true;
+      for (var i = 0; i < zod.length && ok; i++) {
+        var g = 0, gk = "";
+        for (var j = 0; j < laukai.length; j++) { var b = zodzioBalas(zod[i], x[laukai[j][0]]) * laukai[j][1]; if (b > g) { g = b; gk = laukai[j][2]; } }
+        if (!g) ok = false; else { balas += g; kur[gk] = 1; }
+      }
+      if (!ok) return;
+      var bs = viesosBusena(x, dabar).kodas;
+      rasta.push({ x: x, balas: zod.length ? balas / zod.length : 0, kur: Object.keys(kur), busena: bs });
+    });
+    var sk = { visos: rasta.length, galioja: 0, baigesi: 0 };
+    rasta.forEach(function (r) { if (r.busena === "baigesi") sk.baigesi++; else sk.galioja++; });
+    if (o.busena === "galioja") rasta = rasta.filter(function (r) { return r.busena !== "baigesi"; });
+    else if (o.busena === "baigesi") rasta = rasta.filter(function (r) { return r.busena === "baigesi"; });
+    rasta.sort(function (a, b) {
+      if (Math.abs(a.balas - b.balas) > 0.05) return b.balas - a.balas;
+      var ag = a.busena === "baigesi" ? 1 : 0, bg = b.busena === "baigesi" ? 1 : 0;
+      if (zod.length && ag !== bg) return ag - bg;
+      return (a.x.sudaryta || "") > (b.x.sudaryta || "") ? -1 : (a.x.sudaryta || "") < (b.x.sudaryta || "") ? 1 : 0;
+    });
+    return { rasta: rasta, skaiciai: sk, zodziai: zod };
+  }
+  /* Rastų žodžių vietos tekste (pradžia, pabaiga) - žymėjimui; ieškoma taip pat kaip zodzioBalas (žodis, kamienas) */
+  function zymiuVietos(tekstas, zodziai) {
+    var t = lygink(tekstas), v = [];
+    (zodziai || []).forEach(function (z) {
+      var k = kamienas(z), rado = false, i = -1;
+      while ((i = t.indexOf(z, i + 1)) >= 0) { v.push([i, i + z.length]); rado = true; }
+      if (!rado && k) {
+        i = -1;
+        while ((i = t.indexOf(k, i + 1)) >= 0) {
+          if (i > 0 && t.charAt(i - 1) !== " ") continue;
+          var g = i + k.length; while (g < t.length && t.charAt(g) !== " ") g++;
+          v.push([i, g]);
+        }
+      }
+    });
+    v.sort(function (a, b) { return a[0] - b[0] || b[1] - a[1]; });
+    var out = [];
+    v.forEach(function (x) { var p = out[out.length - 1]; if (p && x[0] <= p[1]) p[1] = Math.max(p[1], x[1]); else out.push([x[0], x[1]]); });
+    return out;
+  }
+  /* Objekto rūšis pagal BVPŽ kodo skyrių: 45 - darbai, 03-44 ir 48 - prekės, 50-98 - paslaugos (kaip shared/vpt-duomenys.js) */
+  function objektasIsBvpz(k) {
+    var d = /^\d{8}$/.test(k || "") ? +String(k).slice(0, 2) : 0;
+    return d === 45 ? "darbai" : (d >= 3 && d <= 44) || d === 48 ? "prekes" : d >= 50 && d <= 98 ? "paslaugos" : "";
+  }
+  /* Sutarties formos pasiūlymas pagal pavadinimą ir objektą - tik pasiūlymas, pasirenka žmogus */
+  function siulomaForma(pav, obj) {
+    var n = norm(pav);
+    if (obj !== "prekes" && /(^| )(eksploatavim|trasu valym)/.test(n)) return "EKS";
+    if (obj === "darbai") return /(^| )projektavim/.test(n) ? "PSR" : /(^| )(rekonstr|statyb|rangos)/.test(n) ? "SR" : /(^| )(remont|paprast)/.test(n) ? "DARBAI" : "";
+    if (obj === "paslaugos") return /(^| )(projektavim|techninio projekto|darbo projekto)/.test(n) && !/ekspertiz/.test(n) ? "PPS" : "PASLAUGOS";
+    return obj === "prekes" ? "PREKES" : "";
+  }
+  /* Sutarties pavadinimas kilmininku iš paskelbto pavadinimo - tik aiškiais atvejais, kitaip "" (žmogus įrašo pats) */
+  function pavadinimasKilmininku(pav) {
+    var p = eilute1(pav, 380).replace(/[.\s]+$/, ""), m;
+    if (!p) return "";
+    if ((m = /^(.*\S)\s+pirkimas$/i.exec(p))) return m[1] + " pirkimo sutarties";
+    if ((m = /^(.*\S)\s+sutartis$/i.exec(p))) return m[1] + " sutarties";
+    if ((m = /^sutartis\s+dėl\s+(.+)$/i.exec(p))) return m[1] + " sutarties";
+    if ((m = /^(.*\S)\s+paslaugos$/i.exec(p))) return m[1] + " paslaugų pirkimo sutarties";
+    if ((m = /^(.*\S)\s+darbai$/i.exec(p))) return m[1] + " darbų pirkimo sutarties";
+    if (/\s(paslaugų|darbų|prekių)$/i.test(p)) return p + " pirkimo sutarties";
+    return "";
+  }
+  /* Pasirinkta sąrašo sutartis -> sutarties įrašas: vieši duomenys (isViesu), objektas pagal BVPŽ, pavadinimo kilmininku pasiūlymas.
+     Kainos neįrašomos (vieša vertė gali būti su PVM) - jos lieka užuomina prie lauko. */
+  function isSaraso(S, x, o) {
+    o = o || {};
+    if (!S || !x) return { ok: false };
+    var r = isViesu(S, { sutartis: { nr: x.nr, sudaryta: x.sudaryta, galioja: x.galiojaV || x.galioja, pirkimoNr: x.pirkimoNr, pav: x.pav, verte: x.verte, tiekejas: x.tiekejas }, pakeitimai: x.pakeitimai, keliosSutartys: x.keliosSutartys });
+    if (!r.ok) return r;
+    var s = S.sutartis;
+    if (x.bvpz) s.bvpz = x.bvpz;
+    if (!s.objektas && !objektas({ forma: s.forma })) { var ob = objektasIsBvpz(x.bvpz); if (ob) { s.objektas = ob; r.pildyta.push("objektas (pagal BVPŽ kodą)"); } }
+    if (!s.pavadinimasKilm) { var pk = pavadinimasKilmininku(x.pav); if (pk) { s.pavadinimasKilm = pk; s.pavS = "cvpis"; } }
+    s.gauta = dataISO(o.dabar) || s.gauta;
+    r.keliosSutartys = x.keliosSutartys;
+    return r;
+  }
+  /* Ar paskelbta vertė tikėtinai su PVM: atėmus PVM gaunama sveika ir „apvalesnė“ suma (daugiau nulių gale) nei paskelbtoji.
+     Tik užuomina prie pasiūlymo - kainą įrašo žmogus. */
+  function tiketinaSuPvm(v) {
+    var t = pvmTarifas();
+    if (teig(v) == null || !v || t == null) return false;
+    var be = v / (1 + t), sv = Math.round(be);
+    if (Math.abs(be - sv) > 0.005 || !sv) return false;
+    function nuliai(n) { var k = 0; n = Math.round(n * 100); while (n && n % 10 === 0) { n /= 10; k++; } return k; }
+    return nuliai(sv) > nuliai(v);
+  }
+  /* Ko dar trūksta, kad būtų galima rengti pakeitimą (1 žingsnio viršuje): [{ k: laukas, pav }] */
+  function trukstaSutarciai(S) {
+    var s = S.sutartis, out = [];
+    if (!s.nr) out.push({ k: "s.nr", pav: "sutarties numeris" });
+    if (!s.data) out.push({ k: "s.data", pav: "sudarymo data" });
+    if (!s.forma) out.push({ k: "s.forma", pav: "sutarties forma" });
+    if (!s.pavadinimasKilm) out.push({ k: "s.pavadinimasKilm", pav: "pavadinimas kilmininku" });
+    if (s.pradineVerte == null) out.push({ k: "s.pradineVerte", pav: "pradinė kaina be PVM" });
+    if (!s.tiekejoPav) out.push({ k: "s.tiekejoPav", pav: "kita Šalis" });
+    return out;
   }
 
   global.GP_PAKEITIMAI = {
@@ -1069,6 +1244,8 @@
     sutartiesForma: sutartiesForma, saugyklosForma: saugyklosForma, blokoForma: blokoForma, indKilm: indKilm,
     dabartine: dabartine, suPvm: suPvm, skaiciuokInd: skaiciuokInd, kTekstas: kTekstas, blokoPatikros: blokoPatikros, patikros: patikros, kliuciu: kliuciu, rezultatas: rezultatas,
     susitarimas: susitarimas, skaiciavimoDok: skaiciavimoDok, blokoPagrindas: blokoPagrindas, skaiciuokPap: skaiciuokPap, skaiciuokTer: skaiciuokTer,
-    patikslinta: patikslinta, ribos: ribos, objektas: objektas, apzvalga: apzvalga, artimiausi: artimiausi, pazymekAtlikta: pazymekAtlikta, PRAKTIKA: PRAKTIKA, LITEKO: LITEKO, blokoPraktika: blokoPraktika, praktikosEilute: praktikosEilute, ESM: ESM, ESM_PAAISK: ESM_PAAISK, OBJ: OBJ, TERMINAI: TERMINAI, SALTINIAI: SALTINIAI, saltiniaiSusitarimui: saltiniaiSusitarimui, pagrindimoDok: pagrindimoDok, terminai: terminai, esme: esme, uzbaik: uzbaik, isViesu: isViesu, paskutinisInd: paskutinisInd
+    patikslinta: patikslinta, ribos: ribos, objektas: objektas, apzvalga: apzvalga, artimiausi: artimiausi, pazymekAtlikta: pazymekAtlikta, PRAKTIKA: PRAKTIKA, LITEKO: LITEKO, blokoPraktika: blokoPraktika, praktikosEilute: praktikosEilute, ESM: ESM, ESM_PAAISK: ESM_PAAISK, OBJ: OBJ, TERMINAI: TERMINAI, SALTINIAI: SALTINIAI, saltiniaiSusitarimui: saltiniaiSusitarimui, pagrindimoDok: pagrindimoDok, terminai: terminai, esme: esme, uzbaik: uzbaik, isViesu: isViesu, paskutinisInd: paskutinisInd,
+    lygink: lygink, norm: norm, viesaSutartis: viesaSutartis, viesasSarasas: viesasSarasas, viesosBusena: viesosBusena, paieskosZodziai: paieskosZodziai, ieskok: ieskok, zymiuVietos: zymiuVietos,
+    objektasIsBvpz: objektasIsBvpz, siulomaForma: siulomaForma, pavadinimasKilmininku: pavadinimasKilmininku, isSaraso: isSaraso, trukstaSutarciai: trukstaSutarciai, pvmTarifas: pvmTarifas, tiketinaSuPvm: tiketinaSuPvm
   };
 })(typeof window !== "undefined" ? window : this);
