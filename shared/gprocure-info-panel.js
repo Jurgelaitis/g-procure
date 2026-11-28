@@ -128,6 +128,7 @@
     "pp-plan": ["vda_sutartys"],
     "pp-qual": ["vda_sutartys", "ted", "rc"],
     "pp-ts": ["vda_sutartys", "ted"],
+    "pp-sutartys": ["vda_sutartys", "osp"],
     "pp-esg": ["sank_es", "sank_jt", "sank_ofac", "sank_jk", "vda_pirkimai"]
   };
   function saltiniai(moduleId) {

@@ -8,7 +8,9 @@
  *  - PP-qual „Rinkos pajėgumas“: kiek juridinių asmenų, laimėjusių panašias sutartis per 3 metus, atitiktų
  *    apyvartos ir patirties reikalavimą - TIK skaičiai (atitiktų, neatitiktų, nežinoma), be pavadinimų;
  *  - PP-ts „Galimi rinkos konsultacijos adresatai“: juridiniai asmenys, laimėję panašias sutartis (Lietuvoje
- *    ir ES pagal TED).
+ *    ir ES pagal TED);
+ *  - PP-sutartys „Sutarties pakeitimai“ (nuo 2026-11-28): sutartis pagal jos numerį - pavadinimas, datos, kita
+ *    Šalis ir to paties pirkimo paskelbti sutarties pakeitimai (numeris ir data), kad jų nereikėtų įrašyti ranka.
  *
  * Šaltiniai (vieši, be raktų; patikrinta 2026-11-19):
  *  - Valstybės duomenų agentūra, „Viešųjų pirkimų sutartys“ (get.data.gov.lt/datasets/gov/lsd/vpt/cvpp - Sutartis
@@ -41,7 +43,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var VERSIJA = "2026-11-20";
+  var VERSIJA = "2026-11-28";
   var KILMES = ["https://g-procure.com", "https://www.g-procure.com"];
   var VIETINE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
 
@@ -61,6 +63,8 @@
   var MAX_TIEKEJU = 100;              // rodomų tiekėjų ar laimėtojų riba
   var MAX_FINANSU = 400;              // kiek įmonių finansinių duomenų ieškoma vienai rinkai
   var PAKETAS_SUTARCIU = 150, PAKETAS_SALIU = 60, PAKETAS_JAR = 40;
+  var MAX_PAKEITIMU = 100;            // vienos sutarties paskelbtų pakeitimų riba
+  var MAX_PIRKIMO_SUTARCIU = 240;     // to paties pirkimo sutarčių ir pakeitimų įrašų riba
   var TTL_VAL = 24, PASENES_MAX_D = 7;
 
   var VALDYMO = /[\u0000-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩﻿]/g;
@@ -145,6 +149,9 @@
   // ---------------------------------------------------------------------------
   function jarKodas(s) { return typeof s === "string" && /^\d{7,9}$/.test(s) ? s : null; }
   // BVPŽ kodo pradžia: 3-8 skaitmenys; galiniai nuliai nuimami (31210000 -> 3121), bet ne trumpiau nei 3
+  /* Sutarties ir pirkimo numeris užklausai: tik raidės be diakritikų, skaitmenys ir - / . _ (į šaltinio užklausą dedamas tarp kabučių) */
+  function sutartiesNr(s) { return typeof s === "string" && /^[0-9A-Za-z][0-9A-Za-z\-\/._]{2,59}$/.test(s) ? s : null; }
+  function pirkimoNr(s) { return typeof s === "string" && /^[0-9A-Za-z][0-9A-Za-z\-\/._]{0,39}$/.test(s) ? s : null; }
   function cpvPradzia(s) {
     if (typeof s !== "string" || !/^\d{3,8}$/.test(s)) return null;
     var t = s;
@@ -178,6 +185,16 @@
   }
   function uzklausaTiekejai(ids) {
     return { saltinis: "vda", kelias: "Salis?" + arba("dok_id", ids, true) + "&ar_salis_tiekejas=true&select(dok_id,salies_kodas,salies_asmens_rusis,salies_pavadinimas)&limit(" + (ids.length * 10) + ")" };
+  }
+  var SUT_LAUKAI = "dok_id,dok_sut_tipas,dok_sut_numeris,dok_pirk_numeris,dok_sut_obj_pav,dok_sut_verte,dok_sudarymo_data,dok_sut_galiojimo_data";
+  function uzklausaSutartisNr(nr) {
+    return { saltinis: "vda", kelias: "Sutartis?dok_sut_numeris=\"" + nr + "\"&select(" + SUT_LAUKAI + ")&limit(20)" };
+  }
+  function uzklausaPirkimoSutartys(pnr) {
+    return { saltinis: "vda", kelias: "Sutartis?dok_pirk_numeris=\"" + pnr + "\"&select(" + SUT_LAUKAI + ")&sort(dok_sudarymo_data)&limit(" + MAX_PIRKIMO_SUTARCIU + ")" };
+  }
+  function uzklausaSalys(ids) {
+    return { saltinis: "vda", kelias: "Salis?" + arba("dok_id", ids, true) + "&select(dok_id,salies_kodas,salies_asmens_rusis,salies_pavadinimas,ar_salis_tiekejas)&limit(" + (ids.length * 10) + ")" };
   }
   function uzklausaRinka(cpv, dabar) {
     var nuo = pridekMen(siandien(dabar), -12 * METU);
@@ -239,6 +256,20 @@
        nežinoma (rūšis „Nežinomas“, kodas ar pavadinimas nenurodytas). */
     var priezastis = viesas ? null : juridinis && pav ? "asmens-vardu" : o.salies_asmens_rusis === "Fizinis" ? "fizinis" : "nezinomas";
     return { dok: dok, kodas: viesas || juridinis ? kodas : null, pav: viesas ? pav : null, viesas: viesas, juridinis: juridinis, priezastis: priezastis };
+  }
+  /* Sutarties ar jos pakeitimo įrašas paieškai pagal numerį: tipas "1" - sutartis, "5" - sutarties pakeitimas (kiti - kaip šaltinyje) */
+  function sutartiesIrasas(o, dabar) {
+    var c = sutartis(o, dabar);
+    if (!c) return null;
+    var tp = typeof o.dok_sut_tipas === "number" ? String(o.dok_sut_tipas) : o.dok_sut_tipas;
+    return { id: c.id, tipas: typeof tp === "string" && /^\d{1,2}$/.test(tp) ? tp : null, nr: svarus(typeof o.dok_sut_numeris === "number" ? String(o.dok_sut_numeris) : o.dok_sut_numeris, 60),
+      pirkimoNr: c.pirkimoNr, pav: c.pav, verte: c.verte, sudaryta: c.sudaryta, galioja: c.galioja };
+  }
+  function salisSuPuse(o) {
+    var x = salis(o);
+    if (!x) return null;
+    x.tiekejas = o.ar_salis_tiekejas === true;
+    return x;
   }
   function tedTekstas(v) {
     if (typeof v === "string") return v;
@@ -541,6 +572,63 @@
     return d;
   }
 
+  /* Sutartis pagal numerį ir jos paskelbti pakeitimai.
+     pagalNr - įrašai su tuo sutarties numeriu; pirkimo - visi to paties pirkimo įrašai; salys - jų šalys (su puse); jar - pirkimo vykdytojo
+     kodas (neprivalomas: nurodžius, kito pirkimo vykdytojo sutartis tuo pačiu numeriu atmetama).
+     Pakeitimai šaltinyje su sutartimi susieti tik pirkimo numeriu, todėl kai pirkime kelios sutartys, paliekami tik tie, kurių tiekėjas -
+     šios sutarties tiekėjas (jei jis žinomas), o atsakyme - keliosSutartys: true (žmogus sutikrina). */
+  function sutartiesSuvestine(pagalNr, pirkimo, salys, jar) {
+    var pagalDok = {};
+    salys.forEach(function (x) { (pagalDok[x.dok] = pagalDok[x.dok] || []).push(x); });
+    function pirkejoTinka(c) {
+      if (!jar) return true;
+      var pk = (pagalDok[c.id] || []).filter(function (x) { return !x.tiekejas; });
+      return !pk.length || pk.some(function (x) { return x.kodas === jar; });
+    }
+    var visi = {}, sar = [];
+    pagalNr.concat(pirkimo).forEach(function (c) { if (c && !visi[c.id]) { visi[c.id] = 1; sar.push(c); } });
+    var baz = pagalNr.filter(function (c) { return c.tipas === "1" && pirkejoTinka(c); });
+    if (!baz.length) {
+      /* įrašytas pakeitimo numeris - sutartis randama pagal jo pirkimo numerį, jei pirkime ji viena */
+      var pn = unikalus(pagalNr.filter(pirkejoTinka).map(function (c) { return c.pirkimoNr; }));
+      var kand = sar.filter(function (c) { return c.tipas === "1" && pn.indexOf(c.pirkimoNr) >= 0 && pirkejoTinka(c); });
+      if (kand.length === 1) baz = kand;
+    }
+    if (!baz.length) return { sutartis: null, pakeitimai: [], keliosSutartys: false };
+    baz.sort(function (a, b) { return (b.sudaryta || "") < (a.sudaryta || "") ? -1 : 1; });
+    var b = baz[0], tiek = (pagalDok[b.id] || []).filter(function (x) { return x.tiekejas; }), vs = tiek.filter(function (x) { return x.viesas; })[0];
+    var kodai = tiek.map(function (x) { return x.kodas; }).filter(Boolean);
+    var pirkimoBaziniu = sar.filter(function (c) { return c.tipas === "1" && c.pirkimoNr && c.pirkimoNr === b.pirkimoNr; }).length;
+    var matyti = {}, pak = [];
+    sar.filter(function (c) { return c.tipas === "5" && c.pirkimoNr && c.pirkimoNr === b.pirkimoNr && (!b.sudaryta || !c.sudaryta || c.sudaryta >= b.sudaryta); }).forEach(function (c) {
+      var ct = (pagalDok[c.id] || []).filter(function (x) { return x.tiekejas && x.kodas; });
+      if (pirkimoBaziniu > 1 && kodai.length && ct.length && !ct.some(function (x) { return kodai.indexOf(x.kodas) >= 0; })) return;
+      var r = (c.nr || "") + "|" + (c.sudaryta || "");
+      if (matyti[r] || !c.nr) return;
+      matyti[r] = 1;
+      pak.push({ nr: c.nr, sudaryta: c.sudaryta, verte: c.verte });
+    });
+    pak.sort(function (x, y) { return (x.sudaryta || "9") < (y.sudaryta || "9") ? -1 : (x.sudaryta || "9") > (y.sudaryta || "9") ? 1 : 0; });
+    return {
+      sutartis: { nr: b.nr, sudaryta: b.sudaryta, galioja: b.galioja, pirkimoNr: b.pirkimoNr, pav: b.pav, verte: b.verte,
+        tiekejas: vs ? { pav: vs.pav, kodas: vs.kodas } : (tiek.length ? { paslepta: true, priezastis: tiek[0].priezastis } : null), tiekeju: tiek.length },
+      pakeitimai: pak.slice(0, MAX_PAKEITIMU), keliosSutartys: baz.length > 1 || pirkimoBaziniu > 1
+    };
+  }
+  async function vykdykSutartis(p, gauk, o) {
+    o = o || {};
+    var dabar = o.dabar, n = o.lygiagreciai || 2;
+    var pagalNr = tikrasSarasas(await gauk(uzklausaSutartisNr(p.nr))).map(function (x) { return sutartiesIrasas(x, dabar); }).filter(Boolean);
+    if (!pagalNr.length) return { sutartis: null, pakeitimai: [], keliosSutartys: false };
+    var pnr = unikalus(pagalNr.map(function (c) { return pirkimoNr(c.pirkimoNr); })).slice(0, 2), pirkimo = [];
+    for (var i = 0; i < pnr.length; i++) pirkimo = pirkimo.concat(tikrasSarasas(await gauk(uzklausaPirkimoSutartys(pnr[i]))).map(function (x) { return sutartiesIrasas(x, dabar); }).filter(Boolean));
+    var ids = unikalus(pagalNr.concat(pirkimo).map(function (c) { return c.id; })).slice(0, MAX_PIRKIMO_SUTARCIU);
+    var salys = (await lygiagreciai(paketai(ids, PAKETAS_SALIU).map(function (pk) {
+      return async function () { return tikrasSarasas(await gauk(uzklausaSalys(pk))); };
+    }), n)).reduce(function (a, b) { return a.concat(b); }, []).map(salisSuPuse).filter(Boolean);
+    return sutartiesSuvestine(pagalNr, pirkimo, salys, p.jar || null);
+  }
+
   async function vykdykPirkejas(p, gauk, o) {
     o = o || {};
     var dabar = o.dabar, n = o.lygiagreciai || 2;
@@ -620,6 +708,7 @@
   var KLAIDOS = {
     jar: "Pirkimo vykdytojo kodas - 7-9 skaitmenys.",
     cpv: "BVPŽ kodo pradžia - 3-8 skaitmenys.",
+    nr: "Sutarties numeris - 3-60 ženklų: raidės be diakritikų, skaitmenys ir ženklai - / . _",
     ted: "TED apimtis - lt arba es.",
     apyvarta: "Apyvartos riba - teigiamas skaičius eurais.",
     patirtis: "Patirties riba - teigiamas skaičius eurais.",
@@ -661,6 +750,15 @@
       if (sp.toString()) return { atsakymas: json(400, { klaida: KLAIDOS.kelias, parametras: "kelias" }, kilme) };
       return { darbas: { tipas: "pirkejas", raktas: "p:" + jar, p: { jar: jar } } };
     }
+    if (u.pathname === "/api/sutartys/sutartis") {
+      var e0 = parametrai(sp, ["nr", "pirkejas"]);
+      if (e0) return { atsakymas: json(400, { klaida: KLAIDOS.parametras, parametras: "parametras" }, kilme) };
+      var nr = sutartiesNr(sp.get("nr"));
+      if (!nr) return { atsakymas: json(400, { klaida: KLAIDOS.nr, parametras: "nr" }, kilme) };
+      var pj = sp.has("pirkejas") ? jarKodas(sp.get("pirkejas")) : null;
+      if (sp.has("pirkejas") && !pj) return { atsakymas: json(400, { klaida: KLAIDOS.jar, parametras: "pirkejas" }, kilme) };
+      return { darbas: { tipas: "sutartis", raktas: "s:" + nr + ":" + (pj || ""), p: { nr: nr, jar: pj } } };
+    }
     if (u.pathname === "/api/sutartys/rinka") {
       var e1 = parametrai(sp, ["cpv", "ted"]);
       if (e1) return { atsakymas: json(400, { klaida: KLAIDOS.parametras, parametras: "parametras" }, kilme) };
@@ -698,6 +796,7 @@
     dabar = typeof dabar === "number" ? dabar : Date.now();
     var d = irasas.duomenys, mt = meta(irasas, dabar);
     if (darbas.tipas === "pirkejas") return json(200, { zemelapis: d, meta: mt }, kilme);
+    if (darbas.tipas === "sutartis") return json(200, { sutartis: d.sutartis, pakeitimai: d.pakeitimai, keliosSutartys: d.keliosSutartys, meta: mt }, kilme);
     if (darbas.tipas === "rinka") {
       return json(200, { lt: d.lt ? be(d.lt, ["vidus"]) : null, ted: d.ted ? be(d.ted, ["vidus"]) : null,
         klaidos: Object.keys(d.klaidos || {}).reduce(function (o, k) { o[k] = KLAIDU_RUSYS[d.klaidos[k]] || KLAIDU_RUSYS.saltinis; return o; }, {}), meta: mt }, kilme);
@@ -723,6 +822,8 @@
     uzklausaRinka: uzklausaRinka, uzklausaJa: uzklausaJa, uzklausaPajamos: uzklausaPajamos, uzklausaTed: uzklausaTed,
     sutartis: sutartis, salis: salis, tedSkelbimas: tedSkelbimas, vardoRaktas: vardoRaktas, kodoRaktas: kodoRaktas, neImone: neImone, TED_LAUKAI: TED_LAUKAI,
     pirkejoZemelapis: pirkejoZemelapis, rinkosSuvestine: rinkosSuvestine, tedSuvestine: tedSuvestine, pajamuSuvestine: pajamuSuvestine, pajegumas: pajegumas,
+    sutartiesNr: sutartiesNr, uzklausaSutartisNr: uzklausaSutartisNr, uzklausaPirkimoSutartys: uzklausaPirkimoSutartys, uzklausaSalys: uzklausaSalys,
+    sutartiesIrasas: sutartiesIrasas, sutartiesSuvestine: sutartiesSuvestine, vykdykSutartis: vykdykSutartis, MAX_PAKEITIMU: MAX_PAKEITIMU,
     vykdykPirkejas: vykdykPirkejas, vykdykRinka: vykdykRinka, vykdykFinansai: vykdykFinansai, lygiagreciai: lygiagreciai,
     marsrutas: marsrutas, atsakymasDarbo: atsakymasDarbo, kilmesAntraste: kilmesAntraste, jsonAtsakymas: json
   };

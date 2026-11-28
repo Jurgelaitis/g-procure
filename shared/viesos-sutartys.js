@@ -10,6 +10,8 @@
  *   rinka(bvpz, { ted: "lt"|"es" }) -> { ok, lt, ted, klaidos, meta }   PP-ts „Galimi adresatai“ (nuo 2026-11-20: lt ir ted - laikotarpis
  *                                  { nuo, iki }; TED laimėtojo suma - null, kai vertės jam priskirti negalima, beVertes, neImoniu)
  *   pajegumas(bvpz, { apyvarta, patirtis }) -> { ok, pajegumas, meta }   PP-qual „Rinkos pajėgumas“ (tik skaičiai)
+ *   sutartis(numeris, { pirkejas }) -> { ok, sutartis, pakeitimai, keliosSutartys, meta }   PP-sutartys (nuo 2026-11-28): sutartis pagal
+ *                                  numerį ir to paties pirkimo paskelbti pakeitimai; nerasta - { ok: false, rusis: "nerasta", meta }
  *   klaida -> { ok: false, rusis }: "neidiegta" (404 - paslauga dar neįdiegta), "parametrai" (400), "uzimta" (429),
  *            "saltinis" (503 - šaltinis neatsakė), "ruosiama" (serveris vis dar ruošia), "rysys", "atsaukta".
  *   Nepavykęs įkėlimas NIEKADA nėra „sutarčių nėra“ - tekstai žmogui: klaida(rusis, kalba).
@@ -65,6 +67,8 @@
                 en: "Only the contracting entity code is sent to the G-Procure server; the server gets public contract data from the State Data Agency. Nothing is stored." },
     rinka: { lt: "Į G-Procure serverį siunčiama tik BVPŽ kodo pradžia; serveris duomenis gauna iš Valstybės duomenų agentūros ir TED. Nieko neišsaugoma.",
              en: "Only the beginning of the CPV code is sent to the G-Procure server; the server gets data from the State Data Agency and TED. Nothing is stored." },
+    sutartis: { lt: "Į G-Procure serverį siunčiamas tik sutarties numeris ir pirkimo vykdytojo kodas; serveris viešų sutarčių duomenis gauna iš Valstybės duomenų agentūros. Nieko neišsaugoma.",
+                en: "Only the contract number and the contracting entity code are sent to the G-Procure server; the server gets public contract data from the State Data Agency. Nothing is stored." },
     pajegumas: { lt: "Į G-Procure serverį siunčiama tik BVPŽ kodo pradžia ir ribos eurais; serveris grąžina tik skaičius (be įmonių pavadinimų). Nieko neišsaugoma.",
                  en: "Only the beginning of the CPV code and the thresholds in euros are sent to the G-Procure server; the server returns counts only (no company names). Nothing is stored." }
   };
@@ -161,6 +165,19 @@
       return { ok: true, zemelapis: z, meta: metaIs(j) };
     });
   }
+  /* Sutarties numeris užklausai: raidės be diakritikų, skaitmenys ir - / . _ (kaip serveryje); kitoks - null */
+  function sutartiesNr(s) { s = String(s == null ? "" : s).trim(); return /^[0-9A-Za-z][0-9A-Za-z\-\/._]{2,59}$/.test(s) ? s : null; }
+  function sutartis(numeris, o) {
+    o = o || {};
+    var n = sutartiesNr(numeris), jar = String(o.pirkejas == null ? "" : o.pirkejas).trim();
+    if (!n) return Promise.resolve({ ok: false, rusis: "parametrai" });
+    return kviesk("/sutartis?nr=" + encodeURIComponent(n) + (/^\d{7,9}$/.test(jar) ? "&pirkejas=" + jar : ""), o, function (j) {
+      if (!("sutartis" in j) || !Array.isArray(j.pakeitimai)) return null;
+      if (j.sutartis === null) return { ok: false, rusis: "nerasta", meta: metaIs(j) };
+      if (typeof j.sutartis !== "object") return null;
+      return { ok: true, sutartis: j.sutartis, pakeitimai: j.pakeitimai, keliosSutartys: j.keliosSutartys === true, meta: metaIs(j) };
+    });
+  }
   function rinka(bvpz, o) {
     o = o || {};
     var k = cpvPradzia(bvpz);
@@ -187,7 +204,7 @@
 
   global.GP_VIESOS_SUTARTYS = {
     API_BAZE: API_BAZE, SALTINIAI: SALTINIAI, TEKSTAI: TEKSTAI,
-    pirkejas: pirkejas, rinka: rinka, pajegumas: pajegumas,
+    pirkejas: pirkejas, rinka: rinka, pajegumas: pajegumas, sutartis: sutartis, sutartiesNr: sutartiesNr,
     cpvPradzia: cpvPradzia, klaida: klaida, siunciama: siunciama, saltiniuTekstas: saltiniuTekstas, atnaujinta: atnaujinta
   };
 })(typeof window !== "undefined" ? window : this);

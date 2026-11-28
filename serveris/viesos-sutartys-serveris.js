@@ -157,6 +157,7 @@ function rinka(cpv, ted) {
 }
 async function vykdykDarba(d) {
   if (d.tipas === "pirkejas") return { irasas: await irasas(d.raktas, "pirkejas", () => L.vykdykPirkejas(d.p, gauk, Object.assign({ dabar: Date.now() }, PARINKTYS))) };
+  if (d.tipas === "sutartis") return { irasas: await irasas(d.raktas, "sutartis", () => L.vykdykSutartis(d.p, gauk, Object.assign({ dabar: Date.now() }, PARINKTYS))) };
   if (d.tipas === "rinka") return { irasas: await rinka(d.p.cpv, d.p.ted) };
   if (d.tipas === "pajegumas") {
     const r = await rinka(d.p.cpv, "lt");

@@ -21,7 +21,7 @@
     { num: 1, lt: "Planavimas", en: "Planning" },
     { num: 2, lt: "Pasirengimas", en: "Preparation" },
     { num: 3, lt: "Vykdymas", en: "Execution" },
-    { num: 4, lt: "Ataskaitos ir atitiktis", en: "Reporting and compliance" }
+    { num: 4, lt: "Sutartis ir ataskaitos", en: "Contract and reporting" }
   ];
 
   /* Ikonos - tos pačios kaip portalo kortelėse (24 x 24, linijinės). */
@@ -37,7 +37,7 @@
     "pp-negotiation": '<path d="M3 6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3v-3a1 1 0 0 1-1-1Z"/><path d="M9 14v1a2 2 0 0 0 2 2h6l4 3v-3a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2h-3"/>',
     "pp-report": '<path d="M3 21h18"/><rect x="6" y="13" width="3" height="6"/><rect x="11" y="9" width="3" height="10"/><rect x="16" y="5" width="3" height="14"/>',
     "pp-carbon": '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>',
-    "pp-esg": '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+    "pp-sutartys": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M12 10v6"/><path d="M9 18h6"/>',
     "tiekejams": '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.2a6.5 6.5 0 0 1 3 5.8"/>',
     "epd": '<path d="M8 3h8l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M16 3v4h4"/><path d="M10.5 17c0-3 1.6-5 5-5.5 0 3.4-1.8 5.5-5 5.5Z"/>'
   };
@@ -401,13 +401,13 @@
         "Projekto skaičiuoklė su emisijos faktorių biblioteka",
         "Produkto EPD reikšmę (A1-A3) DI pasiūlo su citata - ji patvirtinama tik tada, kai reikšmė yra dokumente",
         "Tiekėjų pasiūlymų vertinimas pagal kainą ir anglies pėdsaką",
-        "Ataskaitos: ES taksonomijos suvestinė, vieša ataskaita, duomenys ESG įrankiui"
+        "Ataskaitos: ES taksonomijos suvestinė ir vieša ataskaita; ESRS duomenys - pirkimų Scope 3 pagal metus, atsisiunčiami JSON ir CSV failais"
       ],
       galiEn: [
         "A project calculator with an emission factor library",
         "AI proposes the product EPD value (A1-A3) with a citation - it is confirmed only when the value is in the document",
         "Evaluation of supplier offers by price and carbon footprint",
-        "Reports: an EU Taxonomy summary, a public report, a data point for the ESG tool"
+        "Reports: an EU Taxonomy summary and a public report; ESRS data - procurement Scope 3 by year, downloadable as JSON and CSV files"
       ],
       daugiauLt: [
         "Metodinis pagrindas - GHG protokolas, EN 15804 ir gyvavimo ciklo vertinimas",
@@ -417,44 +417,45 @@
         "Methodological basis - the GHG Protocol, EN 15804 and life-cycle assessment",
         "Interface in Lithuanian and English"
       ],
-      rezLt: "anglies pėdsako įvertinimas ir ataskaitos Word formatu",
-      rezEn: "a carbon footprint assessment and reports in Word",
+      rezLt: "anglies pėdsako įvertinimas, ataskaitos Word formatu ir ESRS duomenys",
+      rezEn: "a carbon footprint assessment, reports in Word and ESRS data",
       extra: [
         { href: "PP-carbon/epd.html", labelLt: "Tiekėjo EPD įrankis", labelEn: "Supplier EPD tool" }
       ]
     },
+    /* Nuo 2026-11-28 vietoje ESG ir atitikties įrankio (PP-esg), kuris nebevystomas ir kataloge neberodomas (naudotojo sprendimas). */
     {
-      id: "pp-esg", code: "PP-ESG", stage: 4, cat: "reporting",
-      badgeLt: "Ataskaitos", badgeEn: "Reporting",
+      id: "pp-sutartys", code: "PP-Sutartys", stage: 4, cat: "execution",
+      badgeLt: "Sutartys", badgeEn: "Contracts",
       maturity: "kuriamas",
-      ai: true,
-      kalbos: true,
-      nameLt: "ESG ir atitiktis", nameEn: "ESG and compliance",
-      href: "PP-esg/index.html",
-      sumLt: "Tiekėjų rizikos registras, sankcijų patikros ir ESRS duomenys vienoje vietoje.",
-      sumEn: "A supplier risk register, sanctions checks and ESRS data in one place.",
+      nameLt: "Sutarties pakeitimai", nameEn: "Contract amendments",
+      href: "PP-sutartys/index.html",
+      sumLt: "Sutarties pakeitimo projektas pagal Sutarties nuostatas: kainos perskaičiavimas pagal indeksą, subtiekėjai, atsakingi asmenys.",
+      sumEn: "A draft contract amendment that follows the contract terms: price indexation, subcontractors, responsible persons.",
       galiLt: [
-        "Tiekėjų rizikos registras: rizikos lygį įrankis tik siūlo, pasirenkate patys",
-        "Automatinė patikra ES, JT, OFAC ir JK sankcijų sąrašuose (tik bendrovėms); jei sąrašo gauti nepavyko, jis rodomas kaip nepatikrintas",
-        "Kiekvieną galimą atitikmenį įvertina žmogus; DI sankcijų rizikos vertinimas - pagalbinis ir pažymėtas",
-        "ESRS duomenys ir patikrų žurnalo eksportas"
+        "Sutartis ir jos paskelbti pakeitimai randami viešuose CVP IS duomenyse pagal sutarties numerį",
+        "Kainos perskaičiavimas: indeksų reikšmės iš Oficialiosios statistikos portalo, Sutartyje nustatytos ribos ir laikotarpio patikra",
+        "Vienas susitarimas gali jungti kelis pakeitimus - kiekvienas su savo pagrindu ir patikromis",
+        "Susitarimo projektas, skaičiavimas ir pagrindimas derinimui (Word)"
       ],
       galiEn: [
-        "A supplier risk register: the tool only suggests the risk level, you choose it",
-        "An automatic check against the EU, UN, OFAC and UK sanctions lists (companies only); an unreachable list is shown as not checked",
-        "Each possible match is assessed by a person; the AI sanctions-risk assessment is advisory and labelled",
-        "ESRS data points and export of the check log"
+        "The contract and its published amendments are found in public CVP IS data by the contract number",
+        "Price indexation: index values from the Official Statistics Portal, a check of the threshold and period set in the contract",
+        "One agreement can combine several changes, each with its own legal basis and checks",
+        "A draft agreement, the calculation and a justification for internal approval (Word)"
       ],
       daugiauLt: [
-        "Tiekėjų importas iš viešų sutarčių duomenų",
-        "Sąsaja lietuvių ir anglų kalba"
+        "Pakeitimų sąrašas: Sutarties kaina iki pakeitimo ir po jo, kainos perskaičiavimo laikotarpiai nepersidengia",
+        "Priminimai po pasirašymo: paskelbimas CVP IS, asmens duomenų pašalinimas",
+        "Sutartys saugomos tik naršyklėje, kopija - failu"
       ],
       daugiauEn: [
-        "Import of suppliers from public contract data",
-        "Interface in Lithuanian and English"
+        "A list of amendments: the contract price before and after each change, indexation periods do not overlap",
+        "Reminders after signing: publication in CVP IS, removal of personal data",
+        "Contracts are stored only in the browser, with a copy as a file"
       ],
-      rezLt: "tiekėjų patikrų istorija (JSON ir CSV failai)",
-      rezEn: "a documented history of supplier checks (JSON, CSV)"
+      rezLt: "susitarimo dėl sutarties pakeitimo projektas, skaičiavimas ir pagrindimas (Word)",
+      rezEn: "a draft amendment agreement, the calculation and the justification (Word)"
     }
   ];
 

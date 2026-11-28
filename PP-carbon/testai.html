@@ -87,7 +87,9 @@ function puslapis(kelias, plotis){
       await laukti(150);
       res({ f: f, d: d });
     }, { once: true });
-    f.src = kelias + (kelias.indexOf("?") === -1 ? "?" : "&") + "b=" + Date.now();
+    // Adreso dalis po „#“ lieka gale (pvz. „index.html?lang=lt#esrs“)
+    const [k0, hash] = kelias.split("#");
+    f.src = k0 + (k0.indexOf("?") === -1 ? "?" : "&") + "b=" + Date.now() + (hash ? "#" + hash : "");
     document.body.appendChild(f);
   });
 }
@@ -493,17 +495,33 @@ async function testaiEpdIstrauka(){
       lygu([X.checkUnitCompatibility("kg CO2e", "1 m³", "kg CO2e/m3").warning, X.checkUnitCompatibility("kg CO2e", "1 kg", "kg CO2e/vnt").warning !== ""], ["", true], "deklaruotas vienetas");
       lygu([X.convertValue({ value: 2.5, unit: "t CO2-eq", declaredUnit: "1 vnt" }, "kg CO2e/vnt").value, X.convertValue({ value: 2.5, unit: "g CO2e" }, "kg CO2e/vnt").value], [2500, null], "convertValue");
     });
-    await testas("PP-ESG eksportas: taškas tonomis (eilutė, 3 skaitmenys), padengimas 0-100; įterpiama ar atnaujinama išlaikant PP-ESG id, kiti taškai nepaliečiami; sugadintas ar ne sąrašo raktas NEperrašomas", async ()=>{
+    await testas("ESRS duomenys (E1-6): taškas tonomis (eilutė, 3 skaitmenys), padengimas 0-100, metai; vienas taškas projektui ir metams - tas pats atnaujinamas išlaikant id, kitas projektas ar metai - naujas su savo id, senas taškas be projekto ir metų - pagal pavadinimą; kiti taškai nepaliečiami; sugadintas ar ne sąrašo raktas NEperrašomas", async ()=>{
       const G = f.contentWindow.GP_ESG_EXPORT;
       const st = (v) => { const m = { "ppesg.esrs": v }; return { getItem: k => (k in m ? m[k] : null), setItem: (k, x) => { m[k] = x; }, m }; };
-      const p = G.buildEsrsPoint(1234.5, { projectName: "Pastotė", coverage: 80, date: "2026-09-28T00:00:00Z" });
-      lygu([p.value, p.unit, p.esrs, p.coverage, p.source, p.sourceRef, /Pastotė$/.test(p.name), p.date], ["1.235", "tCO2e", "E1-6", 80, "module", "PP-CARBON", true, "2026-09-28T00:00:00.000Z"], "taškas");
+      const p = G.buildEsrsPoint(1234.5, { projectName: "Pastotė", coverage: 80, metai: "2026", date: "2026-09-28T00:00:00Z" });
+      lygu([p.value, p.unit, p.esrs, p.coverage, p.source, p.sourceRef, /Pastotė$/.test(p.name), p.date, p.projektas, p.metai], ["1.235", "tCO2e", "E1-6", 80, "module", "PP-CARBON", true, "2026-09-28T00:00:00.000Z", "Pastotė", "2026"], "taškas");
       lygu([G.buildEsrsPoint(1, { coverage: -5 }).coverage, G.buildEsrsPoint(1, {}).coverage, G.buildEsrsPoint(1, { coverage: 100 }).coverage], [null, null, 100], "padengimas");
+      lygu([G.metai("2026"), G.metai(" 2025 "), G.metai(2024), G.metai("26"), G.metai("2026-01"), G.metai(""), G.metai(null)], ["2026", "2025", "2024", "", "", "", ""], "metai");
       const kitas = { id: "DP-2", name: "Kitas", source: "manual" }, a = st(JSON.stringify([kitas]));
-      lygu(G.upsertToEsg(a, p).action, "inserted", "įterpta");
-      const sen = JSON.parse(a.m["ppesg.esrs"]); sen[1].id = "DP-9"; a.m["ppesg.esrs"] = JSON.stringify(sen);
-      const r2 = G.upsertToEsg(a, G.buildEsrsPoint(2000, { coverage: 50 }));
-      lygu([r2.action, r2.list.length, r2.list[0], r2.list[1].id, r2.list[1].value], ["updated", 2, kitas, "DP-9", "2"], "atnaujinta");
+      const r1 = G.upsertToEsg(a, p);
+      lygu([r1.action, /^DP-[0-9A-Z]+-[0-9A-Z]+$/.test(r1.list[1].id)], ["inserted", true], "įterpta su id");
+      const id = r1.list[1].id;
+      const r2 = G.upsertToEsg(a, G.buildEsrsPoint(2000, { projectName: "Pastotė", coverage: 50, metai: "2026" }));
+      lygu([r2.action, r2.list.length, r2.list[0], r2.list[1].id, r2.list[1].value], ["updated", 2, kitas, id, "2"], "tas pats projektas ir metai - atnaujinta");
+      const r3 = G.upsertToEsg(a, G.buildEsrsPoint(3000, { projectName: "Pastotė", coverage: 50, metai: "2025" }));
+      const r4 = G.upsertToEsg(a, G.buildEsrsPoint(4000, { projectName: "Linija", coverage: 50, metai: "2026" }));
+      lygu([r3.action, r4.action, r4.list.length, r4.list[2].id !== id && r4.list[3].id !== r4.list[2].id], ["inserted", "inserted", 4, true], "kiti metai ir projektas - nauji");
+      // Senas (iki 2026-11-28) taškas be projekto ir metų: tas pats, kai pavadinimas baigiasi projektu
+      const senas = { id: "DP-9", name: "Scope 3 emisijos - projekto ŠESD (visos įvestos skaičiuoklės eilutės) · Pastotė", esrs: "E1-6", value: "1", unit: "tCO2e", coverage: 10, source: "module", sourceRef: "PP-CARBON" };
+      const b0 = st(JSON.stringify([senas]));
+      lygu(G.esamasTaskas(b0, G.buildEsrsPoint(1, { projectName: "Pastotė", metai: "2026", coverage: 1 })).id, "DP-9", "senas - tas pats projektas");
+      lygu(G.esamasTaskas(b0, G.buildEsrsPoint(1, { projectName: "Kitas", metai: "2026", coverage: 1 })), null, "kitas projektas");
+      lygu(G.esamasTaskas(b0, G.buildEsrsPoint(1, { projectName: "tė", metai: "2026", coverage: 1 })), null, "pavadinimo pabaiga - tik po skyriklio");
+      const rs = G.upsertToEsg(b0, G.buildEsrsPoint(5000, { projectName: "Pastotė", coverage: 70, metai: "2026" }));
+      lygu([rs.action, rs.list.length, rs.list[0].id, rs.list[0].metai, rs.list[0].projektas], ["updated", 1, "DP-9", "2026", "Pastotė"], "senas atnaujintas, id išlaikytas");
+      lygu(G.esamasTaskas(st(JSON.stringify([{ name: "Scope 3 emisijos - projekto ŠESD (visos įvestos skaičiuoklės eilutės)", source: "module", sourceRef: "PP-CARBON" }])), G.buildEsrsPoint(1, { metai: "2026", coverage: 1 })) !== null, true, "senas be projekto - be projekto");
+      const be = st("[]");
+      tiesa(/metus/.test(G.exportTotal(be, 1000, { coverage: 50 }).error) && be.m["ppesg.esrs"] === "[]", "be metų neįrašoma");
       for (const blogas of ["{sugadinta", '{"schema":2,"taskai":[]}']) {
         const b = st(blogas), r = G.upsertToEsg(b, p);
         lygu([!!r.error, b.m["ppesg.esrs"]], [true, blogas], "neperrašoma: " + blogas);
@@ -852,7 +870,7 @@ async function testaiPatikra1104(){
       lygu([p.esrs, p.source, p.sourceRef, /Scope 3/.test(p.name), /A1-A3/.test(p.name), /visos įvestos skaičiuoklės eilutės/.test(p.name), /Pastotė$/.test(p.name)], ["E1-6", "module", "PP-CARBON", true, false, true, true], "taškas");
       lygu([G.buildEsrsPoint(1, {}).coverage, G.buildEsrsPoint(1, { coverage: 150 }).coverage, G.buildEsrsPoint(1, { coverage: -1 }).coverage, G.buildEsrsPoint(1, { coverage: 0 }).coverage], [null, null, null, 0], "padengimas");
       const st = { m: {}, getItem(k) { return k in this.m ? this.m[k] : null; }, setItem(k, v) { this.m[k] = v; } };
-      tiesa(G.exportTotal(st, 1000, {}).error && !st.m["ppesg.esrs"], "be padengimo neįrašoma");
+      tiesa(G.exportTotal(st, 1000, { metai: "2026" }).error && !st.m["ppesg.esrs"], "be padengimo neįrašoma");
       kiekis(d, "construction.concrete", "10"); kiekis(d, "substationEquipment.breaker", "2");
       const x = tekstaiModelio(W.GP_REPORTS.build("internal", W.buildReportData()));
       tiesa(/visos įvestos skaičiuoklės eilutės/.test(x) && !/A1-A3 pagrindu/.test(x) && /Įtraukti etapai: Statybinė dalis\./.test(x), x.slice(0, 400));
@@ -867,10 +885,19 @@ async function testaiPatikra1104(){
       W.transferToEsg();
       tiesa(/nuo 0 iki 100/.test(d.getElementById("esgCovKlaida").textContent) && localStorage.getItem("ppesg.esrs") === null, "150");
       cov.value = "60";
+      // Metai - privalomi, numatytųjų nėra (2026-11-28)
+      const met = d.getElementById("esgMetai");
+      lygu([met.value, met.options[0].value, met.options.length], ["", "", 5], "metų numatytojo nėra");
+      W.transferToEsg();
+      tiesa(/ataskaitinius metus/.test(d.getElementById("esgMetaiKlaida").textContent) && met.getAttribute("aria-invalid") === "true" && localStorage.getItem("ppesg.esrs") === null && d.activeElement === met, "be metų - klaida, fokusas");
+      met.value = String(new Date().getFullYear()); met.dispatchEvent(new Event("change", { bubbles: true }));
+      lygu([d.getElementById("esgMetaiKlaida").textContent, met.getAttribute("aria-invalid")], ["", null], "pasirinkus klaida dingsta");
       W.transferToEsg();
       const sar = JSON.parse(localStorage.getItem("ppesg.esrs"));
-      lygu([sar.length, sar[0].coverage, sar[0].value], [1, 60, "2.88"], "perduota");
-      tiesa(/Perduota/.test(d.getElementById("esgResult").textContent) && /2,88 tCO₂e/.test(d.getElementById("esgResult").textContent) && /60 %/.test(d.getElementById("esgResult").textContent), d.getElementById("esgResult").textContent);
+      lygu([sar.length, sar[0].coverage, sar[0].value, sar[0].metai], [1, 60, "2.88", met.value], "įrašyta");
+      tiesa(/Įrašyta į ESRS duomenis/.test(d.getElementById("esgResult").textContent) && /2,88 tCO₂e/.test(d.getElementById("esgResult").textContent) && /60 %/.test(d.getElementById("esgResult").textContent) && d.getElementById("esgResult").textContent.indexOf(met.value) > 0, d.getElementById("esgResult").textContent);
+      d.querySelector('#esgResult [data-view="esrs"]').click();
+      tiesa(d.getElementById("view-esrs").classList.contains("active") && /2,88/.test(d.getElementById("esrsMetai").textContent), "„Atverti ESRS duomenis“");
     } finally { f.remove(); localStorage.removeItem("ppesg.esrs"); }
   });
 
@@ -1163,23 +1190,29 @@ async function testaiPatikra1104(){
       St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB A", bidPrice: "100", embodiedCarbon: "2" }); });
       St.appendEpdHistory({ date: "2026-01-10", itemLabel: "Jungtuvai", unit: "kg CO2e/vnt", value: 1, manufacturer: "A", fileName: "" });
       W.setView("reports");
-      const cov = d.getElementById("esgCoverage");
-      cov.value = "80"; W.transferToEsg();
-      lygu(JSON.parse(localStorage.getItem("ppesg.esrs"))[0].value, "2.88", "pirmas perdavimas be klausimo");
+      const cov = d.getElementById("esgCoverage"), met = d.getElementById("esgMetai"), y = String(new Date().getFullYear());
+      cov.value = "80"; met.value = y; W.transferToEsg();
+      lygu(JSON.parse(localStorage.getItem("ppesg.esrs"))[0].value, "2.88", "pirmas įrašymas be klausimo");
       W.transferToEsg();
       lygu(d.getElementById("overlay").classList.contains("open"), false, "tas pats - neklausia");
       kiekis(d, "construction.concrete", "20");
-      W.onCalcMeta("name", "Antras");
       W.transferToEsg();
       lygu(d.getElementById("overlay").classList.contains("open"), true, "klausia");
       const tx = d.getElementById("klausimoTekstas").textContent;
-      tiesa(/2\.88 tCO₂e/.test(tx) && /5\.76 tCO₂e/.test(tx) && /Pirmas/.test(tx) && /Antras/.test(tx), tx);
+      tiesa(/2\.88 tCO₂e/.test(tx) && /5\.76 tCO₂e/.test(tx) && /Pirmas/.test(tx) && tx.indexOf(y + " m.") > 0, tx);
       W.closeModal();
       lygu(JSON.parse(localStorage.getItem("ppesg.esrs"))[0].value, "2.88", "atšaukus nepakito");
       W.transferToEsg();
       d.getElementById("klausimoTaip").click();
-      const sar = JSON.parse(localStorage.getItem("ppesg.esrs"));
+      let sar = JSON.parse(localStorage.getItem("ppesg.esrs"));
       lygu([sar.length, sar[0].value, sar[0].sourceRef, W.GP_ESG_EXPORT.ESG_KEY], [1, "5.76", "PP-CARBON", "ppesg.esrs"], "perrašyta");
+      // Kitas projektas ar kiti metai - naujas duomenų vienetas, be klausimo (2026-11-28)
+      W.onCalcMeta("name", "Antras");
+      W.transferToEsg();
+      lygu(d.getElementById("overlay").classList.contains("open"), false, "kitas projektas - neklausia");
+      met.value = String(Number(y) - 1); W.transferToEsg();
+      sar = JSON.parse(localStorage.getItem("ppesg.esrs"));
+      lygu(sar.map(x => x.projektas + " " + x.metai), ["Pirmas " + y, "Antras " + y, "Antras " + (Number(y) - 1)], "trys duomenų vienetai");
       W.setView("calc");
       d.getElementById("naujasProjektasBtn").click();
       lygu(St.getCalc().name, "Antras", "be patvirtinimo neišvaloma");
@@ -1189,6 +1222,7 @@ async function testaiPatikra1104(){
       lygu([c.name, Object.keys(c.qty).length, St.getEvalOffers().length, St.getEpdHistory().length, d.getElementById("calcName").value, d.querySelector('input.qty-input[data-key="construction.concrete"]').value],
            ["", 0, 0, 1, "", ""], "išvalyta, istorija lieka");
       lygu(d.activeElement.id, "naujasProjektasBtn", "fokusas");
+      lygu(JSON.parse(localStorage.getItem("ppesg.esrs")).length, 3, "ESRS duomenys po naujo projekto lieka");
     } finally { f.remove(); localStorage.removeItem("ppesg.esrs"); }
   });
 
@@ -1497,6 +1531,208 @@ async function testaiPatikra1104(){
   });
 }
 
+
+/* 2026-11-28 (naudotojo sprendimas sujungti PP-carbon ir ESG įrankio ESRS dalį): skirtukas „ESRS duomenys“ - tas pats raktas ppesg.esrs,
+   metų sumos, ranka įrašomi taškai, atsisiuntimas JSON ir CSV; ESG įrankis ESRS nebetvarko. */
+async function testaiEsrs1128(){
+  dabartine = grupe("ESRS duomenys (2026-11-28)");
+  const svarus = async (kalba, plotis, hash) => { localStorage.removeItem("pp_carbon_data"); return puslapis("index.html?lang=" + (kalba || "lt") + (hash || ""), plotis || 1280); };
+  const st = (v) => { const m = { "ppesg.esrs": v }; return { getItem: k => (k in m ? m[k] : null), setItem: (k, x) => { m[k] = x; }, m }; };
+  const TASKAI = [
+    { id: "DP-A", name: "Scope 3 emisijos - projekto ŠESD (visos įvestos skaičiuoklės eilutės) · Pastotė", projektas: "Pastotė", metai: "2026", esrs: "E1-6", value: "10.5", unit: "tCO2e", coverage: 80, source: "module", sourceRef: "PP-CARBON", date: "2026-11-28T08:00:00.000Z" },
+    { id: "DP-B", name: "Linija", projektas: "Linija", metai: "2026", esrs: "E1-6", value: "2000", unit: "kg CO₂e", coverage: 40, source: "manual", date: "2026-11-28T08:00:00.000Z" },
+    { id: "DP-C", name: "Senas", esrs: "E1-6", value: "3", unit: "t", coverage: 60, source: "module", sourceRef: "PP-CARBON", date: "2025-05-01T00:00:00.000Z" },
+    { id: "DP-D", name: "Be vieneto", metai: "2026", esrs: "E1-6", value: "7", unit: "vnt.", coverage: 20, source: "manual" },
+    { id: "DP-E", name: "Elgesio kodeksas", metai: "2026", esrs: "G1-2", value: "42", unit: "%", source: "manual" },
+    { id: "DP-3", name: "Seno ESG įrankio pavyzdys", esrs: "S2-1", value: "0", unit: "vnt.", coverage: 70, source: "manual" },
+    { id: "DP-Z", name: "Pavyzdys", esrs: "E1-6", value: "999", unit: "t", metai: "2026", coverage: 100, source: "manual", pavyzdys: true }
+  ];
+
+  await testas("Suvestinė ir eksportas: Scope 3 pagal metus (tonos ir kilogramai, senas taškas - metai iš datos), ne tonomis ir be metų - neįskaičiuota, pavyzdžiai ir seni demonstraciniai - ne; JSON ir CSV be pavyzdžių, CSV su UTF-8 žyme, kabliataškiu ir formulių apsauga", async ()=>{
+    const { f } = await svarus();
+    try {
+      const G = f.contentWindow.GP_ESG_EXPORT;
+      const sv = G.suvestine(TASKAI);
+      lygu([sv.taskai, sv.demo, sv.kategorijos, sv.vidAprepts, sv.bePadengimo, sv.neiskaiciuota], [5, 2, { E1: 4, S2: 0, G1: 1 }, 50, 1, 1], "suvestinė");
+      lygu(sv.scope3, [{ metai: "2026", t: 12.5, taskai: 2, projektai: ["Pastotė", "Linija"] }, { metai: "2025", t: 3, taskai: 1, projektai: [] }], "metų sumos");
+      lygu([G.tonomis({ value: "1,5", unit: "t CO2e" }), G.tonomis({ value: "1500", unit: "kgCO2e" }), G.tonomis({ value: "1", unit: "tCO2-eq" }), G.tonomis({ value: "x", unit: "t" }), G.tonomis({ value: "1", unit: "MWh" })], [1.5, 1.5, 1, null, null], "vienetai");
+      lygu(G.suvestine("ne sąrašas"), { taskai: 0, vidAprepts: null, bePadengimo: 0, kategorijos: { E1: 0, S2: 0, G1: 0 }, scope3: [], neiskaiciuota: 0, demo: 0 }, "netinkamas sąrašas");
+      const e = G.eksportas(TASKAI, { dabar: new Date("2026-11-28T10:00:00Z"), kalba: "lt" });
+      lygu([e.meta.module, e.meta.dataPointCount, e.meta.generatedAt, e.summary.scope3ByYear, e.summary.scope3NotCounted, e.summary.averageCoverage], ["PP-carbon", 5, "2026-11-28T10:00:00.000Z", [{ year: "2026", tCO2e: 12.5, dataPoints: 2 }, { year: "2025", tCO2e: 3, dataPoints: 1 }], 1, 50], "JSON");
+      lygu(e.dataPoints.map(x => x.esrsCode + "/" + x.year + "/" + x.source + "/" + x.project), ["E1-6/2026/module/Pastotė", "E1-6/2026/manual/Linija", "E1-6/2025/module/null", "E1-6/2026/manual/null", "G1-2/2026/manual/null"], "JSON taškai");
+      const csv = G.csv(TASKAI.concat([{ id: "DP-F", name: "=HYPERLINK(1)", esrs: "G1-6", value: "-5", unit: "+d", metai: "2026", coverage: 10, source: "manual" }]));
+      tiesa(csv.charCodeAt(0) === 0xFEFF && /^"esrsCode";"name";"value";"unit";"coverage";"year";"project";"source";"date"\r\n/.test(csv.slice(1)), "CSV antraštė");
+      tiesa(csv.indexOf(`"'=HYPERLINK(1)"`) > 0 && csv.indexOf('"-5"') > 0 && csv.indexOf(`"'+d"`) > 0 && csv.indexOf("Pavyzdys") < 0 && csv.indexOf("Seno ESG") < 0, csv);
+    } finally { f.remove(); }
+  });
+
+  await testas("Ranka įrašomi taškai: privalomi kodas, pavadinimas, vertė, aprėptis 0-100 ir metai; taisomi tik ranka įrašyti; be id - pagal eilę ir tą patį turinį; pakeistas kitur - neįrašoma; sugadintas sąrašas - klaida, niekas neperrašoma", async ()=>{
+    const { f } = await svarus();
+    try {
+      const G = f.contentWindow.GP_ESG_EXPORT;
+      lygu(G.rankinisTaskas({}).klaidos, { esrs: "kodas", name: "tuscias", value: "tuscias", coverage: "ribos", metai: "metai" }, "visos klaidos");
+      lygu(G.rankinisTaskas({ esrs: "E9", name: "x".repeat(301), value: "1", coverage: "150", metai: "2026", unit: "u".repeat(41) }).klaidos, { esrs: "kodas", name: "ilgas", unit: "ilgas", coverage: "ribos" }, "ribos");
+      const t = G.rankinisTaskas({ esrs: "G1-6", name: " Mokėjimo terminas ", value: "30", unit: "d.", coverage: "75,5", metai: "2026" }).point;
+      lygu([t.esrs, t.name, t.value, t.unit, t.coverage, t.metai, t.source, /^DP-/.test(t.id), !!t.date], ["G1-6", "Mokėjimo terminas", "30", "d.", 75.5, "2026", "manual", true, true], "taškas");
+      const a = st(JSON.stringify([TASKAI[0], { name: "Be id", esrs: "S2-4", value: "1", source: "manual" }]));
+      const i1 = G.irasykRankini(a, { esrs: "S2-4", name: "Naujas", value: "5", coverage: 10, metai: "2025" });
+      lygu([i1.action, JSON.parse(a.m["ppesg.esrs"]).length], ["inserted", 3], "pridėta");
+      lygu(G.irasykRankini(a, { esrs: "E1-6", name: "x", value: "1", coverage: 1, metai: "2026" }, { id: "DP-A" }).error, "netaisomas", "skaičiuoklės taško taisyti negalima");
+      const json = JSON.stringify(JSON.parse(a.m["ppesg.esrs"])[1]);
+      const i2 = G.irasykRankini(a, { esrs: "S2-4", name: "Pataisytas", value: "2", coverage: 50, metai: "2026" }, { i: 1, json: json });
+      const po = JSON.parse(a.m["ppesg.esrs"]);
+      lygu([i2.action, po[1].name, po[1].value, /^DP-/.test(po[1].id), po.length], ["updated", "Pataisytas", "2", true, 3], "be id - pagal eilę ir turinį, gauna id");
+      lygu(G.irasykRankini(a, { esrs: "S2-4", name: "x", value: "1", coverage: 1, metai: "2026" }, { i: 1, json: json }).error, "pakeista", "pakeistas kitur");
+      lygu(G.salink(a, { id: "nera" }).error, "pakeista", "nėra ko šalinti");
+      lygu([G.salink(a, { id: "DP-A" }).point.id, JSON.parse(a.m["ppesg.esrs"]).length], ["DP-A", 2], "pašalinta");
+      for (const blogas of ["{sugadinta", '{"a":1}']) {
+        const b = st(blogas);
+        lygu([G.skaitykSarasa(b).error, G.irasykRankini(b, { esrs: "G1-6", name: "x", value: "1", coverage: 1, metai: "2026" }).error, G.salink(b, { id: "x" }).error, b.m["ppesg.esrs"]],
+          [blogas[1] === "s" ? "sugadinta" : "sandara", blogas[1] === "s" ? "sugadinta" : "sandara", blogas[1] === "s" ? "sugadinta" : "sandara", blogas], "neperrašoma: " + blogas);
+      }
+      lygu([G.skaitykSarasa(st(null)).nera, G.skaitykSarasa(null).error, G.skaitykSarasa({ getItem() { throw new Error("x"); } }).error], [true, "neprieinama", "neprieinama"], "saugykla");
+      const pr = G.skaitykSarasa(st('[{"__proto__":{"x":1},"name":"a"}]')).list;
+      lygu([({}).x, Object.prototype.hasOwnProperty.call(pr[0], "__proto__")], [undefined, false], "be prototipo raktų");
+    } finally { f.remove(); }
+  });
+
+  await testas("Skirtukas: rodikliai, metų lentelė, sąrašas (naujausi metai pirmi, šaltinis, taisyti tik ranka įrašytus), pridėjimas su klaidomis ir fokusu, taisymas, šalinimas tik patvirtinus, #esrs atveria skirtuką", async ()=>{
+    localStorage.setItem("ppesg.esrs", JSON.stringify(TASKAI));
+    const { f, d } = await svarus("lt", 1280, "#esrs");
+    const W = f.contentWindow;
+    try {
+      tiesa(d.getElementById("view-esrs").classList.contains("active") && d.querySelector('.tab[data-view="esrs"]').classList.contains("active"), "#esrs atveria skirtuką");
+      const kpi = BE_TARPU(d.getElementById("esrsKpi").textContent);
+      tiesa(kpi.includes("Duomenųvienetai5E1:4·S2:0·G1:1") && kpi.includes("Vidutinėaprėptis50%") && kpi.includes("Scope3,2026m.12,5") && kpi.includes("Neįskaičiuotaįmetųsumas1"), kpi);
+      const metai = d.querySelectorAll("#esrsMetai tbody tr");
+      lygu([...metai].map(r => BE_TARPU(r.textContent)), ["202612,52Pastotė;Linija", "202531-"], "metų lentelė");
+      tiesa(/neįskaičiuota E1-6 duomenų vienetų: 1/.test(d.getElementById("esrsMetai").textContent), "neįskaičiuota");
+      const eil = [...d.querySelectorAll("#esrsSarasas tbody tr")];
+      lygu(eil.length, 7, "visi rodomi");
+      lygu(eil.map(r => r.cells[3].textContent).slice(0, 5), ["2026", "2026", "2026", "2026", "2026"], "naujausi metai pirmi");
+      const r = k => eil.find(x => x.cells[1].textContent === k);
+      tiesa(/Projekto skaičiuoklė/.test(r(TASKAI[0].name).textContent) && !r(TASKAI[0].name).querySelector('[data-veiksmas="esrsTaisyti"]') && r(TASKAI[0].name).querySelector('[data-veiksmas="esrsSalinti"]'), "skaičiuoklės taškas - be taisymo");
+      tiesa(/Įrašyta ranka/.test(r("Elgesio kodeksas").textContent) && r("Elgesio kodeksas").querySelector('[data-veiksmas="esrsTaisyti"]').getAttribute("aria-label") === "Taisyti: Elgesio kodeksas", "ranka įrašytas - taisomas");
+      tiesa(/Pavyzdys - neįskaičiuojamas/.test(r("Pavyzdys").textContent) && /Pavyzdys - neįskaičiuojamas/.test(r("Seno ESG įrankio pavyzdys").textContent) && !r("Pavyzdys").querySelector('[data-veiksmas="esrsTaisyti"]'), "pavyzdžiai");
+      // Pridėjimas: tuščia forma - klaidos prie laukų, fokusas į pirmą
+      d.getElementById("esrsNaujas").focus(); d.getElementById("esrsNaujas").click();
+      await laukti(30);
+      lygu(d.activeElement.id, "efKod", "fokusas lange");
+      d.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await laukti(30);
+      lygu([d.getElementById("overlay").classList.contains("open"), d.activeElement.id], [false, "esrsNaujas"], "Esc uždaro, fokusas grįžta į mygtuką");
+      d.getElementById("esrsNaujas").click();
+      await laukti(30);
+      d.getElementById("efSaugoti").click();
+      lygu(["efKodKl", "efMetaiKl", "efPavKl", "efValKl", "efCovKl"].map(x => !!d.getElementById(x).textContent), [true, true, true, true, true], "klaidos");
+      lygu([d.activeElement.id, d.getElementById("efKod").getAttribute("aria-invalid"), JSON.parse(localStorage.getItem("ppesg.esrs")).length], ["efKod", "true", 7], "neįrašyta");
+      d.getElementById("efKod").value = "G1-6"; d.getElementById("efKod").dispatchEvent(new Event("change", { bubbles: true }));
+      lygu([d.getElementById("efKodKl").textContent, d.getElementById("efKod").getAttribute("aria-invalid")], ["", null], "pataisius klaida dingsta");
+      d.getElementById("efMetai").value = "2026"; d.getElementById("efPav").value = "Mokėjimo terminas <b>"; d.getElementById("efVal").value = "30"; d.getElementById("efUnit").value = "d."; d.getElementById("efCov").value = "150";
+      d.getElementById("efSaugoti").click();
+      tiesa(/nuo 0 iki 100/.test(d.getElementById("efCovKl").textContent) && d.activeElement.id === "efCov", "aprėptis 150");
+      d.getElementById("efCov").value = "90"; d.getElementById("efSaugoti").click();
+      lygu([d.getElementById("overlay").classList.contains("open"), JSON.parse(localStorage.getItem("ppesg.esrs")).length, d.activeElement.id], [false, 8, "esrsNaujas"], "įrašyta, langas uždarytas");
+      const nauja = [...d.querySelectorAll("#esrsSarasas tbody tr")].find(x => /Mokėjimo terminas/.test(x.textContent));
+      tiesa(nauja && !nauja.querySelector("b") && nauja.cells[1].textContent === "Mokėjimo terminas <b>", "tekstas - ne HTML");
+      // Taisymas
+      nauja.querySelector('[data-veiksmas="esrsTaisyti"]').click();
+      lygu([d.getElementById("efKod").value, d.getElementById("efMetai").value, d.getElementById("efVal").value, d.getElementById("efCov").value], ["G1-6", "2026", "30", "90"], "forma užpildyta");
+      d.getElementById("efVal").value = "28"; d.getElementById("efSaugoti").click();
+      const po = JSON.parse(localStorage.getItem("ppesg.esrs"));
+      lygu([po.length, po.filter(x => x.value === "28").length], [8, 1], "pataisyta, ne pridėta");
+      // Šalinimas: tik patvirtinus
+      const salinti = () => [...d.querySelectorAll("#esrsSarasas tbody tr")].find(x => x.cells[1].textContent === "Elgesio kodeksas").querySelector('[data-veiksmas="esrsSalinti"]');
+      salinti().click();
+      tiesa(/„Elgesio kodeksas“ \(G1-2\)/.test(d.getElementById("klausimoTekstas").textContent), "klausimas");
+      W.closeModal();
+      lygu(JSON.parse(localStorage.getItem("ppesg.esrs")).length, 8, "atšaukus nepašalinta");
+      salinti().click(); d.getElementById("klausimoTaip").click();
+      lygu([JSON.parse(localStorage.getItem("ppesg.esrs")).length, JSON.parse(localStorage.getItem("ppesg.esrs")).some(x => x.name === "Elgesio kodeksas")], [7, false], "pašalinta");
+      // Pakeista kitame skirtuke: taisant pasakoma ir sąrašas atnaujinamas
+      const be = [...d.querySelectorAll("#esrsSarasas tbody tr")].find(x => /Mokėjimo terminas/.test(x.textContent)).querySelector('[data-veiksmas="esrsTaisyti"]');
+      localStorage.setItem("ppesg.esrs", JSON.stringify(JSON.parse(localStorage.getItem("ppesg.esrs")).filter(x => !/Mokėjimo/.test(x.name))));
+      be.click();
+      tiesa(/pakeistas ar pašalintas kitame skirtuke/.test(d.getElementById("esrsDlBusena").textContent) && !d.getElementById("overlay").classList.contains("open") && ![...d.querySelectorAll("#esrsSarasas tbody tr")].some(x => /Mokėjimo/.test(x.textContent)), "pakeista kitur");
+    } finally { f.remove(); localStorage.removeItem("ppesg.esrs"); }
+  });
+
+  await testas("Tuščias ir sugadintas sąrašas: tuščias - paaiškinimas, ne klaida; sugadintas - „būsena nežinoma“, be skaičių, mygtukai išjungti, įrašas nepakinta; atsisiuntimas JSON ir CSV (failo vardas, turinys), be duomenų - pasakoma", async ()=>{
+    localStorage.removeItem("ppesg.esrs");
+    let { f, d } = await svarus();
+    let W = f.contentWindow;
+    try {
+      W.setView("esrs");
+      tiesa(/ESRS duomenų vienetų dar nėra/.test(d.getElementById("esrsSarasas").textContent) && /Dar nėra E1-6/.test(d.getElementById("esrsMetai").textContent) && d.getElementById("esrsBusena").hidden, "tuščias");
+      d.querySelector('[data-veiksmas="esrsAtsisiusti"][data-formatas="json"]').click();
+      tiesa(/Atsisiųsti nėra ko/.test(d.getElementById("esrsDlBusena").textContent), "be duomenų");
+      tiesa(localStorage.getItem("ppesg.esrs") === null, "tuščias - nieko neįrašyta");
+      // Tik pavyzdžiai - atsisiųsti taip pat nėra ko
+      localStorage.setItem("ppesg.esrs", JSON.stringify([TASKAI[5], TASKAI[6]]));
+      W.URL.createObjectURL = () => { throw new Error("neturi būti kuriamas failas"); };
+      W.renderEsrs(); d.getElementById("esrsDlBusena").innerHTML = "";
+      d.querySelector('[data-veiksmas="esrsAtsisiusti"][data-formatas="csv"]').click();
+      tiesa(/Atsisiųsti nėra ko/.test(d.getElementById("esrsDlBusena").textContent), "tik pavyzdžiai");
+    } finally { f.remove(); }
+    localStorage.setItem("ppesg.esrs", "{sugadinta");
+    ({ f, d } = await svarus()); W = f.contentWindow;
+    try {
+      W.setView("esrs");
+      const b = d.getElementById("esrsBusena");
+      tiesa(!b.hidden && /neperskaitomas - niekas neperrašoma/.test(b.textContent) && d.getElementById("esrsKpi").textContent === "" && d.getElementById("esrsSarasas").textContent === "", "sugadintas: " + b.textContent);
+      tiesa(d.getElementById("esrsNaujas").disabled && [...d.querySelectorAll('[data-veiksmas="esrsAtsisiusti"]')].every(x => x.disabled), "mygtukai išjungti");
+      W.setView("reports");
+      d.getElementById("esgCoverage").value = "50"; d.getElementById("esgMetai").value = String(new Date().getFullYear());
+      W.atlikEsg(1000, "P", 50, String(new Date().getFullYear()));
+      tiesa(/Nepavyko įrašyti/.test(d.getElementById("esgResult").textContent) && localStorage.getItem("ppesg.esrs") === "{sugadinta", "įrašymas iš skaičiuoklės - klaida, neperrašoma");
+    } finally { f.remove(); }
+    localStorage.setItem("ppesg.esrs", JSON.stringify(TASKAI));
+    ({ f, d } = await svarus()); W = f.contentWindow;
+    const failai = [];
+    try {
+      W.URL.createObjectURL = blob => { failai.push({ blob }); return "blob:testas"; };
+      W.URL.revokeObjectURL = () => {};
+      W.HTMLAnchorElement.prototype.click = function () { failai[failai.length - 1].vardas = this.download; };
+      W.setView("esrs");
+      d.querySelector('[data-veiksmas="esrsAtsisiusti"][data-formatas="json"]').click();
+      d.querySelector('[data-veiksmas="esrsAtsisiusti"][data-formatas="csv"]').click();
+      lygu(failai.map(x => /^ESRS-duomenys_\d{4}-\d{2}-\d{2}\.(json|csv)$/.test(x.vardas)), [true, true], failai.map(x => x.vardas).join(", "));
+      const j = JSON.parse(await failai[0].blob.text()), c = await failai[1].blob.text();
+      lygu([j.meta.dataPointCount, j.summary.scope3ByYear[0].tCO2e, j.dataPoints.some(x => /Pavyzdys/.test(x.name))], [5, 12.5, false], "JSON");
+      const pr = new Uint8Array(await failai[1].blob.arrayBuffer()).slice(0, 3);
+      tiesa([...pr].join(",") === "239,187,191" && c.split("\r\n").length === 6 && /text\/csv/.test(failai[1].blob.type), "CSV: UTF-8 žymė ir eilutės: " + c.split("\r\n").length);
+      tiesa(/Atsisiųsta: ESRS-duomenys_/.test(d.getElementById("esrsDlBusena").textContent), "pranešimas");
+    } finally { f.remove(); localStorage.removeItem("ppesg.esrs"); }
+  });
+
+  await testas("Anglų kalba ir telefonas: ESRS skirtuko tekstai be lietuviškų raidžių (išskyrus duomenis), 375 ir 320 px - puslapis neslenka į šoną, lentelė - kortelėmis", async ()=>{
+    localStorage.setItem("ppesg.esrs", JSON.stringify(TASKAI.slice(0, 2)));
+    let { f, d } = await svarus("en");
+    let W = f.contentWindow;
+    try {
+      W.setView("esrs");
+      const v = d.getElementById("view-esrs").cloneNode(true);
+      v.querySelectorAll(".esrs-pav, #esrsMetai td:last-child").forEach(x => x.remove());
+      const tekstas = v.textContent;
+      tiesa(!/[ąčęėįšųūž]/i.test(tekstas) && /Procurement Scope 3 by year/.test(tekstas) && /Data points/.test(tekstas) && /Project calculator/.test(tekstas), tekstas.match(/.{0,40}[ąčęėįšųūž].{0,40}/i));
+      W.setView("reports");
+      tiesa(/Save to ESRS data/.test(d.getElementById("esgBtn").textContent) && /Reporting year/.test(d.querySelector('label[for="esgMetai"]').textContent), "EN įrašymo kortelė");
+    } finally { f.remove(); }
+    ({ f, d } = await svarus("lt", 375)); W = f.contentWindow;
+    try {
+      for (const px of [375, 320]) {
+        await plotis(f, px);
+        W.setView("esrs");
+        await new Promise(r => requestAnimationFrame(r));
+        tiesa(d.documentElement.scrollWidth <= d.documentElement.clientWidth + 1, px + " px slenka: " + d.documentElement.scrollWidth);
+        const lang = d.querySelector("#esrsSarasas tbody tr td");
+        lygu(getComputedStyle(lang).display, "flex", px + " px kortelė");
+        d.querySelectorAll("#view-esrs button").forEach(b => tiesa(rect(b).right <= d.documentElement.clientWidth + 1, px + " px mygtukas už krašto: " + b.textContent));
+      }
+    } finally { f.remove(); localStorage.removeItem("ppesg.esrs"); }
+  });
+}
+
 (async function(){
   // Bendras catch: išimtis už testas() kitaip palieka „Vykdoma...“, o CI laukia visą laiko limitą
   try {
@@ -1506,6 +1742,7 @@ async function testaiPatikra1104(){
     await testaiBusenos();
     await testaiSkaiciavimai();
     await testaiPatikra1104();
+    await testaiEsrs1128();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

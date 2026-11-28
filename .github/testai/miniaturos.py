@@ -130,8 +130,21 @@ IRANKIAI = [
          .forEach((b, i) => sar.push({ id: "PVZ" + (i + 1), name: b[0], bidPrice: b[1], embodiedCarbon: b[2] })); });
        setView("bids");""",
      "slinkti": "[...document.querySelectorAll('.card-title')].find(e => /^Pasiūlymai/.test(e.textContent.trim())).closest('.card')", "atstumas": 138, "laukti": 1.5},
-    {"id": "pp-esg", "kelias": "PP-esg/index.html?lang=lt",
-     "js": "rodykPavyzdi(); setView('dashboard');", "slinkti": "[...document.querySelectorAll('h1,h2')].find(e => /ESG ir atitikties/.test(e.textContent))", "atstumas": 232, "laukti": 1.5},
+    {"id": "pp-sutartys", "kelias": "PP-sutartys/index.html?saugykla=testine",
+     "js": r"""
+       const d = document, rasyk = (k, v) => { const el = d.querySelector('[data-kelias="' + k + '"]'); if (!el) return; if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+         el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); };
+       d.querySelector('[data-veiksmas="psNauja"]').click();
+       rasyk("s.nr", "25VP-SUT-000"); rasyk("s.data", "2025-02-10"); rasyk("s.forma", "SR"); rasyk("s.pavadinimasKilm", "110 kV skirstyklos rekonstravimo darbų pirkimo sutarties");
+       rasyk("s.tiekejoPav", "UAB „Pavyzdinė ranga“"); rasyk("s.tiekejoKodas", "300000001"); rasyk("s.tiekejoAdresas", "Pavyzdžio g. 1, Vilnius"); rasyk("s.pradineVerte", "4200000"); rasyk("s.galiojaIki", "2027-12-31");
+       d.querySelector('[data-veiksmas="psPridekAnkstesni"]').click(); rasyk("a.0.data", "2025-09-15"); rasyk("a.0.regNr", "25VP-SUTP-00"); rasyk("a.0.esme", "subrangovo pasitelkimo"); rasyk("a.0.pokytis", "0");
+       d.querySelector("#psToliau").click();
+       d.querySelector('[data-veiksmas="psPridekBloka"][data-tipas="ind"]').click();
+       rasyk("b.0.pradzia", "2025-01"); rasyk("b.0.pabaiga", "2026-09"); rasyk("b.0.rastoData", "2026-11-03"); rasyk("b.0.garantija", "taip");
+       [[120, 127.2, ""], [118, 123.9, "1450000"], [115, 119.6, "380000"], [122, 131.76, "920000"]].forEach((x, i) => { rasyk("b.0.e." + i + ".pr", String(x[0]).replace(".", ",")); rasyk("b.0.e." + i + ".pb", String(x[1]).replace(".", ","));
+         if (x[2]) rasyk("b.0.e." + i + ".suma", x[2]); });
+       window.scrollTo(0, 0);""",
+     "slinkti": "document.querySelector('#psKortele')", "atstumas": 92, "laukti": 1.0},
     {"id": "tiekejams", "kelias": "PP-tiekejams/index.html?lang=lt",
      "js": r"""
        const w = window, d = document;

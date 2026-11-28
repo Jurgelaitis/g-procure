@@ -1221,6 +1221,76 @@ async function testaiViesosSutartys1119(){
 
 /* DI serverio systemd vienetas (serveris/g-procure.service, 2026-11-23, saugumo auditas G-05): vietoj pm2 (root) - DynamicUser,
    izoliacija, .env - tik kaip LoadCredential, šablonų grupė, V8 riba žemiau systemd ribos. */
+/* Sutartis pagal numerį ir jos paskelbti pakeitimai (2026-11-28, PP-sutartys). Duomenų sandara - kaip viešuose VDA duomenyse:
+   sutartis - dok_sut_tipas "1", pakeitimai - "5" su savo numeriu, susieti tik pirkimo numeriu; tas pats pakeitimas gali būti įrašytas du kartus. */
+async function testaiSutartisPagalNumeri1128(){
+  grupe("Viešų pirkimų sutarčių duomenys (2026-11-28) - sutartis pagal numerį ir jos pakeitimai");
+  const sut = (id, tipas, nr, data, kita) => Object.assign({ dok_id: id, dok_sut_tipas: tipas, dok_sut_numeris: nr, dok_pirk_numeris: "735154", dok_sut_obj_pav: "Sutartis dėl 110 kV linijos paslaugų", dok_sut_verte: 359128.0,
+    dok_sudarymo_data: data, dok_sut_galiojimo_data: "2027-07-29" }, kita || {});
+  const sal = (dok, kodas, pav, tiekejas, rusis) => ({ dok_id: dok, salies_kodas: kodas, salies_asmens_rusis: rusis || "Juridinis", salies_pavadinimas: pav, ar_salis_tiekejas: tiekejas });
+  const PIRKIMO = [sut("100", "1", "24VP-SUT-246", "2024-11-29"), sut("101", "5", "25VP-SUTP-64", "2025-12-01"), sut("102", "5", "26VP-SUTP-87", "2026-07-29", { dok_sut_verte: 431114.68 }),
+    sut("103", "5", "26VP-SUTP-87", "2026-07-29", { dok_sut_verte: 431114.68 }), sut("104", "5", "26VP-SUTP-11", "2026-01-26"), sut("105", 5, "23VP-SENAS", "2023-01-01")];
+  const SALYS = [sal("100", "133884372", "Uždaroji akcinė bendrovė \"Ardynas\"", true), sal("100", "302564383", "LITGRID AB", false), sal("101", "133884372", "UAB Ardynas", true), sal("102", "133884372", "UAB Ardynas", true)];
+  function gaukis(pagalNr, pirkimo, salys, zurnalas){
+    return async u => {
+      if (zurnalas) zurnalas.push(u.kelias);
+      if (/^Sutartis\?dok_sut_numeris=/.test(u.kelias)) return { _data: pagalNr };
+      if (/^Sutartis\?dok_pirk_numeris=/.test(u.kelias)) return { _data: pirkimo };
+      if (/^Salis\?\(/.test(u.kelias)) return { _data: salys };
+      throw new Error("netikėta užklausa");
+    };
+  }
+  await testas("Sutartis randama pagal numerį: pavadinimas, datos, kita Šalis, pakeitimai pagal datą be dublikatų ir be senesnių už sutartį", async () => {
+    const z = [];
+    const r = await VS.vykdykSutartis({ nr: "24VP-SUT-246", jar: "302564383" }, gaukis([PIRKIMO[0]], PIRKIMO, SALYS, z), { dabar: VS_DABAR });
+    lygu(r.sutartis, { nr: "24VP-SUT-246", sudaryta: "2024-11-29", galioja: "2027-07-29", pirkimoNr: "735154", pav: "Sutartis dėl 110 kV linijos paslaugų", verte: 359128,
+      tiekejas: { pav: "Uždaroji akcinė bendrovė \"Ardynas\"", kodas: "133884372" }, tiekeju: 1 });
+    lygu(r.pakeitimai, [{ nr: "25VP-SUTP-64", sudaryta: "2025-12-01", verte: 359128 }, { nr: "26VP-SUTP-11", sudaryta: "2026-01-26", verte: 359128 }, { nr: "26VP-SUTP-87", sudaryta: "2026-07-29", verte: 431114.68 }]);
+    lygu(r.keliosSutartys, false);
+    lygu(z[0], 'Sutartis?dok_sut_numeris="24VP-SUT-246"&select(dok_id,dok_sut_tipas,dok_sut_numeris,dok_pirk_numeris,dok_sut_obj_pav,dok_sut_verte,dok_sudarymo_data,dok_sut_galiojimo_data)&limit(20)');
+    tiesa(/^Sutartis\?dok_pirk_numeris="735154"&select\(/.test(z[1]) && /^Salis\?\(dok_id="100"\|dok_id="101"/.test(z[2]) && /ar_salis_tiekejas\)/.test(z[2]), "užklausos: " + z.slice(1).join(" | "));
+    tiesa(z.every(k => !/[^\x21-\x7E]/.test(k)), "užklausų keliuose - tik spausdinami ASCII ženklai");
+  });
+  await testas("Nerasta, kito pirkimo vykdytojo sutartis, pakeitimo numeris, kelios sutartys viename pirkime, paslėptas tiekėjas", async () => {
+    lygu(await VS.vykdykSutartis({ nr: "NERA-1" }, gaukis([], [], []), { dabar: VS_DABAR }), { sutartis: null, pakeitimai: [], keliosSutartys: false }, "numerio nėra - be kitų užklausų");
+    const kito = await VS.vykdykSutartis({ nr: "24VP-SUT-246", jar: "111111111" }, gaukis([PIRKIMO[0]], PIRKIMO, SALYS), { dabar: VS_DABAR });
+    lygu(kito.sutartis, null, "to paties numerio kito pirkimo vykdytojo sutartis nerodoma");
+    const beKodo = await VS.vykdykSutartis({ nr: "24VP-SUT-246" }, gaukis([PIRKIMO[0]], PIRKIMO, SALYS), { dabar: VS_DABAR });
+    lygu(beKodo.sutartis.nr, "24VP-SUT-246", "be pirkimo vykdytojo kodo - randama");
+    const pagalPak = await VS.vykdykSutartis({ nr: "25VP-SUTP-64" }, gaukis([PIRKIMO[1]], PIRKIMO, SALYS), { dabar: VS_DABAR });
+    lygu([pagalPak.sutartis.nr, pagalPak.pakeitimai.length], ["24VP-SUT-246", 3], "įrašius pakeitimo numerį - jo sutartis");
+    const dvi = PIRKIMO.concat([sut("200", "1", "24VP-SUT-247", "2024-11-29"), sut("201", "5", "26VP-SUTP-90", "2026-08-01")]);
+    const salys2 = SALYS.concat([sal("200", "222222222", "UAB Kita", true), sal("201", "222222222", "UAB Kita", true), sal("104", "133884372", "UAB Ardynas", true)]);
+    const k = await VS.vykdykSutartis({ nr: "24VP-SUT-246" }, gaukis([PIRKIMO[0]], dvi, salys2), { dabar: VS_DABAR });
+    lygu([k.keliosSutartys, k.pakeitimai.map(p => p.nr)], [true, ["25VP-SUTP-64", "26VP-SUTP-11", "26VP-SUTP-87"]], "kito tiekėjo sutarties pakeitimas nepriskiriamas");
+    const asm = await VS.vykdykSutartis({ nr: "24VP-SUT-246" }, gaukis([PIRKIMO[0]], [PIRKIMO[0]], [sal("100", "12345678", "Jono Jonaičio individuali įmonė", true)]), { dabar: VS_DABAR });
+    lygu(asm.sutartis.tiekejas, { paslepta: true, priezastis: "asmens-vardu" }, "asmens vardu pavadinta įmonė nerodoma");
+    const be = await VS.vykdykSutartis({ nr: "24VP-SUT-246" }, gaukis([PIRKIMO[0]], [PIRKIMO[0]], []), { dabar: VS_DABAR });
+    lygu([be.sutartis.tiekejas, be.sutartis.tiekeju], [null, 0]);
+    let klaida = null;
+    try { await VS.vykdykSutartis({ nr: "24VP-SUT-246" }, async () => ({ klaida: 1 }), { dabar: VS_DABAR }); } catch (e) { klaida = e.rusis; }
+    lygu(klaida, "netiketa-sandara", "netikėta šaltinio sandara - klaida, ne „nerasta“");
+    const nesvarus = await VS.vykdykSutartis({ nr: "X-1" }, gaukis([sut("300", "1", "X-1", "2024-01-01", { dok_sut_obj_pav: "<b>Pav</b>‮", dok_pirk_numeris: "a\"b" })], [], []), { dabar: VS_DABAR });
+    lygu([nesvarus.sutartis.pav, nesvarus.pakeitimai], ["<b>Pav</b>", []], "valdymo ženklai pašalinami, netinkamas pirkimo numeris į užklausą nededamas");
+  });
+  await testas("Maršrutas ir atsakymas: tik leidžiami numerio ženklai, įvestis neatkartojama, darbo raktas", () => {
+    const m = (a) => VS.marsrutas("GET", a, "https://g-procure.com", {});
+    lygu(m("/api/sutartys/sutartis?nr=24VP-SUT-246&pirkejas=302564383").darbas, { tipas: "sutartis", raktas: "s:24VP-SUT-246:302564383", p: { nr: "24VP-SUT-246", jar: "302564383" } });
+    lygu(m("/api/sutartys/sutartis?nr=SUT%2F2024%2F15").darbas.p, { nr: "SUT/2024/15", jar: null });
+    [["/api/sutartys/sutartis", "nr"], ["/api/sutartys/sutartis?nr=ab", "nr"], ["/api/sutartys/sutartis?nr=A%22%7Cdok_id%3D1", "nr"], ["/api/sutartys/sutartis?nr=A%20B%20C", "nr"], ["/api/sutartys/sutartis?nr=SUT-%C4%85", "nr"],
+      ["/api/sutartys/sutartis?nr=ABC-1&pirkejas=12", "pirkejas"], ["/api/sutartys/sutartis?nr=ABC-1&x=1", "parametras"], ["/api/sutartys/sutartis?nr=ABC-1&nr=ABC-2", "parametras"]].forEach(([a, p]) => {
+      const r = m(a).atsakymas;
+      lygu([r.status, JSON.parse(r.kunas).parametras], [400, p], a);
+      tiesa(!/dok_id|ABC-1/.test(r.kunas), "įvestis atkartota: " + r.kunas);
+    });
+    lygu([VS.sutartiesNr("24VP-SUT-246"), VS.sutartiesNr("a\"b"), VS.sutartiesNr("-ABC"), VS.sutartiesNr("x".repeat(61)), VS.sutartiesNr(123)], ["24VP-SUT-246", null, null, null, null]);
+    const ats = VS.atsakymasDarbo({ tipas: "sutartis", p: { nr: "SLAPTAS-NR", jar: "302564383" } }, { laikas: Date.now(), duomenys: { sutartis: null, pakeitimai: [], keliosSutartys: false } }, "https://g-procure.com");
+    const k = JSON.parse(ats.kunas);
+    lygu([ats.status, k.sutartis, k.pakeitimai, k.keliosSutartys, !!k.meta.atnaujinta], [200, null, [], false, true]);
+    tiesa(!/SLAPTAS-NR|302564383/.test(ats.kunas), "užklausos turinys atsakyme neatkartojamas");
+  });
+}
+
 async function testaiDiServerioVienetas1123(){
   grupe("DI serverio systemd vienetas (2026-11-23)");
   const v = await tekstas("g-procure.service");
@@ -1396,6 +1466,7 @@ async function testaiNuorodos1127(){
     await testaiDiUzduotys();
     if (!window.GP_VIESOS_SUTARTYS_API) throw new Error("viesos-sutartys-logika.js neįsikėlė");
     await testaiViesosSutartys1119();
+    await testaiSutartisPagalNumeri1128();
     if (!window.GP_DI_KVOTA) throw new Error("di-kvota.js neįsikėlė");
     await testaiDiKvota1123();
     await testaiDiServerioVienetas1123();
