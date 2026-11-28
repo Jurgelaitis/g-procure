@@ -138,10 +138,12 @@
   var UI = {
     lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Išsami instrukcija",
           trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumo politika", cookies: "Slapukų nustatymai",
+          fb: "Pastebėjote netikslumą ar turite idėją?", fbLink: "Pasiūlykite patobulinimą",
           src: "Duomenų šaltiniai:", srcBy: { narsykle: "gaunama tiesiai iš naršyklės", serveris: "gaunama per G-Procure serverį" },
           srcNote: "„Per G-Procure serverį“ - į šaltinį kreipiasi serveris, o naršyklė gauna tik rezultatą; „tiesiai iš naršyklės“ - jūsų naršyklė kreipiasi į šaltinį pati. Ką įrankis siunčia - privatumo politikoje.", srcLink: "atverti šaltinį" },
     en: { collapse: "Collapse", expand: "Expand", more: "Learn more", close: "Close", aria: "Information panel", dialog: "Detailed guide",
           trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy", cookies: "Cookie settings",
+          fb: "Spotted an inaccuracy or have an idea?", fbLink: "Suggest an improvement",
           src: "Data sources:", srcBy: { narsykle: "fetched directly by your browser", serveris: "fetched via the G-Procure server" },
           srcNote: "“Via the G-Procure server” - the server queries the source and your browser receives only the result; “directly by your browser” - your browser queries the source itself. What the tool sends is described in the privacy policy.", srcLink: "open source" }
   };
@@ -197,6 +199,10 @@
       ".gpi-trust{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:10px;font-size:13px;color:var(--color-graphite-50-strong,#5B6470)}",
       ".gpi-trust svg{width:15px;height:15px;flex-shrink:0;color:var(--color-emerald-strong,#007554)}",
       ".gpi-trust a{color:var(--color-emerald-strong,#007554);font-weight:700;text-decoration:underline;text-underline-offset:2px}",
+      /* Pasiūlymai (2026-11-28): nuoroda į laiško ruošinį „Kontaktai“ puslapyje su šiuo įrankiu */
+      ".gpi-fb{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:6px;font-size:13px;color:var(--color-graphite-50-strong,#5B6470)}",
+      ".gpi-fb svg{width:15px;height:15px;flex-shrink:0;color:var(--color-emerald-strong,#007554)}",
+      ".gpi-fb a{color:var(--color-emerald-strong,#007554);font-weight:700;text-decoration:underline;text-underline-offset:2px}",
       /* Duomenų šaltiniai (2026-11-24): suskleistas sąrašas virš „Kaip G-Procure valdo DI ...“ */
       ".gpi-src{margin-top:10px;font-size:13px;color:var(--color-graphite-50-strong,#5B6470)}",
       ".gpi-src summary{cursor:pointer;display:flex;align-items:center;gap:6px;flex-wrap:wrap;list-style:none;width:fit-content;max-width:100%;border-radius:4px}",
@@ -295,6 +301,7 @@
   var ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>';
   var ICON_CHEV = '<svg class="gpi-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
   var ICON_DB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>';
+  var ICON_FB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 11h7M8.5 14.5h4.5"/></svg>';
   var ICON_SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 7.7 8 10 4.6-2.3 8-5 8-10V6z"/></svg>';
   var ICON_BOOK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
   var ICON_FLOW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M8 6h8M6.5 8.5 10.5 15M17.5 8.5 13.5 15"/></svg>';
@@ -362,6 +369,9 @@
             '</a><a href="' + esc(SAKNIS + "privatumas.html") + '">' + esc(ui.privacy) + '</a>' +
             // Slapukų nustatymai (2026-10-16): su shared/sutikimas.js atveria nustatymų langą, be jo - slapukų politiką
             '<a href="' + esc(SAKNIS + "slapukai.html#nustatymai") + '" data-gp-slapukai aria-haspopup="dialog">' + esc(ui.cookies) + '</a></div>' +
+          // Pasiūlymai (2026-11-28): „Kontaktai“ puslapio laiško ruošinys su pažymėtu šiuo įrankiu (shared/pasiulymai.js)
+          '<div class="gpi-fb">' + ICON_FB + '<span>' + esc(ui.fb) + '</span><a href="' +
+            esc(SAKNIS + "G-Procure_About.html" + (cfg.moduleId ? "?irankis=" + encodeURIComponent(cfg.moduleId) : "") + "#pasiulymai") + '">' + esc(ui.fbLink) + '</a></div>' +
         '</div></div>' +
       '</div>';
 
