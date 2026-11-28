@@ -107,18 +107,18 @@
   /* Moduliai, į kuriuos įrašai gali rodyti. Adresai - nuo svetainės šaknies.
      Keičiant modulio failo vardą - taisyk ČIA (testai tikrina, kad failai egzistuoja). */
   var MODULIAI = {
-    "PP-plan":         { pav: "Pirkimų planavimas", trumpai: "Pirkimų planas",              kelias: "PP-plan/EPSO-G_pirkimu_planavimas_MVP.html" },
-    "PP-market-KPI":   { pav: "Rinkos rodikliai", trumpai: "Rinkos rodikliai",                kelias: "PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html" },
-    "PP-ts":           { pav: "TS asistentas", trumpai: "Techninė specifikacija",                   kelias: "PP-ts/TS_Asistentas.html" },
-    "PP-qual":         { pav: "Kvalifikaciniai reikalavimai", trumpai: "Kvalifikacija",    kelias: "PP-qual/PP-QUAL.html" },
-    "PP-salygos":      { pav: "Pirkimo sąlygų generatorius", trumpai: "Pirkimo sąlygos",     kelias: "PP-salygos/PP-SALYGOS.html" },
-    "PP-cost-benefit": { pav: "Kaštų ir naudos analizė", trumpai: "Kaštai ir nauda",         kelias: "PP-cost-benefit/index.html" },
-    "PP-graphs":       { pav: "Pirkimų grafikai", trumpai: "Grafikai",                kelias: "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html" },
-    "PP-protocol":     { pav: "Komisijos sprendimai", trumpai: "Komisijos sprendimai",            kelias: "PP-protocol/LITGRID_Generatorius_v3.html" },
-    "PP-negotiation":  { pav: "Derybų pasirengimas", trumpai: "Derybos",             kelias: "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html" },
-    "PP-report":       { pav: "Mažos vertės pažymos", trumpai: "Pažymos",            kelias: "PP-report/PP-report.html" },
+    "PP-plan":         { pav: "Pirkimų planas ir vertės ribos", trumpai: "Pirkimų planas",              kelias: "PP-plan/EPSO-G_pirkimu_planavimas_MVP.html" },
+    "PP-market-KPI":   { pav: "Rinkos rodikliai ir kainų indeksavimas", trumpai: "Rinkos rodikliai",                kelias: "PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html" },
+    "PP-ts":           { pav: "Techninė specifikacija ir rinkos konsultacija", trumpai: "Techninė specifikacija",                   kelias: "PP-ts/TS_Asistentas.html" },
+    "PP-qual":         { pav: "Kvalifikacijos reikalavimai", trumpai: "Kvalifikacija",    kelias: "PP-qual/PP-QUAL.html" },
+    "PP-salygos":      { pav: "Pirkimo sąlygos ir sutarties projektas", trumpai: "Pirkimo sąlygos",     kelias: "PP-salygos/PP-SALYGOS.html" },
+    "PP-cost-benefit": { pav: "Pasiūlymų vertinimas, kaštų ir naudos analizė", trumpai: "Kaštai ir nauda",         kelias: "PP-cost-benefit/index.html" },
+    "PP-graphs":       { pav: "Pirkimo grafikas ir terminai", trumpai: "Grafikai",                kelias: "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html" },
+    "PP-protocol":     { pav: "Pirkimo komisijos protokolai ir pranešimai", trumpai: "Komisijos sprendimai",            kelias: "PP-protocol/LITGRID_Generatorius_v3.html" },
+    "PP-negotiation":  { pav: "Pasiūlymų analizė ir derybos", trumpai: "Derybos",             kelias: "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html" },
+    "PP-report":       { pav: "Mažos vertės pirkimo apklausa ir pažyma", trumpai: "Pažymos",            kelias: "PP-report/PP-report.html" },
     "PP-esg":          { pav: "ESG ir atitiktis", trumpai: "ESG",                kelias: "PP-esg/index.html" },
-    "PP-carbon":       { pav: "Anglies pėdsakas", trumpai: "Anglies pėdsakas",                kelias: "PP-carbon/index.html" },
+    "PP-carbon":       { pav: "Anglies pėdsakas ir ESRS duomenys", trumpai: "Anglies pėdsakas",                kelias: "PP-carbon/index.html" },
     "PP-tiekejams":    { pav: "Tiekėjams", trumpai: "Tiekėjams",                       kelias: "PP-tiekejams/index.html" }
   };
 

@@ -1162,7 +1162,7 @@
     var k = cfg.kortele ? cfg.kortele() : null, pt = visosPatikros(), body = "";
     body += wp(wr("Pirkimo dokumentų patikros ataskaita"), { st: "Heading1" });
     body += wp([wr("Pirkimas: ", { b: true }), wr(k ? (k.pavadinimas || "") + (k.numeris ? " (" + k.numeris + ")" : "") : "pirkimo kortelė nepasirinkta")]);
-    body += wp([wr("Patikrinta: ", { b: true }), wr(laikoTekstas(B.laikas) + " · G-Procure, Pirkimo sąlygų generatorius, „Tikrinti parengtus dokumentus“ (taisyklės ir palyginimas su forma, be DI)")]);
+    body += wp([wr("Patikrinta: ", { b: true }), wr(laikoTekstas(B.laikas) + " · G-Procure, „Pirkimo sąlygos ir sutarties projektas“, „Tikrinti parengtus dokumentus“ (taisyklės ir palyginimas su forma, be DI)")]);
     if (B.ankstesne) body += wp([wr("Ankstesnė patikra: ", { b: true }), wr((B.ankstesne.data || "") + " (" + (B.ankstesne.vardas || "") + ")")]);
     var sk = { kliutis: 0, nukrypimas: 0, tikrinti: 0, rekomendacija: 0, info: 0 };
     B.radiniai.forEach(function (r) { sk[r.lygis]++; });

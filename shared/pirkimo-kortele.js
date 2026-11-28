@@ -298,11 +298,11 @@
     skelbimas: { lt: "CVP IS skelbimas (PDF)", en: "CVP IS notice (PDF)" },
     vpt: { lt: "CVP IS duomenys (VPT)", en: "CVP IS data (VPT)" },
     "pagal-vykdytoja": { lt: "Pirkimo vykdytojo įprastai taikomas įstatymas", en: "Usual regime of the contracting body" },
-    "pp-plan": { lt: "Pirkimų planavimas", en: "Procurement planning" },
-    "pp-protocol": { lt: "Protokolų generatorius", en: "Protocol generator" },
-    "pp-graphs": { lt: "Pirkimų grafikų generatorius", en: "Procurement schedule generator" },
+    "pp-plan": { lt: "Pirkimų planas ir vertės ribos", en: "Procurement plan and value thresholds" },
+    "pp-protocol": { lt: "Pirkimo komisijos protokolai ir pranešimai", en: "Procurement committee minutes and notices" },
+    "pp-graphs": { lt: "Pirkimo grafikas ir terminai", en: "Procurement schedule and deadlines" },
     "pp-cost-benefit": { lt: "Ekonominio naudingumo skaičiuoklė", en: "Economic advantage calculator" },
-    "pp-market-kpi": { lt: "Rinkos rodiklių stebėsena", en: "Market indicators monitoring" },
+    "pp-market-kpi": { lt: "Rinkos rodikliai ir kainų indeksavimas", en: "Market indicators and price indexation" },
     modulis: { lt: "Įrankis", en: "Tool" },
     byla: { lt: "Pirkimo bylos failas", en: "Procurement file" },          // 2026-11-14, 1.3 - shared/pirkimo-byla.js
     nezinomas: { lt: "Šaltinis nenurodytas", en: "Source not stated" }

@@ -47,7 +47,7 @@
       id: "pp-plan", code: "PP-Planning", stage: 1, cat: "planning",
       badgeLt: "Planavimas", badgeEn: "Planning",
       maturity: "kuriamas",
-      nameLt: "Pirkimų planavimas", nameEn: "Procurement planning",
+      nameLt: "Pirkimų planas ir vertės ribos", nameEn: "Procurement plan and value thresholds",
       href: "PP-plan/EPSO-G_pirkimu_planavimas_MVP.html",
       sumLt: "Metinio pirkimų plano analizė: pirkimų sąrašas su pastabomis, vertės ribos pagal to paties tipo pirkimų grupes, terminai ir centralizavimo galimybės.",
       sumEn: "Annual procurement plan analysis: a procurement list with remarks, value thresholds by groups of same-type procurements, timelines and centralisation opportunities.",
@@ -64,12 +64,14 @@
         "Timelines and team workload based on standard procurement durations"
       ],
       daugiauLt: [
+        "Sutarčių žemėlapis: įmonės sutartys, kurios baigiasi per 12 ar 24 mėn., ir ar jų pirkimas jau yra plane - iš viešų sutarčių duomenų, tik paspaudus",
         "Centralizavimo galimybės tarp grupės įmonių - skaičiuojama naršyklėje taisyklėmis, be DI",
         "Vienos įmonės arba visos grupės planas",
         "Iš plano eilutės sukuriama pirkimo kortelė",
         "BVPŽ kodų paieška lietuvių ir anglų kalba"
       ],
       daugiauEn: [
+        "A contract map: the company's contracts ending within 12 or 24 months and whether their procurement is already in the plan - from public contract data, only on click",
         "Centralisation opportunities between group companies - an algorithm in the browser, not AI",
         "A single company's plan or the group-wide view",
         "A procurement card can be created from a plan line",
@@ -84,7 +86,7 @@
       badgeLt: "Stebėsena", badgeEn: "Monitoring",
       maturity: "naudojamas",
       kalbos: true,
-      nameLt: "Rinkos rodiklių stebėsena", nameEn: "Market indicators monitoring",
+      nameLt: "Rinkos rodikliai ir kainų indeksavimas", nameEn: "Market indicators and price indexation",
       href: "PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
       sumLt: "Rinkos rodikliai ir pirkimo rinkos apžvalga: ką kainų, darbo užmokesčio ir tiekimo rodikliai reiškia konkrečiam pirkimui ir kokias sąlygas numatyti sutartyje.",
       sumEn: "Market indicators and a market review for a procurement: what price, wage and supply indicators mean for a specific procurement and which contract actions to take.",
@@ -101,11 +103,13 @@
         "Actions are saved to the procurement card and shown when the procurement conditions are prepared"
       ],
       daugiauLt: [
+        "Doleriais skelbiamos kainos - ir eurais pagal ECB kursą; ES importo kilmė pagal prekių grupes (Eurostat)",
         "Rinkų profiliai pagal perkančią įmonę",
         "Iliustracinės ir ankstesnio laikotarpio reikšmės visada pažymėtos",
         "Sąsaja lietuvių ir anglų kalba"
       ],
       daugiauEn: [
+        "Prices published in dollars - also in euros at the ECB rate; EU import origin by product group (Eurostat)",
         "Market profiles by purchasing company",
         "Illustrative and earlier-period values are always labelled",
         "Interface in Lithuanian and English"
@@ -119,7 +123,7 @@
       badgeLt: "Specifikacija", badgeEn: "Specification",
       maturity: "bandomasis",
       ai: true,
-      nameLt: "TS asistentas", nameEn: "TS assistant",
+      nameLt: "Techninė specifikacija ir rinkos konsultacija", nameEn: "Technical specification and market consultation",
       href: "PP-ts/TS_Asistentas.html",
       sumLt: "Techninės specifikacijos (TS) rengimas ir patikra padedant DI; rinkos konsultacijos klausimynas, kvietimas ir suvestinės.",
       sumEn: "Drafting and checking a technical specification (TS) with AI support; a market consultation questionnaire, invitation and summaries.",
@@ -136,12 +140,14 @@
         "Contracting body and law (PĮ or VPĮ) - legal references follow it"
       ],
       daugiauLt: [
-        "Panašių sutarčių paieška viešuose pirkimų duomenyse",
+        "Kibernetinio saugumo reikalavimų skyrius pagal teisės aktus - taisyklėmis, be DI",
+        "Rinkos konsultacijai - galimi adresatai iš viešų sutarčių duomenų; panašių sutarčių paieška",
         "DI kainos įvertis - tik orientacinis ir į numatomą vertę neperkeliamas",
         "Word dokumentai oficialiu stiliumi; DI parengtas tekstas pažymėtas"
       ],
       daugiauEn: [
-        "Search for similar contracts in public procurement data",
+        "A cybersecurity requirements section based on legislation - rule-based, without AI",
+        "For a market consultation - possible addressees from public contract data; a search for similar contracts",
         "The AI price estimate is indicative only and is not carried over to the estimated value",
         "Word documents in an official style; AI-drafted text is labelled"
       ],
@@ -155,7 +161,7 @@
       maturity: "bandomasis",
       ai: true,
       kalbos: true,
-      nameLt: "Kvalifikaciniai reikalavimai", nameEn: "Qualification requirements",
+      nameLt: "Kvalifikacijos reikalavimai", nameEn: "Qualification requirements",
       href: "PP-qual/PP-QUAL.html",
       sumLt: "Tiekėjų kvalifikacijos reikalavimų rengimas ir proporcingumo patikra pagal VPT metodiką, padedant DI.",
       sumEn: "Preparing supplier qualification requirements and checking their proportionality against the VPT methodology, with AI support.",
@@ -172,11 +178,13 @@
         "Requirements for specialists are assessed separately from supplier experience; for certificates it reminds you of “or equivalent”"
       ],
       daugiauLt: [
+        "Rinkos pajėgumas pagal viešus duomenis: kiek Lietuvos įmonių atitiktų pajamų ir patirties ribas",
         "Pirkimo objekto dalims - ribos kiekvienai daliai",
         "Dvikalbis LT / EN priedas su vertimo patikra",
         "Nepatvirtinti ar nepatikrinti reikalavimai pažymimi kaip juodraštis"
       ],
       daugiauEn: [
+        "Market capacity from public data: how many Lithuanian companies would meet the turnover and experience limits",
         "For lots - limits for each lot",
         "A bilingual LT / EN annex with a translation check",
         "An unapproved or unchecked set is marked as a draft"
@@ -191,7 +199,7 @@
       maturity: "kuriamas",
       ai: true,
       kalbos: true,
-      nameLt: "Pirkimo sąlygų generatorius", nameEn: "Procurement conditions generator",
+      nameLt: "Pirkimo sąlygos ir sutarties projektas", nameEn: "Procurement conditions and draft contract",
       href: "PP-salygos/PP-SALYGOS.html",
       sumLt: "Pirkimo sąlygų paketas ir sutarties projektas iš standartinių šablonų - sąlygų teksto DI nerašo - ir parengtų dokumentų patikra.",
       sumEn: "A procurement conditions package and a draft contract from standard templates - AI does not write the text of the conditions - plus a check of prepared documents.",
@@ -211,6 +219,7 @@
         "„Tikrinti parengtus dokumentus“: palyginimas su standartine forma, privalomi dokumentų ir sutarties elementai, techninės specifikacijos, sąlygų ir sutarties nuoseklumas - taisyklėmis, be DI",
         "DI gali pasiūlyti atsakymus iš jūsų dokumentų su citata: dokumentai į DI siunčiami tik paspaudus mygtuką arba jums leidus tai daryti šiame pirkime; nacionalinio saugumo pirkime - tik paspaudus mygtuką",
         "Sugeneruoto paketo patikra, santrauka tvirtintojui ir CVP IS pildymo atmintinė",
+        "Poveikio klimatui neutralizavimo pramonės akto (NZIA) ir kibernetinio saugumo nuostatos tarptautiniams pirkimams - klausimai ir tekstas kopijuoti",
         "Darbas saugomas juodraštyje šioje naršyklėje - galima tęsti vėliau",
         "DI vertimai į anglų kalbą ir DI atpažintas skenuotų dokumentų tekstas dokumentuose pažymėti",
         "Pirkimo vykdytojas - LITGRID AB arba AB „Amber Grid“: pirkimo sąlygos rengiamos pagal tuos pačius šablonus su bendrovės duomenimis, o sutarties projektas - prekių, paslaugų ir statybos rangos pirkimams"
@@ -219,6 +228,7 @@
         "“Check prepared documents”: comparison with the standard form, mandatory document and contract elements, consistency of the technical specification, conditions and contract - rule-based, without AI",
         "AI can suggest answers from your documents with a citation: content is sent when you press the button or when you allow it for that procurement; in a national security procurement - only by button",
         "A check of the generated package, a summary for the approver and a CVP IS data-entry checklist",
+        "Net-Zero Industry Act (NZIA) and cybersecurity provisions for international procurements - questions and text to copy",
         "Work is saved as a draft in this browser - you can continue later",
         "AI translations into English and AI-recognised text of scanned documents are labelled in the documents",
         "Contracting body - LITGRID AB or AB “Amber Grid”: procurement conditions - the same templates with its data, draft contract - for goods, services and construction works"
@@ -232,7 +242,7 @@
       badgeLt: "Analizė", badgeEn: "Analysis",
       maturity: "kuriamas",
       kalbos: true,
-      nameLt: "Kaštų ir naudos analizė", nameEn: "Cost-benefit analysis",
+      nameLt: "Pasiūlymų vertinimas, kaštų ir naudos analizė", nameEn: "Tender evaluation and cost-benefit analysis",
       href: "PP-cost-benefit/",
       sumLt: "Dvi dalys: ekonominio naudingumo skaičiuoklė pasiūlymų vertinimui ir kaštų ir naudos analizė didelės vertės pirkimams.",
       sumEn: "Two parts: an economic-benefit calculator for tender evaluation and a cost-benefit analysis for high-value procurements.",
@@ -267,7 +277,7 @@
       badgeLt: "Grafikai", badgeEn: "Schedules",
       maturity: "naudojamas",
       kalbos: true,
-      nameLt: "Pirkimų grafikų generatorius", nameEn: "Procurement schedule generator",
+      nameLt: "Pirkimo grafikas ir terminai", nameEn: "Procurement schedule and deadlines",
       href: "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html",
       sumLt: "Pirkimo procedūros grafikas darbo dienomis pagal pirkimo būdą ir standartines pirkimų trukmes.",
       sumEn: "A procedure schedule in working days, based on the procurement procedure and standard procurement durations.",
@@ -300,7 +310,7 @@
       badgeLt: "Vykdymas", badgeEn: "Execution",
       maturity: "kuriamas",
       kalbos: true,
-      nameLt: "Protokolų generatorius", nameEn: "Protocol generator",
+      nameLt: "Pirkimo komisijos protokolai ir pranešimai", nameEn: "Procurement committee minutes and notices",
       href: "PP-protocol/LITGRID_Generatorius_v3.html",
       sumLt: "Pirkimo komisijos protokolai ir pranešimai tiekėjams pagal PĮ - vienoda struktūra nuo pirkimo pradžios iki laimėtojo nustatymo.",
       sumEn: "Procurement committee protocols and notices to suppliers under PĮ - a consistent structure from the start of a procurement to the award.",
@@ -334,7 +344,7 @@
       maturity: "kuriamas",
       ai: true,
       kalbos: true,
-      nameLt: "Derybų pasirengimo įrankis", nameEn: "Negotiation preparation tool",
+      nameLt: "Pasiūlymų analizė ir derybos", nameEn: "Bid analysis and negotiation",
       href: "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html",
       sumLt: "Nuo tiekėjų pasiūlymų iki derybų plano: įkainių matrica, derybų ribos ir rekomendacijos kiekvienam tiekėjui.",
       sumEn: "From supplier offers to a negotiation plan: a line-item price matrix, negotiation limits and recommendations for each supplier.",
@@ -368,19 +378,19 @@
       kortele: true,
       badgeLt: "Pažymos", badgeEn: "Reports",
       maturity: "kuriamas",
-      nameLt: "Tiekėjų apklausos pažyma", nameEn: "Supplier survey report",
+      nameLt: "Mažos vertės pirkimo apklausa ir pažyma", nameEn: "Low-value procurement survey and record",
       href: "PP-report/PP-report.html",
       sumLt: "Elektroninė tiekėjų apklausa iki 15 000 Eur be PVM, mažos vertės pirkimo pažyma ir raštai tiekėjams pagal LITGRID mažos vertės pirkimų tvarkos aprašą.",
       sumEn: "An electronic request for quotation up to EUR 15,000 excluding VAT, a small-value procurement report and letters to suppliers under LITGRID's small-value procurement rules.",
       galiLt: [
         "Elektroninė apklausa iki 15 000 Eur be PVM: kvietimai tiekėjams, pasiūlymai viena forma lietuvių ar anglų kalba, pasiūlymų eilė ir pažyma iš apklausos duomenų",
-        "Pasiūlymai neatveriami iki termino; pasiūlymų eilę sudaro taisyklės, sprendimą patvirtina žmogus; žurnalas su vientisumo patikra ir apklausos byla",
+        "Pasiūlymai atveriami pasibaigus terminui arba visiems kviestiems tiekėjams juos pateikus; pasiūlymų eilę sudaro taisyklės, sprendimą patvirtina žmogus; žurnalas su vientisumo patikra",
         "Dvi pažymos formos - Aprašo 1 ir 2 priedai - su patikra prieš generuojant: neatsakyti klausimai ir prieštaravimai su nuorodomis į laukus",
         "Raštai tiekėjams apie priimtus sprendimus"
       ],
       galiEn: [
         "An electronic request for quotation up to EUR 15,000 excluding VAT: invitations to suppliers, quotations in one form in Lithuanian or English, a ranking and a report filled in from the request data",
-        "Quotations are not opened before the deadline; the ranking is made by rules, the decision is confirmed by a person; a log with an integrity check and a request file",
+        "Quotations are opened after the deadline or once all invited suppliers have submitted them; the ranking is made by rules, the decision is confirmed by a person; a log with an integrity check",
         "Two report forms - Annexes 1 and 2 of the rules - with a check before generating: unanswered questions and contradictions with links to the fields",
         "Letters to suppliers about the decisions taken"
       ],
@@ -393,10 +403,10 @@
       maturity: "kuriamas",
       ai: true,
       kalbos: true,
-      nameLt: "Anglies pėdsakas", nameEn: "Carbon footprint",
+      nameLt: "Anglies pėdsakas ir ESRS duomenys", nameEn: "Carbon footprint and ESRS data",
       href: "PP-carbon/index.html",
-      sumLt: "Projekto ŠESD (CO2e) skaičiavimas ir tiekėjų pasiūlymų anglies pėdsako vertinimas.",
-      sumEn: "Project GHG (CO2e) calculation and carbon footprint evaluation of supplier offers.",
+      sumLt: "Projekto ŠESD (CO2e) skaičiavimas, tiekėjų pasiūlymų anglies pėdsako vertinimas ir ESRS duomenys tvarumo ataskaitai.",
+      sumEn: "Project GHG (CO2e) calculation, carbon footprint evaluation of supplier offers and ESRS data for the sustainability report.",
       galiLt: [
         "Projekto skaičiuoklė su emisijos faktorių biblioteka",
         "Produkto EPD reikšmę (A1-A3) DI pasiūlo su citata - ji patvirtinama tik tada, kai reikšmė yra dokumente",
@@ -430,28 +440,28 @@
       maturity: "kuriamas",
       nameLt: "Sutarties pakeitimai", nameEn: "Contract amendments",
       href: "PP-sutartys/index.html",
-      sumLt: "Sutarties pakeitimo projektas pagal Sutarties nuostatas: kainos perskaičiavimas pagal indeksą, subtiekėjai, atsakingi asmenys.",
-      sumEn: "A draft contract amendment that follows the contract terms: price indexation, subcontractors, responsible persons.",
+      sumLt: "Susitarimo dėl sutarties pakeitimo projektas: kainos perskaičiavimas pagal indeksą, papildomi ir atsisakomi darbai, termino pratęsimas, subtiekėjai - su Pirkimų įstatymo ribomis ir patikromis.",
+      sumEn: "A draft contract amendment agreement: price indexation, additional and withdrawn works, extension of the term, subcontractors - with the limits and checks of the Law on Procurement.",
       galiLt: [
         "Sutartis ir jos paskelbti pakeitimai randami viešuose CVP IS duomenyse pagal sutarties numerį",
         "Kainos perskaičiavimas: indeksų reikšmės iš Oficialiosios statistikos portalo, Sutartyje nustatytos ribos ir laikotarpio patikra",
-        "Vienas susitarimas gali jungti kelis pakeitimus - kiekvienas su savo pagrindu ir patikromis",
-        "Susitarimo projektas, skaičiavimas ir pagrindimas derinimui (Word)"
+        "Papildomi ir atsisakomi darbai, termino pratęsimas ir kitos sąlygos - su Pirkimų įstatymo ribomis ir esminio pakeitimo klausimais",
+        "Patikros remiasi VPT sutarčių keitimo gairėmis ir teismų praktika - su nuorodomis į sprendimus"
       ],
       galiEn: [
         "The contract and its published amendments are found in public CVP IS data by the contract number",
         "Price indexation: index values from the Official Statistics Portal, a check of the threshold and period set in the contract",
-        "One agreement can combine several changes, each with its own legal basis and checks",
-        "A draft agreement, the calculation and a justification for internal approval (Word)"
+        "Additional and withdrawn works, extension of the term and other terms - with the limits of the Law on Procurement and questions on substantial modification",
+        "The checks follow the VPT contract modification guidelines and case law - with links to the judgments"
       ],
       daugiauLt: [
-        "Pakeitimų sąrašas: Sutarties kaina iki pakeitimo ir po jo, kainos perskaičiavimo laikotarpiai nepersidengia",
-        "Priminimai po pasirašymo: paskelbimas CVP IS, asmens duomenų pašalinimas",
+        "Vienas susitarimas gali jungti kelis pakeitimus; susitarimo projektas, skaičiavimas ir pagrindimas derinimui (Word)",
+        "Sutarčių sąrašas: kaina nuo pradinės, nedidelės vertės pakeitimų dalis iš ribos, artimiausi darbai ir priminimai (paskelbimas CVP IS, užtikrinimo perskaičiavimas)",
         "Sutartys saugomos tik naršyklėje, kopija - failu"
       ],
       daugiauEn: [
-        "A list of amendments: the contract price before and after each change, indexation periods do not overlap",
-        "Reminders after signing: publication in CVP IS, removal of personal data",
+        "One agreement can combine several changes; a draft agreement, the calculation and a justification for internal approval (Word)",
+        "A list of contracts: the price against the original, the share of the low-value modification limit used, upcoming tasks and reminders (publication in CVP IS, recalculation of the performance security)",
         "Contracts are stored only in the browser, with a copy as a file"
       ],
       rezLt: "susitarimo dėl sutarties pakeitimo projektas, skaičiavimas ir pagrindimas (Word)",
